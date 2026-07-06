@@ -1,0 +1,14 @@
+[
+  {
+    "task_id": "t1",
+    "prompt": "What is 2+2?"
+  },
+  {
+    "task_id": "t2",
+    "prompt": "Classify the sentiment as positive, negative, or neutral: I love this product."
+  },
+  {
+    "task_id": "t3",
+    "prompt": "Summarise the following text in one sentence: AMD Developer Cloud gives developers access to AMD GPUs for AI workloads."
+  }
+]

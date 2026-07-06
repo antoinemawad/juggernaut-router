@@ -1,0 +1,14 @@
+[
+  {
+    "task_id": "t1",
+    "answer": "4"
+  },
+  {
+    "task_id": "t2",
+    "answer": "positive"
+  },
+  {
+    "task_id": "t3",
+    "answer": "AMD Developer Cloud gives developers access to AMD GPUs for AI workloads."
+  }
+]
