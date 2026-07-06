@@ -1,0 +1,34 @@
+[
+  {
+    "task_id": "factual_1",
+    "answer": "A CPU is optimized for general-purpose sequential processing with a smaller number of powerful cores. A GPU has many parallel cores designed to process large batches of similar operations efficiently, which makes it useful for graphics and AI workloads."
+  },
+  {
+    "task_id": "math_1",
+    "answer": "$60"
+  },
+  {
+    "task_id": "sentiment_1",
+    "answer": "negative"
+  },
+  {
+    "task_id": "summary_1",
+    "answer": "AMD Developer Cloud gives developers access to AMD GPUs for AI workloads."
+  },
+  {
+    "task_id": "ner_1",
+    "answer": "Lisa Chen: PERSON; AMD: ORG; Austin: LOCATION; July 6, 2026: DATE"
+  },
+  {
+    "task_id": "debug_1",
+    "answer": "The bug is that the function subtracts instead of adding. Corrected implementation:\n\ndef add_numbers(a, b):\n    return a + b"
+  },
+  {
+    "task_id": "logic_1",
+    "answer": "Carol"
+  },
+  {
+    "task_id": "codegen_1",
+    "answer": "def is_even(n):\n    return n % 2 == 0"
+  }
+]
