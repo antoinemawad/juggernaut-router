@@ -1,14 +1,34 @@
 [
   {
-    "task_id": "t1",
-    "prompt": "What is 2+2?"
+    "task_id": "factual_1",
+    "prompt": "Explain in two sentences how a GPU differs from a CPU."
   },
   {
-    "task_id": "t2",
-    "prompt": "Classify the sentiment as positive, negative, or neutral: I love this product."
+    "task_id": "math_1",
+    "prompt": "A product costs $80 and is discounted by 25%. What is the final price?"
   },
   {
-    "task_id": "t3",
-    "prompt": "Summarise the following text in one sentence: AMD Developer Cloud gives developers access to AMD GPUs for AI workloads."
+    "task_id": "sentiment_1",
+    "prompt": "Classify the sentiment as positive, negative, or neutral: The service was slow and disappointing."
+  },
+  {
+    "task_id": "summary_1",
+    "prompt": "Summarise the following text in one sentence: AMD Developer Cloud gives developers access to AMD GPUs for AI workloads. It supports ROCm, PyTorch, and vLLM environments for building and testing AI applications."
+  },
+  {
+    "task_id": "ner_1",
+    "prompt": "Extract named entities and label them: Lisa Chen joined AMD in Austin on July 6, 2026."
+  },
+  {
+    "task_id": "debug_1",
+    "prompt": "Debug this Python code and provide the corrected implementation:\n\ndef add_numbers(a, b):\n    return a - b"
+  },
+  {
+    "task_id": "logic_1",
+    "prompt": "Alice is taller than Bob. Bob is taller than Carol. Who is the shortest?"
+  },
+  {
+    "task_id": "codegen_1",
+    "prompt": "Write a Python function named is_even that returns True if a number is even and False otherwise."
   }
 ]
