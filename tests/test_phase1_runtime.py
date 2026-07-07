@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import URLError
 
 from app.config import RuntimeConfig, parse_allowed_models
 from app.deadline import DeadlineManager
@@ -20,6 +21,20 @@ class FakeClock:
 
     def __call__(self) -> float:
         return self.value
+
+
+class FakeResponse:
+    def __init__(self, payload: str) -> None:
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+    def read(self) -> bytes:
+        return self.payload.encode("utf-8")
 
 
 class Phase1RuntimeTests(unittest.TestCase):
@@ -59,6 +74,104 @@ class Phase1RuntimeTests(unittest.TestCase):
             result = ask_fireworks_structured("hello")
         self.assertEqual(result.answer, SAFE_FALLBACK_ANSWER)
         self.assertEqual(result.error, "missing_fireworks_environment")
+
+    def test_fireworks_success_uses_injected_base_url_and_usage(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["url"] = request.full_url
+            captured["timeout"] = timeout
+            return FakeResponse(json.dumps({
+                "choices": [{"message": {"content": "Remote answer"}}],
+                "usage": {"completion_tokens": 3, "total_tokens": 9},
+            }))
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3,kimi-k2p7-code",
+                "FIREWORKS_TIMEOUT_SECONDS": "7",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", fake_urlopen):
+            result = ask_fireworks_structured("hello")
+
+        self.assertEqual(result.answer, "Remote answer")
+        self.assertEqual(result.model, "minimax-m3")
+        self.assertEqual(result.completion_tokens, 3)
+        self.assertEqual(result.total_tokens, 9)
+        self.assertEqual(captured["url"], "https://judge-proxy.example/v1/chat/completions")
+        self.assertEqual(captured["timeout"], 7)
+
+    def test_fireworks_invalid_json_fails_soft(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse("{bad json")):
+            result = ask_fireworks_structured("hello")
+
+        self.assertEqual(result.answer, SAFE_FALLBACK_ANSWER)
+        self.assertTrue(result.error.startswith("fireworks_response_error"))
+
+    def test_fireworks_missing_choices_fails_soft(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(json.dumps({"usage": {}}))):
+            result = ask_fireworks_structured("hello")
+
+        self.assertEqual(result.answer, SAFE_FALLBACK_ANSWER)
+        self.assertTrue(result.error.startswith("fireworks_response_error"))
+
+    def test_fireworks_network_error_retries_then_fails_soft(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example",
+                "ALLOWED_MODELS": "minimax-m3",
+                "FIREWORKS_MAX_RETRIES": "1",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", side_effect=URLError("boom")) as mocked:
+            result = ask_fireworks_structured("hello")
+
+        self.assertEqual(result.answer, SAFE_FALLBACK_ANSWER)
+        self.assertEqual(result.retry_count, 1)
+        self.assertEqual(mocked.call_count, 2)
+        self.assertTrue(result.error.startswith("fireworks_network_error"))
+
+    def test_fireworks_deadline_suppresses_remote_before_network_call(self):
+        clock = FakeClock()
+        deadline = DeadlineManager(total_seconds=10, safety_margin_seconds=3, clock=clock)
+        clock.value = 8
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example",
+                "ALLOWED_MODELS": "minimax-m3",
+                "FIREWORKS_TIMEOUT_SECONDS": "5",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen") as mocked:
+            result = ask_fireworks_structured("hello", deadline=deadline)
+
+        self.assertEqual(result.answer, SAFE_FALLBACK_ANSWER)
+        self.assertEqual(result.error, "deadline_suppressed_remote")
+        mocked.assert_not_called()
 
     def test_main_handles_malformed_task_and_keeps_official_shape(self):
         with tempfile.TemporaryDirectory() as tmpdir:

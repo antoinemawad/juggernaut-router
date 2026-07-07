@@ -86,6 +86,8 @@ def main() -> int:
                 "docker",
                 "run",
                 "--rm",
+                "--platform",
+                args.platform,
                 "-v",
                 f"{input_dir}:/input:ro",
                 "-v",
