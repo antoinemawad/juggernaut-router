@@ -37,6 +37,7 @@ Core routing stages:
 6. Route decision across local, concise Fireworks, accuracy Fireworks, format-strict Fireworks, and code Fireworks modes.
 7. Answer normalization.
 8. Router decision logging.
+9. Eval sweep through the same router path with mocked Fireworks responses before live submissions.
 
 Local answers must earn trust. A local solver result should carry answer, confidence, category, evidence, validator status, risk flags, and failure reason. The agent should accept it only when category confidence, solver confidence, risk score, and validation all pass the selected router mode thresholds.
 

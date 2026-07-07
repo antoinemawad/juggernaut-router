@@ -9,6 +9,8 @@ from app.config import RuntimeConfig
 from app.deadline import DeadlineManager
 from app.solvers.basic import LocalSolverResult
 from app.validators import validate_local_answer
+from eval.model_matrix import score_answer
+from eval.router_config_sweep import DEFAULT_CONFIGS, route_matches_expected, run_scenario
 
 
 class FakeClock:
@@ -154,6 +156,66 @@ class Phase2RouterTests(unittest.TestCase):
         mocked.assert_not_called()
         self.assertEqual(result.route, "fallback")
         self.assertEqual(result.route_reason, "deadline_suppressed_remote")
+
+    def test_router_sweep_uses_real_router_for_safe_local_case(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid")
+        scenario = {
+            "task_id": "math_discount",
+            "category": "mathematical_reasoning",
+            "prompt": "A product costs $80 and is discounted by 25%. What is the final price? Return only the final price.",
+            "expected_keywords": ["60"],
+            "expected_answer": "$60",
+            "expected_route": "local",
+        }
+        row = run_scenario(config, scenario)
+        self.assertEqual(row["route"], "local")
+        self.assertEqual(row["total_tokens"], 0)
+        self.assertTrue(row["expected_route_match"])
+        self.assertIn("risk_gate", row["local_proof_layers_passed"])
+
+    def test_router_sweep_uses_real_router_for_remote_case(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid")
+        scenario = {
+            "task_id": "math_projection",
+            "category": "mathematical_reasoning",
+            "prompt": "A service has 120 users and grows by 15% each month for two months. How many users after two months? Round to the nearest whole number.",
+            "expected_keywords": ["159"],
+            "expected_answer": "159",
+            "expected_route": "remote_accuracy",
+        }
+        row = run_scenario(config, scenario)
+        self.assertEqual(row["route"], "fireworks")
+        self.assertEqual(row["model"], "minimax-m3")
+        self.assertGreater(row["total_tokens"], 0)
+        self.assertTrue(row["expected_route_match"])
+
+    def test_route_match_contract(self):
+        self.assertTrue(route_matches_expected("local", "local"))
+        self.assertTrue(route_matches_expected("fireworks", "remote_accuracy"))
+        self.assertTrue(route_matches_expected("local", "local_or_remote_concise"))
+        self.assertFalse(route_matches_expected("fireworks", "local"))
+
+    def test_eval_scoring_respects_label_and_numeric_verifiers(self):
+        label_passed, label_score, _label_notes = score_answer(
+            "negative",
+            {
+                "verifier": "label_set",
+                "expected_answer": "negative",
+                "expected_keywords": ["negative", "slow", "disappointing"],
+            },
+        )
+        numeric_passed, numeric_score, _numeric_notes = score_answer(
+            "$60.00",
+            {
+                "verifier": "numeric_exact",
+                "expected_answer": "$60",
+                "expected_keywords": ["60"],
+            },
+        )
+        self.assertTrue(label_passed)
+        self.assertEqual(label_score, 1.0)
+        self.assertTrue(numeric_passed)
+        self.assertEqual(numeric_score, 1.0)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -54,16 +55,41 @@ def prompt_for_policy(scenario, policy):
 
 
 def score_answer(answer, scenario):
+    verifier = scenario.get("verifier")
+    expected_answer = str(scenario.get("expected_answer", "")).strip()
+    answer_text = str(answer or "").strip()
+    answer_lower = answer_text.lower()
+
+    if verifier == "label_set" and expected_answer:
+        expected_label = expected_answer.lower()
+        passed = expected_label in answer_lower.split() or answer_lower.startswith(expected_label)
+        return passed, 1.0 if passed else 0.0, [] if passed else [f"expected_label={expected_answer}"]
+
+    if verifier == "numeric_exact" and expected_answer:
+        expected_numbers = _numbers(expected_answer)
+        answer_numbers = _numbers(answer_text)
+        passed = bool(expected_numbers) and expected_numbers[0] in answer_numbers
+        return passed, 1.0 if passed else 0.0, [] if passed else [f"expected_number={expected_numbers[0] if expected_numbers else expected_answer}"]
+
     expected_keywords = scenario.get("expected_keywords", [])
-    answer_lower = answer.lower()
     matches = [keyword for keyword in expected_keywords if keyword.lower() in answer_lower]
     score = len(matches) / max(1, len(expected_keywords))
-    passed = score >= 0.75
+    threshold = 0.66 if verifier == "summary_constraints" else 0.75
+    passed = score >= threshold
     notes = []
-    missing = [keyword for keyword in expected_keywords if keyword not in matches]
+    matched_lower = {keyword.lower() for keyword in matches}
+    missing = [keyword for keyword in expected_keywords if keyword.lower() not in matched_lower]
     if missing:
         notes.append("missing_keywords=" + ",".join(missing))
     return passed, round(score, 3), notes
+
+
+def _numbers(text):
+    values = []
+    for raw in re.findall(r"-?\d+(?:\.\d+)?", text):
+        value = float(raw)
+        values.append(str(int(value)) if value.is_integer() else str(value))
+    return values
 
 
 def mock_answer(model, scenario):
