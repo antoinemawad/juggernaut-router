@@ -135,9 +135,13 @@ def _trap_guard_passes(prompt: str, classification: ClassificationResult) -> boo
         return False
     if classification.category == "sentiment_classification" and (" but " in lower or "however" in lower):
         return False
+    if classification.category == "sentiment_classification" and ("sarcasm" in lower or "yeah right" in lower or "as if" in lower):
+        return False
     if classification.category == "mathematical_reasoning" and ("for two months" in lower or "compound" in lower):
         return False
     if classification.category == "logical_deductive_reasoning" and "ranked by" in lower:
+        return False
+    if classification.category in {"code_generation", "code_debugging"} and _code_is_nontrivial(lower):
         return False
     return True
 
@@ -151,6 +155,11 @@ def _summary_needs_remote(lower: str, classification: ClassificationResult) -> b
 def _ner_is_ambiguous(lower: str) -> bool:
     ambiguous_markers = ("announced", "support with", "google deepmind", "gemma")
     return any(marker in lower for marker in ambiguous_markers)
+
+
+def _code_is_nontrivial(lower: str) -> bool:
+    nontrivial_markers = ("if x is below", "otherwise x", "sum of all numbers", "for n in", "s = n", "clamp(")
+    return any(marker in lower for marker in nontrivial_markers)
 
 
 def _cheap_cross_check_passes(

@@ -122,7 +122,7 @@ Performance rule: local verification must be bounded. A good default is a small 
 - Implemented first category-aware validator/proof gate for local outputs.
 - Checks category confidence, constraint extraction, risk threshold, solver confidence, category validation, format validation, trap guard, cheap cross-check, and proof-budget enforcement.
 - Rejects local answers that cannot be checked strongly enough for the selected router mode.
-- Current trap guards force ambiguous NER and weak/exact-summary tasks to Fireworks rather than accepting brittle local answers.
+- Current trap guards force ambiguous NER, weak/exact-summary tasks, sarcasm-style sentiment, and nontrivial code to Fireworks rather than accepting brittle local answers.
 - Planned expansion: richer relation graphs, tiny code micro-tests, summary key-term checks, and more adversarial trap guards.
 
 ### `app/normalization.py`

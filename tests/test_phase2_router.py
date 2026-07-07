@@ -9,8 +9,8 @@ from app.config import RuntimeConfig
 from app.deadline import DeadlineManager
 from app.solvers.basic import LocalSolverResult
 from app.validators import validate_local_answer
-from eval.model_matrix import score_answer
-from eval.router_config_sweep import DEFAULT_CONFIGS, route_matches_expected, run_scenario
+from eval.model_matrix import DEFAULT_SCENARIOS, load_scenarios, score_answer
+from eval.router_config_sweep import DEFAULT_CONFIGS, route_matches_expected, run_scenario, summarize
 
 
 class FakeClock:
@@ -64,6 +64,11 @@ class Phase2RouterTests(unittest.TestCase):
 
         fresh_classification = classify_prompt("Who is the current CEO of AMD today?")
         self.assertIn("factual_freshness", fresh_classification.risk_components)
+
+        sarcasm_classification = classify_prompt(
+            "Classify the sentiment as positive, negative, or neutral: Yeah right, the outage was just perfect."
+        )
+        self.assertIn("ambiguity", sarcasm_classification.risk_components)
 
     def test_local_high_confidence_task_does_not_call_fireworks(self):
         with patch("app.agent.ask_fireworks_structured") as mocked:
@@ -154,6 +159,57 @@ class Phase2RouterTests(unittest.TestCase):
             result = answer_task(
                 "summary",
                 "Summarise in exactly 12 words: A hybrid router should answer easy tasks locally and send risky tasks to Fireworks.",
+            )
+
+        self.assertEqual(result.route, "fireworks")
+        self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+
+    def test_sarcasm_sentiment_routes_remote(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse()):
+            result = answer_task(
+                "sarcasm",
+                "Classify the sentiment as positive, negative, or neutral: Yeah right, the outage was just perfect.",
+            )
+
+        self.assertEqual(result.route, "fireworks")
+        self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+
+    def test_nontrivial_code_routes_remote_even_in_aggressive_mode(self):
+        config = RuntimeConfig.from_env()
+        config = RuntimeConfig(
+            input_path=config.input_path,
+            output_path=config.output_path,
+            router_mode="aggressive",
+            local_confidence_threshold=0.82,
+            fireworks_timeout_seconds=config.fireworks_timeout_seconds,
+            fireworks_max_retries=config.fireworks_max_retries,
+            batch_deadline_seconds=config.batch_deadline_seconds,
+            deadline_safety_margin_seconds=config.deadline_safety_margin_seconds,
+            remote_worker_count=config.remote_worker_count,
+            local_proof_budget_ms=config.local_proof_budget_ms,
+            local_cross_check_enabled=config.local_cross_check_enabled,
+            router_log_path=config.router_log_path,
+            fireworks_api_key="secret",
+            fireworks_base_url="https://judge-proxy.example/v1",
+            allowed_models=("minimax-m3",),
+            fireworks_max_tokens=config.fireworks_max_tokens,
+        )
+        with patch("app.agent.ask_fireworks_structured") as mocked_remote:
+            from app.fireworks_client import FireworksResult
+
+            mocked_remote.return_value = FireworksResult(answer="def clamp(x, low, high):\n    return max(low, min(x, high))", model="minimax-m3")
+            result = answer_task(
+                "code",
+                "Write a Python function clamp(x, low, high) that returns low if x is below low, high if x is above high, otherwise x. Return only code.",
+                config=config,
             )
 
         self.assertEqual(result.route, "fireworks")
@@ -256,6 +312,27 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertTrue(row["expected_route_match"])
         self.assertIn("trap_guard", row["local_proof_layers_failed"])
 
+
+    def test_strict_hybrid_expected_routes_match_full_fixture(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid")
+        mismatches = []
+        for scenario in load_scenarios(DEFAULT_SCENARIOS):
+            row = run_scenario(config, scenario)
+            if not row["expected_route_match"]:
+                mismatches.append((row["task_id"], row["expected_route"], row["route"], row["route_reason"]))
+
+        self.assertEqual(mismatches, [])
+
+    def test_router_sweep_ranking_prioritizes_accuracy_then_tokens(self):
+        rows = [
+            {"config": "high_accuracy", "category": "x", "passed": True, "score": 1.0, "total_tokens": 100, "route": "fireworks", "expected_route_match": True},
+            {"config": "low_tokens_bad_accuracy", "category": "x", "passed": False, "score": 0.0, "total_tokens": 0, "route": "local", "expected_route_match": True},
+            {"config": "same_accuracy_lower_tokens", "category": "x", "passed": True, "score": 1.0, "total_tokens": 50, "route": "fireworks", "expected_route_match": True},
+        ]
+        _by_config, _by_category, ranked, _eligible, winner = summarize(rows, accuracy_threshold=0.85)
+        self.assertEqual(winner, "same_accuracy_lower_tokens")
+        self.assertEqual(ranked[0][0], "same_accuracy_lower_tokens")
+        self.assertEqual(ranked[-1][0], "low_tokens_bad_accuracy")
 
     def test_route_match_contract(self):
         self.assertTrue(route_matches_expected("local", "local"))
