@@ -52,16 +52,23 @@ def main():
     compile_targets = [
         "app/main.py",
         "app/agent.py",
+        "app/config.py",
+        "app/deadline.py",
         "app/fireworks_client.py",
+        "app/normalization.py",
         "app/solvers/basic.py",
+        "app/telemetry.py",
+        "app/types.py",
         "eval/model_matrix.py",
         "eval/router_config_sweep.py",
         "scripts/check_eval_coverage.py",
         "scripts/compare_eval_reports.py",
         "scripts/validate_submission_io.py",
+        "tests/test_phase1_runtime.py",
     ]
 
     results.append(run([py, "-m", "py_compile", *compile_targets]))
+    results.append(run([py, "-m", "unittest", "discover", "-s", "tests"]))
     results.append(run([py, "scripts/check_eval_coverage.py"]))
     results.append(run([py, "scripts/check_eval_coverage.py", "eval/golden_tier_2_regression.jsonl", "--profile", "tier"]))
     results.append(run([py, "scripts/check_eval_coverage.py", "eval/golden_tier_3_adversarial.jsonl", "--profile", "tier"]))
