@@ -1,4 +1,5 @@
 import re
+from dataclasses import dataclass
 
 
 POSITIVE_WORDS = [
@@ -10,6 +11,14 @@ NEGATIVE_WORDS = [
     "hate", "bad", "terrible", "awful", "sad", "angry", "slow",
     "disappointing", "poor", "worst", "broken", "frustrating", "late"
 ]
+
+
+@dataclass(frozen=True)
+class LocalSolverResult:
+    answer: str
+    confidence: float
+    solver_name: str
+    evidence: tuple[str, ...] = ()
 
 
 def solve_discount_problem(text: str):
@@ -152,20 +161,30 @@ def solve_factual(text: str):
 
 
 def try_basic_solver(prompt: str):
+    result = try_basic_solver_structured(prompt)
+    return result.answer if result is not None else None
+
+
+def try_basic_solver_structured(prompt: str):
     solvers = [
-        solve_basic_math,
-        solve_sentiment,
-        solve_summary,
-        solve_simple_ner,
-        solve_simple_logic,
-        solve_code_generation,
-        solve_code_debugging,
-        solve_factual,
+        ("basic_math", solve_basic_math, 0.99),
+        ("sentiment_word_count", solve_sentiment, 0.97),
+        ("first_sentence_summary", solve_summary, 0.82),
+        ("simple_ner_pattern", solve_simple_ner, 0.96),
+        ("order_logic_pattern", solve_simple_logic, 0.96),
+        ("code_generation_template", solve_code_generation, 0.92),
+        ("code_debugging_template", solve_code_debugging, 0.91),
+        ("stable_factual_template", solve_factual, 0.9),
     ]
 
-    for solver in solvers:
+    for solver_name, solver, confidence in solvers:
         answer = solver(prompt)
         if answer is not None:
-            return answer
+            return LocalSolverResult(
+                answer=answer,
+                confidence=confidence,
+                solver_name=solver_name,
+                evidence=(f"matched:{solver_name}",),
+            )
 
     return None

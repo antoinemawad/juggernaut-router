@@ -52,6 +52,7 @@ def main():
     compile_targets = [
         "app/main.py",
         "app/agent.py",
+        "app/classifier.py",
         "app/config.py",
         "app/deadline.py",
         "app/fireworks_client.py",
@@ -59,6 +60,7 @@ def main():
         "app/solvers/basic.py",
         "app/telemetry.py",
         "app/types.py",
+        "app/validators.py",
         "eval/model_matrix.py",
         "eval/router_config_sweep.py",
         "scripts/check_eval_coverage.py",
@@ -67,6 +69,7 @@ def main():
         "scripts/run_phase1_acceptance.py",
         "scripts/validate_submission_io.py",
         "tests/test_phase1_runtime.py",
+        "tests/test_phase2_router.py",
     ]
 
     results.append(run([py, "-m", "py_compile", *compile_targets]))

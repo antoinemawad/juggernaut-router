@@ -1,9 +1,11 @@
+from app.classifier import classify_prompt
 from app.config import RuntimeConfig
 from app.deadline import DeadlineManager, StageTimer
 from app.fireworks_client import ask_fireworks_structured
 from app.normalization import normalize_answer
-from app.solvers.basic import try_basic_solver
+from app.solvers.basic import try_basic_solver_structured
 from app.types import AgentResult, TimingMetrics
+from app.validators import validate_local_answer
 
 
 def answer_prompt(prompt: str) -> str:
@@ -25,27 +27,51 @@ def answer_task(
     prompt = prompt if isinstance(prompt, str) else str(prompt)
     prompt_token_estimate = estimate_tokens(prompt)
 
-    local_timer = StageTimer()
-    local_answer = try_basic_solver(prompt)
-    timings.local_solver_elapsed_ms = local_timer.elapsed_ms()
-    timings.local_proof_elapsed_ms = timings.local_solver_elapsed_ms
+    classification_timer = StageTimer()
+    classification = classify_prompt(prompt)
+    timings.classification_elapsed_ms = classification_timer.elapsed_ms()
 
-    if local_answer is not None:
+    local_timer = StageTimer()
+    local_result = try_basic_solver_structured(prompt)
+    timings.local_solver_elapsed_ms = local_timer.elapsed_ms()
+
+    validation_timer = StageTimer()
+    proof_elapsed_ms = timings.classification_elapsed_ms + timings.local_solver_elapsed_ms
+    validation = validate_local_answer(
+        prompt=prompt,
+        classification=classification,
+        solver_result=local_result,
+        config=config,
+        proof_elapsed_ms=proof_elapsed_ms,
+    )
+    timings.validation_elapsed_ms = validation_timer.elapsed_ms()
+    timings.local_proof_elapsed_ms = proof_elapsed_ms + timings.validation_elapsed_ms
+
+    if local_result is not None and validation.accepted:
         normalize_timer = StageTimer()
-        answer = normalize_answer(local_answer, code_only=_requests_code_only(prompt))
+        answer = normalize_answer(local_result.answer, code_only=_requests_code_only(prompt))
         timings.normalization_elapsed_ms = normalize_timer.elapsed_ms()
         _finish_timings(timings, task_timer, deadline)
         return AgentResult(
             answer=answer,
             route="local",
-            route_reason="basic_solver",
+            route_reason=local_result.solver_name,
+            category=classification.category,
             router_mode=config.router_mode,
             prompt_token_estimate=prompt_token_estimate,
             deadline_decision=_deadline_decision(deadline, config),
             timings=timings,
             metadata={
-                "local_proof_layers_passed": ["local_solver", "normalization"],
-                "local_proof_layers_failed": [],
+                "answer_shape": classification.answer_shape,
+                "constraints": list(classification.constraints),
+                "classification_confidence": classification.confidence,
+                "risk_score": classification.risk_score,
+                "risk_components": classification.risk_components,
+                "solver_confidence": local_result.confidence,
+                "local_evidence": list(local_result.evidence),
+                "local_proof_layers_passed": list(validation.passed_layers),
+                "local_proof_layers_failed": list(validation.failed_layers),
+                "validator_notes": list(validation.notes),
             },
         )
 
@@ -59,7 +85,8 @@ def answer_task(
     return AgentResult(
         answer=answer,
         route="fireworks" if remote.error is None else "fallback",
-        route_reason="no_local_solver" if remote.error is None else remote.error,
+        route_reason=_remote_route_reason(local_result, validation, remote.error),
+        category=classification.category,
         router_mode=config.router_mode,
         selected_model=remote.model,
         remote_mode="remote_concise",
@@ -72,8 +99,16 @@ def answer_task(
         error=remote.error,
         timings=timings,
         metadata={
-            "local_proof_layers_passed": [],
-            "local_proof_layers_failed": ["local_solver"],
+            "answer_shape": classification.answer_shape,
+            "constraints": list(classification.constraints),
+            "classification_confidence": classification.confidence,
+            "risk_score": classification.risk_score,
+            "risk_components": classification.risk_components,
+            "solver_confidence": local_result.confidence if local_result is not None else None,
+            "local_evidence": list(local_result.evidence) if local_result is not None else [],
+            "local_proof_layers_passed": list(validation.passed_layers),
+            "local_proof_layers_failed": list(validation.failed_layers),
+            "validator_notes": list(validation.notes),
         },
     )
 
@@ -98,3 +133,13 @@ def _finish_timings(timings: TimingMetrics, task_timer: StageTimer, deadline: De
     if deadline is not None:
         timings.batch_elapsed_ms_at_finish = deadline.elapsed_ms()
         timings.remaining_budget_ms = deadline.remaining_budget_ms()
+
+
+def _remote_route_reason(local_result, validation, remote_error: str | None) -> str:
+    if remote_error is not None:
+        return remote_error
+    if local_result is None:
+        return "no_local_solver"
+    if validation.failed_layers:
+        return "local_validation_failed:" + ",".join(validation.failed_layers)
+    return "remote_selected"

@@ -205,6 +205,15 @@ Non-goals:
 
 Objective: replace solver-first routing with classifier/risk/validator routing.
 
+Current status:
+
+- first implementation slice is complete,
+- `app/classifier.py` classifies the 8 Track 1 categories locally before any Fireworks call,
+- `app/solvers/basic.py` returns structured local solver results internally,
+- `app/validators.py` gates local answers through the first proof ladder,
+- `app/agent.py` now accepts local answers only when validator/proof layers pass,
+- `tests/test_phase2_router.py` covers classifier categories, risk components, local no-Fireworks routing, remote fallback through the wrapper, proof-budget rejection, and classifier-before-remote ordering.
+
 Deliverables:
 
 - `app/classifier.py`
@@ -245,6 +254,14 @@ Required tests/checks:
 - local accepted answers include proof/evidence metadata,
 - router decision logs include per-stage elapsed times,
 - local quality gate passes.
+
+Remaining expansion tests:
+
+- expected-route assertions over the full JSONL scenario fixture,
+- richer validator rejection tests for weak local summaries, ambiguous NER, and nontrivial code,
+- explicit trap-guard cases for sarcasm, incomplete logic, and multi-step math,
+- cheap cross-check failure fixtures beyond math/sentiment/simple logic,
+- router sweep should use actual router decisions instead of legacy simulated local scores.
 
 Quality bar:
 

@@ -1,6 +1,6 @@
 # Planned Architecture
 
-This document defines the intended Track 1 implementation architecture. It is planning-only and should be updated before coding changes.
+This document defines the Track 1 implementation architecture. Sections marked as planned describe the target end-state; implemented sections describe code that now exists in the repository.
 
 ## Runtime Flow
 
@@ -102,12 +102,11 @@ Performance rule: local verification must be bounded. A good default is a small 
 
 ### `app/classifier.py`
 
-- Planned task classifier for the 8 Track 1 categories.
-- Should use simple, inspectable heuristics first.
-- Must return category and confidence.
-- Must run locally before any Fireworks call.
-- Must expose risk flags such as `requires_reasoning`, `requires_code`, `requires_summary`, `requires_entities`, `likely_deterministic`, and `ambiguous`.
-- Should contribute risk components for ambiguity, reasoning depth, format strictness, code risk, factual freshness, and local validator weakness.
+- Implemented task classifier for the 8 Track 1 categories.
+- Uses simple, inspectable heuristics first.
+- Returns category, confidence, answer shape, constraints, risk components, and risk score.
+- Runs locally before any Fireworks call.
+- Contributes risk components for ambiguity, reasoning depth, format strictness, code risk, factual freshness, and local validator weakness.
 - Should avoid overfitting to public examples because evaluation uses unseen variants. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 
 ### `app/solvers/result.py`
@@ -119,9 +118,10 @@ Performance rule: local verification must be bounded. A good default is a small 
 
 ### `app/validators.py`
 
-- Planned category-specific validators for local and remote outputs.
-- Should validate math recomputation, sentiment polarity strength, NER schema/labels, summary length/key terms, simple logic relation graphs, code syntax, and exact-format requirements.
-- Must reject local answers that cannot be checked strongly enough for the selected router mode.
+- Implemented first category-aware validator/proof gate for local outputs.
+- Checks category confidence, constraint extraction, risk threshold, solver confidence, category validation, format validation, trap guard, cheap cross-check, and proof-budget enforcement.
+- Rejects local answers that cannot be checked strongly enough for the selected router mode.
+- Planned expansion: richer relation graphs, tiny code micro-tests, summary key-term checks, and more adversarial trap guards.
 
 ### `app/normalization.py`
 
@@ -185,16 +185,17 @@ Timing fields must never be written to the official `/output/results.json`. They
 
 ### `app/solvers/basic.py`
 
-- Planned deterministic local solvers for high-confidence tasks.
-- Candidate coverage: arithmetic, simple sentiment, obvious NER, simple formatting.
+- Implemented deterministic local solvers with structured internal results.
+- Current coverage: arithmetic, simple sentiment, first-sentence summary, obvious NER, simple logic, selected code templates, and stable factual template.
+- `try_basic_solver()` remains available for legacy eval scripts, while `try_basic_solver_structured()` returns answer, confidence, solver name, and evidence for the router.
 - Must never emit low-confidence guesses as final answers.
 
 ### `app/agent.py`
 
-- Planned routing coordinator.
+- Implemented routing coordinator with Phase 2 local-first skeleton.
 - Receives a task from `main.py`.
 - Always classifies locally before deciding whether Fireworks is needed.
-- Uses classifier output and local solvers to decide whether the task can stay local.
+- Uses classifier output, structured local solver results, and validator proof gates to decide whether the task can stay local.
 - Calls Fireworks fallback when local confidence is too low or validation fails.
 - Must not call Fireworks for high-confidence deterministic/local answers.
 - Uses a programmable/configurable accuracy-gate target in local evaluation so the threshold can change without architecture changes.
