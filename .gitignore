@@ -22,6 +22,7 @@ checkpoints/
 
 # Logs/results that may be large
 logs/
+eval_runs/
 *.log
 
 # Jupyter

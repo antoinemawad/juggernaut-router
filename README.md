@@ -2,6 +2,63 @@
 
 Benchmark-driven hybrid LLM routing agent for AMD Developer Hackathon: ACT II.
 
+## Track 1 Runtime Contract
+
+The submitted container defaults to the official harness paths:
+
+- input: `/input/tasks.json`
+- output: `/output/results.json`
+
+For local testing only, those paths can be overridden:
+
+- `INPUT_PATH`
+- `OUTPUT_PATH`
+
+Fireworks values must come from the environment. Local development may use `--env-file .env`, but `.env` must never be committed or bundled into the submitted image.
+
+Required runtime env vars for live Fireworks fallback:
+
+- `FIREWORKS_API_KEY`
+- `FIREWORKS_BASE_URL`
+- `ALLOWED_MODELS`
+
+All Fireworks calls are built from `FIREWORKS_BASE_URL`; do not hardcode the normal Fireworks API URL.
+
+## Local Smoke Test
+
+```bash
+INPUT_PATH=local_test/input/tasks.json \
+OUTPUT_PATH=local_test/output/results.json \
+python3 -m app.main
+
+python3 scripts/validate_submission_io.py local_test/output/results.json
+```
+
+## Docker Smoke Test
+
+```bash
+docker build -t juggernaut-router:local .
+
+docker run --rm \
+  -v "$PWD/local_test/input:/input:ro" \
+  -v "$PWD/local_test/output:/output" \
+  juggernaut-router:local
+
+python3 scripts/validate_submission_io.py local_test/output/results.json
+```
+
+## Final linux/amd64 Build and Push
+
+Use this for the submitted image, especially from Apple Silicon:
+
+```bash
+docker buildx build --platform linux/amd64 \
+  --tag <public-registry>/juggernaut-router:latest \
+  --push .
+```
+
+Before submitting, pull the public image and run it with mounted `/input` and `/output`.
+
 ## Goal
 
 Build a routing system that decides when to use local AMD-hosted inference and when to use remote inference, optimizing:

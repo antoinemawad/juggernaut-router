@@ -1,0 +1,280 @@
+import argparse
+import json
+import os
+import time
+import urllib.error
+import urllib.request
+from collections import defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+ALLOWED_TRACK1_MODELS = [
+    "minimax-m3",
+    "kimi-k2p7-code",
+    "gemma-4-31b-it",
+    "gemma-4-26b-a4b-it",
+    "gemma-4-31b-it-nvfp4",
+]
+
+DEFAULT_SCENARIOS = Path(__file__).with_name("model_matrix_scenarios.jsonl")
+DEFAULT_OUT_DIR = Path(__file__).resolve().parents[1] / "eval_runs"
+
+
+def load_scenarios(path):
+    scenarios = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if line:
+                scenarios.append(json.loads(line))
+    return scenarios
+
+
+def env_models():
+    raw = os.environ.get("ALLOWED_MODELS", "")
+    models = [model.strip() for model in raw.split(",") if model.strip()]
+    return models or ALLOWED_TRACK1_MODELS
+
+
+def estimate_tokens(text):
+    return max(1, (len(text) + 3) // 4)
+
+
+def score_answer(answer, scenario):
+    expected_keywords = scenario.get("expected_keywords", [])
+    answer_lower = answer.lower()
+    matches = [keyword for keyword in expected_keywords if keyword.lower() in answer_lower]
+    score = len(matches) / max(1, len(expected_keywords))
+    passed = score >= 0.75
+    notes = []
+    missing = [keyword for keyword in expected_keywords if keyword not in matches]
+    if missing:
+        notes.append("missing_keywords=" + ",".join(missing))
+    return passed, round(score, 3), notes
+
+
+def mock_answer(model, scenario):
+    expected = scenario.get("expected_answer", "")
+    category = scenario["category"]
+    if model == "kimi-k2p7-code" and category in {"code_debugging", "code_generation"}:
+        return expected
+    if model.startswith("gemma") and category in {"text_summarisation", "sentiment_classification", "factual_knowledge"}:
+        return expected
+    if model == "minimax-m3" and category in {"mathematical_reasoning", "named_entity_recognition", "logical_deductive_reasoning"}:
+        return expected
+    if model == "gemma-4-31b-it-nvfp4":
+        return expected if category != "code_generation" else "def solution(...): pass"
+    return expected
+
+
+def call_fireworks(model, scenario, max_tokens):
+    api_key = os.environ["FIREWORKS_API_KEY"]
+    base_url = os.environ["FIREWORKS_BASE_URL"].rstrip("/")
+    url = base_url + "/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Answer accurately and concisely in English. "
+                    "Follow the requested output format exactly."
+                ),
+            },
+            {"role": "user", "content": scenario["prompt"]},
+        ],
+        "temperature": 0,
+        "max_tokens": max_tokens,
+    }
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    answer = data["choices"][0]["message"]["content"].strip()
+    usage = data.get("usage", {})
+    return answer, {
+        "prompt_tokens": usage.get("prompt_tokens", estimate_tokens(scenario["prompt"])),
+        "completion_tokens": usage.get("completion_tokens", estimate_tokens(answer)),
+        "total_tokens": usage.get("total_tokens"),
+    }
+
+
+def run_case(model, scenario, live, max_tokens):
+    start = time.perf_counter()
+    error = None
+    if live:
+        try:
+            answer, usage = call_fireworks(model, scenario, max_tokens)
+        except (KeyError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
+            answer = ""
+            usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+            error = f"{type(exc).__name__}: {exc}"
+    else:
+        answer = mock_answer(model, scenario)
+        usage = {
+            "prompt_tokens": estimate_tokens(scenario["prompt"]),
+            "completion_tokens": estimate_tokens(answer),
+            "total_tokens": estimate_tokens(scenario["prompt"]) + estimate_tokens(answer),
+        }
+    if usage.get("total_tokens") is None:
+        usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
+    latency_ms = (time.perf_counter() - start) * 1000
+    passed, score, notes = score_answer(answer, scenario)
+    if error:
+        passed = False
+        score = 0.0
+        notes.append(error)
+    return {
+        "task_id": scenario["task_id"],
+        "category": scenario["category"],
+        "model": model,
+        "prompt_tokens": usage["prompt_tokens"],
+        "completion_tokens": usage["completion_tokens"],
+        "total_tokens": usage["total_tokens"],
+        "latency_ms": round(latency_ms, 2),
+        "passed": passed,
+        "score": score,
+        "answer": answer,
+        "expected_answer": scenario.get("expected_answer"),
+        "notes": notes,
+        "error": error,
+    }
+
+
+def summarize(rows):
+    by_model = defaultdict(lambda: {"cases": 0, "passed": 0, "score": 0.0, "tokens": 0, "latency": 0.0})
+    by_model_category = defaultdict(lambda: {"cases": 0, "passed": 0, "score": 0.0, "tokens": 0})
+    for row in rows:
+        model_row = by_model[row["model"]]
+        model_row["cases"] += 1
+        model_row["passed"] += int(row["passed"])
+        model_row["score"] += row["score"]
+        model_row["tokens"] += row["total_tokens"]
+        model_row["latency"] += row["latency_ms"]
+
+        key = (row["model"], row["category"])
+        category_row = by_model_category[key]
+        category_row["cases"] += 1
+        category_row["passed"] += int(row["passed"])
+        category_row["score"] += row["score"]
+        category_row["tokens"] += row["total_tokens"]
+    return by_model, by_model_category
+
+
+def write_report(path, rows, live):
+    by_model, by_model_category = summarize(rows)
+    lines = [
+        "# Track 1 Model Matrix Report",
+        "",
+        f"Mode: {'live Fireworks' if live else 'mock'}",
+        "",
+        "## Summary by Model",
+        "",
+        "| Model | Cases | Pass Rate | Avg Score | Total Tokens | Avg Tokens | Avg Latency ms |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for model, data in sorted(by_model.items()):
+        cases = data["cases"]
+        lines.append(
+            f"| {model} | {cases} | {data['passed'] / cases:.1%} | "
+            f"{data['score'] / cases:.3f} | {data['tokens']} | "
+            f"{data['tokens'] / cases:.1f} | {data['latency'] / cases:.1f} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Summary by Model and Category",
+            "",
+            "| Model | Category | Cases | Pass Rate | Avg Score | Total Tokens |",
+            "| --- | --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for (model, category), data in sorted(by_model_category.items()):
+        cases = data["cases"]
+        lines.append(
+            f"| {model} | {category} | {cases} | {data['passed'] / cases:.1%} | "
+            f"{data['score'] / cases:.3f} | {data['tokens']} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Provisional Routing Recommendation",
+            "",
+        ]
+    )
+    categories = sorted({row["category"] for row in rows})
+    for category in categories:
+        candidates = [row for row in rows if row["category"] == category]
+        model_scores = defaultdict(lambda: {"score": 0.0, "tokens": 0, "cases": 0})
+        for row in candidates:
+            item = model_scores[row["model"]]
+            item["score"] += row["score"]
+            item["tokens"] += row["total_tokens"]
+            item["cases"] += 1
+        ranked = sorted(
+            model_scores.items(),
+            key=lambda item: (-(item[1]["score"] / item[1]["cases"]), item[1]["tokens"] / item[1]["cases"]),
+        )
+        best_model, best_data = ranked[0]
+        lines.append(
+            f"- {category}: `{best_model}` "
+            f"(avg_score={best_data['score'] / best_data['cases']:.3f}, "
+            f"avg_tokens={best_data['tokens'] / best_data['cases']:.1f})"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run Track 1 allowed-model matrix experiments.")
+    parser.add_argument("--scenarios", type=Path, default=DEFAULT_SCENARIOS)
+    parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
+    parser.add_argument("--models", default=",".join(ALLOWED_TRACK1_MODELS))
+    parser.add_argument("--live", action="store_true", help="Call Fireworks through FIREWORKS_BASE_URL.")
+    parser.add_argument("--max-tokens", type=int, default=256)
+    args = parser.parse_args()
+
+    requested_models = [model.strip() for model in args.models.split(",") if model.strip()]
+    allowed = set(env_models())
+    models = [model for model in requested_models if model in allowed]
+    if not models:
+        raise SystemExit("No requested models are present in ALLOWED_MODELS.")
+    if args.live:
+        for name in ("FIREWORKS_API_KEY", "FIREWORKS_BASE_URL", "ALLOWED_MODELS"):
+            if not os.environ.get(name):
+                raise SystemExit(f"--live requires {name}")
+
+    scenarios = load_scenarios(args.scenarios)
+    run_id = datetime.now(timezone.utc).strftime("model_matrix_%Y%m%d_%H%M%S")
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    log_path = args.out_dir / f"{run_id}.jsonl"
+    report_path = args.out_dir / f"{run_id}.md"
+
+    rows = []
+    with log_path.open("x", encoding="utf-8") as handle:
+        for model in models:
+            for scenario in scenarios:
+                row = run_case(model, scenario, args.live, args.max_tokens)
+                row["run_id"] = run_id
+                row["timestamp"] = datetime.now(timezone.utc).isoformat()
+                rows.append(row)
+                handle.write(json.dumps(row, ensure_ascii=True) + "\n")
+
+    write_report(report_path, rows, args.live)
+    print(f"Mode: {'live' if args.live else 'mock'}")
+    print(f"Models: {', '.join(models)}")
+    print(f"Scenarios: {len(scenarios)}")
+    print(f"Rows: {len(rows)}")
+    print(f"Log: {log_path}")
+    print(f"Report: {report_path}")
+
+
+if __name__ == "__main__":
+    main()
