@@ -211,9 +211,11 @@ Current status:
 - `app/classifier.py` classifies the 8 Track 1 categories locally before any Fireworks call,
 - `app/solvers/basic.py` returns structured local solver results internally,
 - `app/validators.py` gates local answers through the first proof ladder,
+- `app/validators.py` rejects weak local summaries and ambiguous NER through trap guards,
 - `app/agent.py` now accepts local answers only when validator/proof layers pass,
 - `eval/router_config_sweep.py` now exercises the real router with mocked Fireworks responses,
-- `tests/test_phase2_router.py` covers classifier categories, risk components, local no-Fireworks routing, remote fallback through the wrapper, proof-budget rejection, classifier-before-remote ordering, real-router sweep rows, and verifier-aware scoring.
+- latest mock sweep recommends `strict_hybrid` with 100% pass rate, 100% expected-route match, and fewer tokens than always-Fireworks,
+- `tests/test_phase2_router.py` covers classifier categories, risk components, local no-Fireworks routing, remote fallback through the wrapper, proof-budget rejection, classifier-before-remote ordering, ambiguous NER rejection, exact-summary rejection, real-router sweep rows, and verifier-aware scoring.
 
 Deliverables:
 
@@ -259,7 +261,7 @@ Required tests/checks:
 Remaining expansion tests:
 
 - expected-route assertions over the full JSONL scenario fixture,
-- richer validator rejection tests for weak local summaries, ambiguous NER, and nontrivial code,
+- richer validator rejection tests for nontrivial code and broader summary/NER variants,
 - explicit trap-guard cases for sarcasm, incomplete logic, and multi-step math,
 - cheap cross-check failure fixtures beyond math/sentiment/simple logic.
 

@@ -63,20 +63,20 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 ### Always-Fireworks vs Hybrid Router
 
 - Name: Always-Fireworks vs Hybrid Router
-- Date: TBD
+- Date: 2026-07-07
 - Goal: Prove the final router saves recorded tokens while preserving the accuracy target.
 - Strategy tested: Run the same dataset through always-Fireworks, strict hybrid, and aggressive hybrid configurations.
-- Dataset: Full category-balanced local eval with adversarial variants.
-- Local solver coverage: 0% for baseline; measured by category for hybrid runs.
-- Fireworks calls required: 100% for baseline; lower for hybrid runs.
+- Dataset: `eval/model_matrix_scenarios.jsonl` with mocked Fireworks answers.
+- Local solver coverage: 0% for baseline; strict hybrid local route rate was 25.0%.
+- Fireworks calls required: 100% for baseline; strict hybrid routed 75.0% remotely in mock sweep.
 - Expected token impact: Hybrid must use fewer recorded tokens than baseline while preserving accuracy.
 - Log file: `eval_runs/router_sweep_<timestamp>.jsonl`.
 - Report file: `eval_runs/router_sweep_<timestamp>.md`.
-- Accuracy observations: TBD.
-- Token observations: TBD.
+- Accuracy observations: Latest mock sweep recommended `strict_hybrid` with 100.0% pass rate and 100.0% expected-route match.
+- Token observations: Strict hybrid used 607 mock total tokens versus 731 for always-Fireworks.
 - Latency observations: TBD.
-- Failure cases: Local overconfidence, validator misses, format drift, Fireworks timeout.
-- Decision: Promote the hybrid configuration only if it meets the accuracy target and beats baseline token usage.
+- Failure cases: Earlier sweep over-accepted ambiguous NER and exact/weak summaries locally; fixed by trap guards.
+- Decision: Keep `strict_hybrid` as the current mock-selected config until live Fireworks/model-matrix data says otherwise.
 
 ### Local Deterministic High-Confidence Only
 

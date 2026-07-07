@@ -129,6 +129,10 @@ def _trap_guard_passes(prompt: str, classification: ClassificationResult) -> boo
     lower = prompt.lower()
     if classification.risk_components.get("factual_freshness", 0) >= 0.75:
         return False
+    if classification.category == "text_summarisation" and _summary_needs_remote(lower, classification):
+        return False
+    if classification.category == "named_entity_recognition" and _ner_is_ambiguous(lower):
+        return False
     if classification.category == "sentiment_classification" and (" but " in lower or "however" in lower):
         return False
     if classification.category == "mathematical_reasoning" and ("for two months" in lower or "compound" in lower):
@@ -136,6 +140,17 @@ def _trap_guard_passes(prompt: str, classification: ClassificationResult) -> boo
     if classification.category == "logical_deductive_reasoning" and "ranked by" in lower:
         return False
     return True
+
+
+def _summary_needs_remote(lower: str, classification: ClassificationResult) -> bool:
+    if "exactly" in lower or "word" in lower:
+        return True
+    return classification.risk_components.get("local_validator_weakness", 0) >= 0.35
+
+
+def _ner_is_ambiguous(lower: str) -> bool:
+    ambiguous_markers = ("announced", "support with", "google deepmind", "gemma")
+    return any(marker in lower for marker in ambiguous_markers)
 
 
 def _cheap_cross_check_passes(

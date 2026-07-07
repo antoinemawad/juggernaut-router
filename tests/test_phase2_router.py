@@ -123,6 +123,42 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(captured["url"], "https://judge-proxy.example/v1/chat/completions")
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
 
+    def test_ambiguous_ner_routes_remote_instead_of_unsafe_local(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse()):
+            result = answer_task(
+                "ner",
+                "Extract named entities and label them: Google DeepMind announced Gemma support with AMD in London on July 7, 2026.",
+            )
+
+        self.assertEqual(result.route, "fireworks")
+        self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+
+    def test_exact_summary_routes_remote_for_format_control(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse()):
+            result = answer_task(
+                "summary",
+                "Summarise in exactly 12 words: A hybrid router should answer easy tasks locally and send risky tasks to Fireworks.",
+            )
+
+        self.assertEqual(result.route, "fireworks")
+        self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+
     def test_local_proof_budget_exhaustion_rejects_local_answer(self):
         config = RuntimeConfig.from_env()
         classification = classify_prompt("A product costs $80 and is discounted by 25%. What is the final price?")
@@ -188,6 +224,38 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(row["model"], "minimax-m3")
         self.assertGreater(row["total_tokens"], 0)
         self.assertTrue(row["expected_route_match"])
+
+    def test_router_sweep_rejects_ambiguous_ner_local_candidate(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "aggressive_local")
+        scenario = {
+            "task_id": "ner_multiple",
+            "category": "named_entity_recognition",
+            "prompt": "Extract named entities and label them: Google DeepMind announced Gemma support with AMD in London on July 7, 2026.",
+            "expected_keywords": ["Google DeepMind", "ORG", "Gemma", "AMD", "London", "July 7, 2026"],
+            "expected_answer": "Google DeepMind: ORG; Gemma: PRODUCT; AMD: ORG; London: LOCATION; July 7, 2026: DATE",
+            "expected_route": "remote_format_strict",
+        }
+        row = run_scenario(config, scenario)
+        self.assertEqual(row["route"], "fireworks")
+        self.assertTrue(row["expected_route_match"])
+        self.assertIn("trap_guard", row["local_proof_layers_failed"])
+
+    def test_router_sweep_rejects_exact_summary_local_candidate(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "aggressive_local")
+        scenario = {
+            "task_id": "summary_router",
+            "category": "text_summarisation",
+            "prompt": "Summarise in exactly 12 words: A hybrid router should answer easy tasks locally and send risky tasks to Fireworks so it can preserve accuracy while reducing recorded token usage.",
+            "expected_keywords": ["local", "Fireworks", "accuracy", "token"],
+            "expected_answer": "Hybrid routing saves tokens by using local answers and Fireworks fallbacks.",
+            "expected_route": "remote_format_strict",
+            "verifier": "word_count",
+        }
+        row = run_scenario(config, scenario)
+        self.assertEqual(row["route"], "fireworks")
+        self.assertTrue(row["expected_route_match"])
+        self.assertIn("trap_guard", row["local_proof_layers_failed"])
+
 
     def test_route_match_contract(self):
         self.assertTrue(route_matches_expected("local", "local"))
