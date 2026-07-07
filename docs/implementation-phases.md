@@ -2,13 +2,50 @@
 
 Purpose: define the exact implementation order for moving from planning/eval scaffolding to a competitive Track 1 runtime.
 
-This document is intentionally operational. Each phase has deliverables, required checks, exit criteria, and explicit non-goals.
+This is the execution spine for the project. Each phase has a clear objective, dependencies, deliverables, tests, exit criteria, quality bar, trace artifacts, and non-goals.
+
+## Global Engineering Rules
+
+- Keep the submitted runtime CPU-safe unless organizers explicitly confirm final GPU access.
+- Keep `/output/results.json` minimal: only `task_id` and `answer`.
+- Keep all remote inference behind `FIREWORKS_BASE_URL`.
+- Keep model selection constrained to runtime `ALLOWED_MODELS`.
+- Prefer accuracy over token reduction until the accuracy gate is safe.
+- Do not promote a router behavior unless it has a test, a scenario, and a log/report path.
+- Do not expand live Fireworks spend until the local quality gate passes.
+
+## Global Quality Gates
+
+Every implementation phase must preserve these checks:
+
+```bash
+python3 scripts/run_local_quality_gate.py
+python3 scripts/validate_submission_io.py local_test/output/results.json
+```
+
+Before official submission, also run Docker:
+
+```bash
+docker build -t juggernaut-router:local .
+docker run --rm -v "$PWD/local_test/input:/input:ro" -v "$PWD/local_test/output:/output" juggernaut-router:local
+python3 scripts/validate_submission_io.py local_test/output/results.json
+```
+
+## Phase Dependencies
+
+| Phase | Depends On | Unlocks |
+| --- | --- | --- |
+| Phase 0 | none | measurable planning baseline |
+| Phase 1 | Phase 0 | safe runtime for all later work |
+| Phase 2 | Phase 1 | real local-first routing |
+| Phase 3 | Phase 2, with Phase 1 stable | official config comparisons |
+| Phase 4 | Phase 1 plus selected Phase 2/3 features | live eval and official submissions |
 
 ## Phase 0: Planning and Eval Foundation
 
 Status: mostly complete.
 
-Goal: make the strategy measurable before changing runtime behavior.
+Objective: make the strategy measurable before changing runtime behavior.
 
 Deliverables:
 
@@ -30,11 +67,23 @@ INPUT_PATH=local_test/input/tasks.json OUTPUT_PATH=local_test/output/results.jso
 python3 scripts/validate_submission_io.py local_test/output/results.json
 ```
 
-Exit criteria:
+Quality bar:
+
+- scenario metadata covers all 8 Track 1 categories,
+- model matrix and router sweep both write JSONL plus markdown reports,
+- docs clearly separate implemented, planned, and open-question behavior.
+
+Trace artifacts:
+
+- latest `eval_runs/model_matrix_*.md`,
+- latest `eval_runs/router_sweep_*.md`,
+- `docs/test-eval-coverage-plan.md`,
+- `docs/strategy-plan.md`.
+
+Definition of done:
 
 - all required checks pass,
-- scenario metadata covers all 8 categories,
-- docs clearly separate implemented vs planned behavior,
+- local quality gate exists and passes,
 - branch is pushed.
 
 Non-goals:
@@ -45,7 +94,7 @@ Non-goals:
 
 ## Phase 1: Production-Safe Runtime
 
-Goal: make the submitted container hard to break before making the router smarter.
+Objective: make the submitted container hard to break before making the router smarter.
 
 Deliverables:
 
@@ -87,12 +136,33 @@ Required tests/checks:
 - telemetry excludes API keys/secrets,
 - `python3 scripts/run_local_quality_gate.py`.
 
-Exit criteria:
+Quality bar:
+
+- every recoverable failure produces valid final JSON,
+- no exception from one task prevents later tasks from completing,
+- Fireworks errors are sanitized,
+- telemetry is optional and never changes official output,
+- quality gate summary is produced for evidence.
+
+Trace artifacts:
+
+- quality gate output,
+- malformed-input test output,
+- sanitized telemetry example,
+- updated submission checklist.
+
+Definition of done:
 
 - all required tests/checks pass,
 - no recoverable single-task failure can prevent valid final JSON,
 - local quality gate passes,
 - Docker smoke command is ready to run.
+
+Stop rules:
+
+- stop Phase 2 work if final JSON can be malformed,
+- stop Phase 2 work if missing Fireworks env crashes the batch,
+- stop Phase 2 work if telemetry can leak secrets.
 
 Non-goals:
 
@@ -102,7 +172,7 @@ Non-goals:
 
 ## Phase 2: Real Local-First Router
 
-Goal: replace solver-first routing with classifier/risk/validator routing.
+Objective: replace solver-first routing with classifier/risk/validator routing.
 
 Deliverables:
 
@@ -135,12 +205,32 @@ Required tests/checks:
 - local accepted answers include proof/evidence metadata,
 - local quality gate passes.
 
-Exit criteria:
+Quality bar:
+
+- local answers are accepted only with proof/validator support,
+- unsafe local acceptance is treated as a blocking bug,
+- expected-route mismatches are explainable and logged,
+- router sweep uses actual route decisions.
+
+Trace artifacts:
+
+- router decision JSONL,
+- expected-route assertion report,
+- updated router sweep report,
+- examples of local accept and Fireworks fallback.
+
+Definition of done:
 
 - real router decisions are visible in logs,
 - router config sweep uses actual router routes instead of only simulated routes,
 - local acceptance is validator-gated,
 - no regression in output JSON shape.
+
+Stop rules:
+
+- stop Phase 3 work if local overconfidence appears in adversarial scenarios,
+- stop Phase 3 work if classifier can call Fireworks directly,
+- stop Phase 3 work if route decisions are not logged in eval/dev mode.
 
 Non-goals:
 
@@ -150,7 +240,7 @@ Non-goals:
 
 ## Phase 3: Remote Modes and Configurable Router Modes
 
-Goal: make official submissions comparable and measurable.
+Objective: make official submissions comparable and measurable.
 
 Deliverables:
 
@@ -185,12 +275,33 @@ Required tests/checks:
 - selected model is always in `ALLOWED_MODELS`,
 - local quality gate passes.
 
-Exit criteria:
+Quality bar:
+
+- conservative mode should be accuracy-biased,
+- aggressive mode should never bypass validators,
+- balanced mode should be the default candidate unless evidence says otherwise,
+- retry policy is bounded and explainable,
+- token-saving changes must not lower pass rate in local eval.
+
+Trace artifacts:
+
+- router config sweep report,
+- remote mode comparison report,
+- retry/failure examples,
+- selected config note in `docs/official-submission-log.md`.
+
+Definition of done:
 
 - router config sweep compares real conservative/balanced/aggressive behavior,
 - reports show local route rate, pass rate, and token estimates by config,
 - remote mode logs are inspectable,
 - one retry policy is bounded and tested.
+
+Stop rules:
+
+- stop live spend if selected model can fall outside `ALLOWED_MODELS`,
+- stop official submission if retry can loop,
+- stop token optimization if local pass rate drops below threshold.
 
 Non-goals:
 
@@ -199,7 +310,7 @@ Non-goals:
 
 ## Phase 4: Live Evaluation and Submission Optimization
 
-Goal: use Fireworks credits and official submissions as controlled feedback.
+Objective: use Fireworks credits and official submissions as controlled feedback.
 
 Deliverables:
 
@@ -227,13 +338,35 @@ docker run --rm -v "$PWD/local_test/input:/input:ro" -v "$PWD/local_test/output:
 python3 scripts/validate_submission_io.py local_test/output/results.json
 ```
 
-Exit criteria:
+Quality bar:
+
+- official submission candidate has local evidence,
+- Docker image is reproducible,
+- live runs are staged by budget plan,
+- every official attempt has a one-variable hypothesis.
+
+Trace artifacts:
+
+- Docker smoke output,
+- selected live eval report,
+- image tag/digest,
+- `docs/official-submission-log.md`,
+- final selected router config.
+
+Definition of done:
 
 - Docker image is public and pullable,
 - image includes linux/amd64 manifest,
 - final output JSON validates,
 - selected router config has local evidence,
 - official submission log is updated.
+
+Stop rules:
+
+- stop official submissions if Docker pull/run fails,
+- stop official submissions if output JSON is malformed,
+- stop official submissions if calls bypass `FIREWORKS_BASE_URL`,
+- stop live expansion if token fields or response schema look wrong.
 
 Non-goals:
 
@@ -267,3 +400,16 @@ Skip unless time remains:
 - GPU-required final runtime,
 - non-Track-1 product polish,
 - generic process docs that do not affect scoring.
+
+## Phase Review Template
+
+Use this before moving from one phase to the next:
+
+- Phase:
+- Branch/commit:
+- Required checks run:
+- Reports generated:
+- Known failures:
+- Risks updated:
+- Decision: advance / hold
+- Reason:
