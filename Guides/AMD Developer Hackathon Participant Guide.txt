@@ -1,0 +1,28 @@
+AMD Developer Hackathon Participant Guide
+## 📋 AMD Developer Hackathon: Participant Guide is live! 
+
+Everything you need to build and submit a competitive entry is now up: Participant Guide (https://drive.google.com/file/d/1UGpOZiGGGBqQhGQxX7g19QAA-Dq9hPKk/view?usp=sharing)
+
+# Three tracks, pick what fits you:
+
+**🧠 Track 1: General-Purpose AI Agent**
+Build an agent that handles tasks across 8 categories (factual Q&A, math reasoning, sentiment, summarization, NER, code debugging, logic puzzles, code generation) using Fireworks AI models. Submit a Docker image. Scored on an accuracy gate, then ranked by token efficiency.
+
+**Allowed models (Track 1):**
+minimax-m3
+kimi-k2p7-code
+gemma-4-31b-it
+gemma-4-26b-a4b-it
+gemma-4-31b-it-nvfp4
+
+**Keep in mind (all tracks):**
+Docker images (Tracks 1 & 2) must be publicly pullable and include a linux/amd64 manifest
+Image size capped at 10GB
+No hardcoded/cached answers: evaluation uses unseen variants
+Submissions are rate-limited, so test locally before repeated submits
+
+**GPU Access: **
+Use this link to get access to GPUs: https://notebooks.amd.com/hackathon
+
+Read the full guide for exact I/O formats, environment variables, and scoring details. 
+
