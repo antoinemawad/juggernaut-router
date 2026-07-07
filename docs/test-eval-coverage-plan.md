@@ -21,10 +21,16 @@ Every scenario should include:
 - `category`
 - `difficulty`
 - `scenario_class`
+- `intent`
+- `answer_shape`
+- `constraints`
 - `risk_components`
 - `output_constraints`
 - `expected_route`
 - `remote_mode_hint`
+- `verifier`
+- `retry_policy`
+- `failure_taxonomy`
 - `prompt`
 - `expected_keywords`
 - `expected_answer`
@@ -72,6 +78,48 @@ Required remote modes:
 - `remote_format_strict`
 - `remote_code`
 
+Required answer shapes:
+
+- `label`
+- `number`
+- `short_text`
+- `summary`
+- `entity_list`
+- `code`
+- `corrected_code`
+
+Required constraints:
+
+- `answer_only`
+- `no_explanation`
+- `one_sentence`
+- `exact_word_count`
+- `code_only`
+- `label_plus_reason`
+- `entity_labels`
+- `exact_numeric`
+- `include_corrected_code`
+
+Required verifiers:
+
+- `label_set`
+- `numeric_exact`
+- `summary_constraints`
+- `entity_labels`
+- `python_syntax`
+- `word_count`
+- `keyword_coverage`
+
+Required failure taxonomy coverage:
+
+- `wrong_category`
+- `local_overconfidence`
+- `validator_too_weak`
+- `remote_model_weak`
+- `prompt_too_loose`
+- `max_tokens_too_low`
+- `output_format_failure`
+
 Required router modes:
 
 - conservative
@@ -89,6 +137,12 @@ Every eval row should include scenario metadata plus runtime decision data when 
 - output constraints,
 - expected route,
 - remote mode hint,
+- intent,
+- answer shape,
+- constraints,
+- verifier,
+- retry policy,
+- failure taxonomy,
 - actual route,
 - route reason,
 - router mode,

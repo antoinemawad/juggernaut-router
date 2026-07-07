@@ -54,10 +54,16 @@ Each scenario should include:
 - `category`
 - `difficulty`
 - `scenario_class`
+- `intent`
+- `answer_shape`
+- `constraints`
 - `risk_components`
 - `output_constraints`
 - `expected_route`
 - `remote_mode_hint`
+- `verifier`
+- `retry_policy`
+- `failure_taxonomy`
 - `prompt`
 - `expected_answer` when deterministic
 - `expected_keywords` for approximate scoring
@@ -86,10 +92,16 @@ Every model/scenario row should be JSONL and include:
 - `category`
 - `difficulty`
 - `scenario_class`
+- `intent`
+- `answer_shape`
+- `constraints`
 - `risk_components`
 - `output_constraints`
 - `expected_route`
 - `remote_mode_hint`
+- `verifier`
+- `retry_policy`
+- `failure_taxonomy`
 - `model`
 - `prompt_policy`
 - `prompt_chars`

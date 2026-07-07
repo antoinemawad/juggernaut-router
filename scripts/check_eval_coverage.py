@@ -40,11 +40,49 @@ REQUIRED_OUTPUT_CONSTRAINTS = {
     "code_only",
     "one_word",
 }
+REQUIRED_ANSWER_SHAPES = {
+    "label",
+    "number",
+    "short_text",
+    "summary",
+    "entity_list",
+    "code",
+    "corrected_code",
+}
+REQUIRED_CONSTRAINTS = {
+    "answer_only",
+    "no_explanation",
+    "one_sentence",
+    "exact_word_count",
+    "code_only",
+    "label_plus_reason",
+    "entity_labels",
+    "exact_numeric",
+    "include_corrected_code",
+}
 REQUIRED_REMOTE_MODES = {
     "remote_concise",
     "remote_accuracy",
     "remote_format_strict",
     "remote_code",
+}
+REQUIRED_VERIFIERS = {
+    "label_set",
+    "numeric_exact",
+    "summary_constraints",
+    "entity_labels",
+    "python_syntax",
+    "word_count",
+    "keyword_coverage",
+}
+REQUIRED_FAILURE_TAXONOMY = {
+    "wrong_category",
+    "local_overconfidence",
+    "validator_too_weak",
+    "remote_model_weak",
+    "prompt_too_loose",
+    "max_tokens_too_low",
+    "output_format_failure",
 }
 
 
@@ -99,17 +137,27 @@ def main():
     errors.extend(require("scenario_class coverage", collect(rows, "scenario_class"), REQUIRED_SCENARIO_CLASSES))
     errors.extend(require("risk_components coverage", collect(rows, "risk_components"), REQUIRED_RISK_COMPONENTS))
     errors.extend(require("output_constraints coverage", collect(rows, "output_constraints"), REQUIRED_OUTPUT_CONSTRAINTS))
+    errors.extend(require("answer_shape coverage", collect(rows, "answer_shape"), REQUIRED_ANSWER_SHAPES))
+    errors.extend(require("constraints coverage", collect(rows, "constraints"), REQUIRED_CONSTRAINTS))
     errors.extend(require("remote_mode_hint coverage", collect(rows, "remote_mode_hint"), REQUIRED_REMOTE_MODES))
+    errors.extend(require("verifier coverage", collect(rows, "verifier"), REQUIRED_VERIFIERS))
+    errors.extend(require("failure_taxonomy coverage", collect(rows, "failure_taxonomy"), REQUIRED_FAILURE_TAXONOMY))
 
     required_fields = {
         "task_id",
         "category",
         "difficulty",
         "scenario_class",
+        "intent",
+        "answer_shape",
+        "constraints",
         "risk_components",
         "output_constraints",
         "expected_route",
         "remote_mode_hint",
+        "verifier",
+        "retry_policy",
+        "failure_taxonomy",
         "prompt",
         "expected_keywords",
         "expected_answer",
@@ -129,7 +177,10 @@ def main():
     print(f"Categories: {len(collect(rows, 'category'))}")
     print(f"Scenario classes: {', '.join(sorted(collect(rows, 'scenario_class')))}")
     print(f"Risk components: {', '.join(sorted(collect(rows, 'risk_components')))}")
+    print(f"Answer shapes: {', '.join(sorted(collect(rows, 'answer_shape')))}")
+    print(f"Constraints: {', '.join(sorted(collect(rows, 'constraints')))}")
     print(f"Remote modes: {', '.join(sorted(collect(rows, 'remote_mode_hint')))}")
+    print(f"Verifiers: {', '.join(sorted(collect(rows, 'verifier')))}")
 
 
 if __name__ == "__main__":

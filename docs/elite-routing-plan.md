@@ -12,15 +12,21 @@ This means the router is a risk engine, not just a category classifier.
 
 Every task should pass through these stages:
 
-1. Category detection.
-2. Difficulty and risk scoring.
-3. Local solvability check.
-4. Local solver attempt.
-5. Category-specific validation.
-6. Route decision.
-7. Fireworks mode/model/prompt selection when needed.
-8. Final answer normalization.
-9. Router decision logging.
+1. Prompt intent and constraint parsing.
+2. Answer-shape detection.
+3. Category detection.
+4. Difficulty and risk scoring.
+5. Local solvability check.
+6. Local solver attempt.
+7. Local proof generation.
+8. Category-specific validation.
+9. Route decision.
+10. Minimal remote prompt construction when needed.
+11. Fireworks mode/model/prompt selection when needed.
+12. Local verification of remote output.
+13. One bounded retry only when verification fails for fixable reasons.
+14. Final answer normalization.
+15. Router decision logging.
 
 The final answer path must remain:
 
@@ -115,6 +121,9 @@ Required fields:
 
 - `task_id`
 - `category`
+- `intent`
+- `answer_shape`
+- `constraints`
 - `category_confidence`
 - `risk_score`
 - `risk_components`
@@ -128,6 +137,11 @@ Required fields:
 - `selected_model`
 - `prompt_policy`
 - `max_tokens`
+- `retry_count`
+- `retry_reason`
+- `verification_passed`
+- `verification_notes`
+- `failure_type`
 - `latency_ms`
 - `prompt_tokens`
 - `completion_tokens`
@@ -150,6 +164,10 @@ Minimum scenario classes:
 - prompt-policy examples: original vs compact vs answer-only.
 - router-mode examples: conservative vs balanced vs aggressive.
 - model-map examples across all allowed models.
+- intent-parser examples for every answer shape.
+- remote-verification examples: invalid JSON, invalid code, overlong answer, markdown when forbidden, empty answer, truncation.
+- one-retry examples where the first answer fails format verification and the retry should fix it.
+- failure-taxonomy examples for wrong category, local overconfidence, weak validator, weak remote model, loose prompt, low `max_tokens`, and output format failure.
 
 Minimum metrics:
 
@@ -163,6 +181,11 @@ Minimum metrics:
 - per-category breakdown,
 - per-router-mode breakdown,
 - per-prompt-policy breakdown.
+- per-answer-shape breakdown,
+- per-constraint breakdown,
+- retry count and retry success rate,
+- verification failure rate,
+- failure taxonomy breakdown.
 
 ## Promotion Rule
 
@@ -173,4 +196,132 @@ A routing change can become a default only when:
 3. It has scenario logs and a markdown report.
 4. It passes adversarial routing tests.
 5. `python3 scripts/check_eval_coverage.py` passes after any scenario or routing-dimension change.
-6. It preserves compliance with `FIREWORKS_BASE_URL`, `ALLOWED_MODELS`, Docker IO, and no-secret rules.
+6. It has intent/constraint/answer-shape coverage when the change touches parsing, prompting, verification, or normalization.
+7. It preserves compliance with `FIREWORKS_BASE_URL`, `ALLOWED_MODELS`, Docker IO, and no-secret rules.
+
+## Prompt Intent IR
+
+The router should compile each prompt into a small internal representation before deciding where to send it.
+
+Example:
+
+```json
+{
+  "category": "mathematical_reasoning",
+  "intent": "compute_final_price",
+  "answer_shape": "number",
+  "constraints": ["answer_only", "exact_numeric"],
+  "entities": {"price": 80, "discount_percent": 25},
+  "risk_score": 0.18
+}
+```
+
+The IR is local-only implementation detail. It should not be written to `/output/results.json`, but it should appear in development/eval decision logs.
+
+## Constraint Extraction
+
+Constraints should be extracted before solving or prompting.
+
+Required constraint types:
+
+- `answer_only`
+- `no_explanation`
+- `one_sentence`
+- `exact_word_count`
+- `json_only`
+- `code_only`
+- `label_only`
+- `label_plus_reason`
+- `entity_labels`
+- `exact_numeric`
+- `rounding_required`
+- `include_corrected_code`
+
+Most remote prompt templates should be built from constraints, answer shape, category, and risk mode instead of a single generic wrapper.
+
+## Answer Shapes
+
+The router should classify expected answer shape:
+
+- `label`
+- `number`
+- `short_text`
+- `summary`
+- `entity_list`
+- `json`
+- `code`
+- `corrected_code`
+- `reasoning_answer`
+
+Answer shape controls local validators, remote mode, prompt policy, `max_tokens`, and output normalization.
+
+## Local Proof System
+
+Local solvers should attach proof metadata:
+
+- math: parsed quantities, operations, recomputed result.
+- NER: matched spans and labels.
+- code: generated/corrected code plus `ast.parse` result when Python.
+- summary: word count, sentence count, key terms kept.
+- sentiment: polarity hits and polarity gap.
+- logic: relation graph or supported puzzle pattern.
+
+No proof, no local acceptance.
+
+## Remote Prompt Builder
+
+Remote prompts should be minimal but constraint-aware.
+
+Inputs:
+
+- original task text,
+- category,
+- answer shape,
+- constraints,
+- remote mode,
+- risk score,
+- `max_tokens`.
+
+Rules:
+
+- preserve the original task text unless metrics prove safe compaction.
+- use the smallest wrapper that preserves accuracy.
+- prefer answer-only instructions only when constraints and evals support them.
+- use format-strict prompts for JSON, exact word count, labels, code-only, and no-explanation constraints.
+
+## Remote Output Verification and Retry
+
+After Fireworks returns, verify locally before final output.
+
+Verification checks:
+
+- JSON parses when `json_only`.
+- Python code parses when answer shape is `code` or `corrected_code`.
+- exact word count passes when requested.
+- label is one of the allowed labels.
+- entity labels are present when requested.
+- no markdown fences when forbidden.
+- answer is nonempty and not obviously truncated.
+
+Retry policy:
+
+- at most one retry.
+- retry only for fixable output-shape failures: invalid JSON, invalid code syntax, exact-format failure, empty answer, truncation, or markdown fence violation.
+- retry must use a stricter remote mode/prompt.
+- retry metadata must be logged.
+
+## Failure Taxonomy
+
+Every failed eval row should be tagged with one or more failure types:
+
+- `wrong_category`
+- `local_overconfidence`
+- `validator_too_weak`
+- `remote_model_weak`
+- `prompt_too_loose`
+- `max_tokens_too_low`
+- `output_format_failure`
+- `timeout`
+- `http_error`
+- `invalid_remote_response`
+- `normalization_error`
