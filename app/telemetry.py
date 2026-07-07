@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 
-SECRET_FIELD_MARKERS = ("api_key", "authorization", "token", "secret", "password")
+SECRET_FIELD_MARKERS = ("api_key", "authorization", "secret", "password", "bearer")
 
 
 class TelemetryLogger:
