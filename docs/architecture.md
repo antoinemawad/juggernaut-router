@@ -40,6 +40,27 @@ Core routing stages:
 
 Local answers must earn trust. A local solver result should carry answer, confidence, category, evidence, validator status, risk flags, and failure reason. The agent should accept it only when category confidence, solver confidence, risk score, and validation all pass the selected router mode thresholds.
 
+## Local Acceptance Proof Ladder
+
+Local tokens count as zero, so it is worth doing stronger local checks before spending Fireworks tokens. The constraint is wall-clock time: every local check still consumes part of the 10-minute container budget. Therefore, the router should use a staged proof ladder with cheap checks first and more expensive checks only for promising local candidates.
+
+Planned local acceptance layers:
+
+1. Input sanity: prompt is nonempty, English-like, and parseable enough to classify.
+2. Category confidence: classifier identifies one of the 8 Track 1 categories above the selected router-mode threshold.
+3. Constraint extraction: answer shape and hard constraints are detected, such as answer-only, exact numeric, one sentence, exact word count, entity labels, code-only, or corrected code.
+4. Risk gate: ambiguity, reasoning depth, format strictness, code risk, factual freshness, and validator weakness are below the local-accept threshold.
+5. Local solver evidence: a deterministic solver or template returns an answer with evidence, not only a raw string.
+6. Independent validation: a category validator recomputes or checks the answer independently from the solver path.
+7. Format validation: exact output constraints are verified after normalization.
+8. Trap guard: known false-local patterns are checked, including sarcasm, mixed sentiment, incomplete logic, multi-step math, current/live factual claims, ambiguous entities, and nontrivial code.
+9. Cheap cross-check: when available, run a second cheap verifier such as math recomputation, relation-graph consistency, Python syntax, tiny code micro-tests, NER entity-count checks, or summary word-count checks.
+10. Deadline/value gate: accept locally only if the proof ladder completed inside the local proof budget; otherwise route to Fireworks if the deadline permits.
+
+The proof ladder should be category-aware. Math may require exact recomputation, code may require syntax plus tiny tests, sentiment may require sarcasm/mixed-signal guards, and factual knowledge should reject current or unverifiable claims unless the answer is directly extractive from the prompt.
+
+Performance rule: local verification must be bounded. A good default is a small per-task budget such as `LOCAL_PROOF_BUDGET_MS=50` to `200` for deterministic checks, with stricter limits when the batch is large or the deadline is near. If a local proof step is too expensive, the router should prefer Fireworks or a safe fallback rather than risk missing the global runtime deadline.
+
 ## Planned Files
 
 ### `app/main.py`
@@ -59,6 +80,7 @@ Local answers must earn trust. A local solver result should carry answer, confid
 - Planned runtime configuration loader.
 - Reads `ROUTER_MODE`, `LOCAL_CONFIDENCE_THRESHOLD`, `FIREWORKS_TIMEOUT_SECONDS`, `FIREWORKS_MAX_RETRIES`, and optional `ROUTER_LOG_PATH`.
 - Reads deadline-related settings such as `BATCH_DEADLINE_SECONDS`, `DEADLINE_SAFETY_MARGIN_SECONDS`, `REMOTE_WORKER_COUNT`, and optional per-mode timeout defaults.
+- Reads local-proof settings such as `LOCAL_PROOF_BUDGET_MS`, `LOCAL_CROSS_CHECK_ENABLED`, and category-specific local acceptance thresholds.
 - Provides safe defaults for local/mock testing.
 - Must not require `.env` in the final container.
 - Must not log secrets.
@@ -114,6 +136,52 @@ Local answers must earn trust. A local solver result should carry answer, confid
 - Must never write secrets or API keys.
 - Must not alter official `/output/results.json`.
 - Should log route, category, risk, confidence, validator notes, selected model, remote mode, prompt policy, retry count, tokens, latency, and errors.
+
+## Task Timing Metrics Contract
+
+Telemetry should make every task auditable for accuracy, token use, and wall-clock cost. When `ROUTER_LOG_PATH` is enabled, each task-level JSONL record should include timing fields measured with a monotonic clock.
+
+Required task timing fields:
+
+- `task_started_at`: ISO timestamp for human inspection.
+- `task_finished_at`: ISO timestamp for human inspection.
+- `task_elapsed_ms`: total task wall-clock duration.
+- `batch_elapsed_ms_at_start`: batch elapsed time when the task started.
+- `batch_elapsed_ms_at_finish`: batch elapsed time when the task finished.
+- `remaining_budget_ms`: remaining batch budget after safety margin.
+- `classification_elapsed_ms`: local classification time.
+- `constraint_extraction_elapsed_ms`: answer-shape and output-constraint extraction time.
+- `local_solver_elapsed_ms`: deterministic local solver time.
+- `validation_elapsed_ms`: validator time.
+- `local_proof_elapsed_ms`: total local proof ladder time.
+- `trap_guard_elapsed_ms`: trap guard time.
+- `cross_check_elapsed_ms`: cheap independent cross-check time.
+- `remote_elapsed_ms`: Fireworks request time when used.
+- `normalization_elapsed_ms`: final answer normalization time.
+- `telemetry_elapsed_ms`: optional logger overhead when measurable.
+
+Required task decision/cost fields:
+
+- `task_id`
+- `category`
+- `route`
+- `route_reason`
+- `router_mode`
+- `risk_components`
+- `local_proof_layers_passed`
+- `local_proof_layers_failed`
+- `selected_model`
+- `remote_mode`
+- `prompt_policy`
+- `max_tokens`
+- `prompt_token_estimate`
+- `completion_tokens`
+- `total_tokens`
+- `retry_count`
+- `deadline_decision`
+- `error`
+
+Timing fields must never be written to the official `/output/results.json`. They belong only in optional telemetry and eval reports. The telemetry overhead itself should be small enough that enabling it during development does not distort routing decisions materially.
 
 ### `app/solvers/basic.py`
 

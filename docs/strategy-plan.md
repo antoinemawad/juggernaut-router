@@ -17,6 +17,7 @@ This plan targets rank #1 for Track 1 only. It separates source-backed constrain
 - Classify every task locally before any Fireworks call.
 - Treat routing as a risk engine: prove local safety first, otherwise route to Fireworks.
 - Use confidence-gated local solvers for deterministic or high-confidence tasks.
+- Use a bounded local proof ladder before accepting any zero-token local answer.
 - Use category-specific validators as the main defense against overconfident zero-token answers.
 - Maintain category playbooks for local acceptance, remote fallback, validators, and known traps.
 - Use category-specific Fireworks fallback when local solvers are uncertain, output validation fails, or the task is naturally high risk.
@@ -59,18 +60,19 @@ This plan targets rank #1 for Track 1 only. It separates source-backed constrain
 Every task should pass through this decision sequence:
 
 1. Local classification: identify category, confidence, and risk.
-2. Risk scoring: estimate ambiguity, reasoning depth, format strictness, code risk, factual freshness, and validator weakness.
-3. Local solvability check: decide whether any local solver can prove correctness.
-4. Local solver attempt: only for categories with deterministic or high-confidence local coverage.
-5. Local validation: reject empty, malformed, non-English, low-confidence, unchecked, or structurally wrong answers.
-6. Route decision:
+2. Constraint extraction: identify answer shape, exact-format rules, and hard output requirements.
+3. Risk scoring: estimate ambiguity, reasoning depth, format strictness, code risk, factual freshness, and validator weakness.
+4. Local solvability check: decide whether any local solver can prove correctness.
+5. Local solver attempt: only for categories with deterministic or high-confidence local coverage.
+6. Local proof ladder: require solver evidence, independent category validation, format validation, trap guard, cheap cross-check, and local proof budget compliance.
+7. Route decision:
    - Stay local when category confidence, solver confidence, and validation all pass.
    - Use Fireworks when the category is risky, confidence is low, solver coverage is missing, or validation fails.
-7. Fireworks mode selection: choose concise, accuracy, format-strict, or code mode.
-8. Fireworks model selection: choose from `ALLOWED_MODELS` based on category/model matrix results.
-9. Prompt policy selection: use original prompt when exact wording matters; use compact or answer-only only when experiments show no accuracy loss.
-10. Deadline check: skip unsafe retries or choose a safe fallback when remaining batch time is too low.
-11. Decision logging: record route, risk, validator notes, model, prompt policy, tokens, latency, deadline decisions, and errors.
+8. Fireworks mode selection: choose concise, accuracy, format-strict, or code mode.
+9. Fireworks model selection: choose from `ALLOWED_MODELS` based on category/model matrix results.
+10. Prompt policy selection: use original prompt when exact wording matters; use compact or answer-only only when experiments show no accuracy loss.
+11. Deadline check: skip unsafe retries or choose a safe fallback when remaining batch time is too low.
+12. Decision logging: record route, risk, validator notes, model, prompt policy, tokens, latency, deadline decisions, and errors.
 
 The router must never use Fireworks as the first step for all tasks. Fireworks is the fallback or accuracy path after local classification decides it is needed.
 
@@ -99,6 +101,7 @@ Prompt resizing is allowed only when metrics show it preserves accuracy.
 - Compare always-Fireworks, strict hybrid, and aggressive hybrid router modes on the same dataset.
 - Keep router decision logs for experiments so every local-vs-Fireworks choice can be audited.
 - Test adversarial examples for every category before promoting a local solver, validator, prompt policy, or model choice.
+- Test local proof ladder layers independently: constraint extraction, trap guard, cross-check, and local proof budget.
 - Maintain tiered golden datasets: smoke, regression, adversarial, and full model matrix.
 - Compare candidate eval reports against baselines before changing defaults.
 - Test the full risk-engine scenario matrix: risk components, remote modes, router modes, validators, prompt policies, and model maps.

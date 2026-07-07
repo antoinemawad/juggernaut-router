@@ -121,6 +121,8 @@ Implementation requirements:
 - support `BATCH_DEADLINE_SECONDS`,
 - support `DEADLINE_SAFETY_MARGIN_SECONDS`,
 - support `REMOTE_WORKER_COUNT`,
+- support `LOCAL_PROOF_BUDGET_MS`,
+- support `LOCAL_CROSS_CHECK_ENABLED`,
 - support optional `ROUTER_LOG_PATH`,
 - never log secrets,
 - handle missing Fireworks env vars gracefully when remote fallback is needed,
@@ -143,10 +145,13 @@ Required tests/checks:
 - output normalization for empty/non-string answers,
 - telemetry JSONL writes when `ROUTER_LOG_PATH` is set,
 - telemetry excludes API keys/secrets,
+- telemetry includes task timing metrics for local, remote, fallback, and error paths,
+- telemetry does not add timing fields to official `/output/results.json`,
 - deadline manager remaining-time tests with a fake clock,
 - no-retry-near-deadline test,
 - valid-output-near-deadline test,
 - remote timeout remains below per-response ceiling,
+- local proof budget config parsing test,
 - `python3 scripts/run_local_quality_gate.py`.
 
 Quality bar:
@@ -198,6 +203,10 @@ Deliverables:
 - intent and constraint extraction,
 - answer-shape detection,
 - local proof metadata,
+- trap guard layer,
+- cheap cross-check layer,
+- local proof elapsed-time tracking,
+- task timing metrics in router decision logs,
 - expected route assertions in eval/test fixtures.
 
 Implementation requirements:
@@ -206,7 +215,9 @@ Implementation requirements:
 - classifier emits category, confidence, answer shape, constraints, and risk components,
 - local solvers return structured results, not raw strings,
 - validators check local answers before acceptance,
-- local route is allowed only when category confidence, solver confidence, risk threshold, and validator all pass,
+- local route is allowed only when category confidence, constraint extraction, risk threshold, solver confidence, independent validator, format validator, trap guard, cheap cross-check, and local proof budget all pass,
+- trap guards reject known unsafe local patterns such as sarcasm, mixed sentiment, incomplete logic, multi-step math, current/live factual claims, ambiguous entities, and nontrivial code,
+- cheap cross-checks run only when they are deterministic and within the local proof budget,
 - risky or unsupported tasks route to Fireworks,
 - final answer still passes normalization.
 
@@ -218,12 +229,17 @@ Required tests/checks:
 - risky tasks call Fireworks wrapper,
 - expected route assertions pass for scenario fixtures,
 - validators reject weak local answers,
+- trap guards reject false-local adversarial fixtures,
+- cross-check failures force Fireworks routing,
+- local proof budget exhaustion forces Fireworks routing or safe fallback,
 - local accepted answers include proof/evidence metadata,
+- router decision logs include per-stage elapsed times,
 - local quality gate passes.
 
 Quality bar:
 
 - local answers are accepted only with proof/validator support,
+- extra local proof checks improve acceptance precision without threatening the 10-minute runtime budget,
 - unsafe local acceptance is treated as a blocking bug,
 - expected-route mismatches are explainable and logged,
 - router sweep uses actual route decisions.

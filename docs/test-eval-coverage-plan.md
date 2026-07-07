@@ -146,6 +146,8 @@ Required production-readiness coverage:
 - disallowed model,
 - normalization of empty/non-string answers,
 - optional `ROUTER_LOG_PATH` JSONL telemetry,
+- local proof budget enforcement,
+- local cross-check timeout/fallback behavior,
 - batch deadline manager with fake-clock tests,
 - near-deadline retry suppression,
 - valid output when deadline is almost exhausted,
@@ -178,12 +180,18 @@ Every eval row should include scenario metadata plus runtime decision data when 
 - failure taxonomy,
 - actual route,
 - route reason,
+- local proof layers passed/failed,
+- local proof elapsed time,
+- trap guard findings,
+- cross-check result,
 - router mode,
 - prompt policy,
 - selected model,
 - `max_tokens`,
-- latency,
+- task timing fields: `task_elapsed_ms`, `classification_elapsed_ms`, `constraint_extraction_elapsed_ms`, `local_solver_elapsed_ms`, `validation_elapsed_ms`, `local_proof_elapsed_ms`, `trap_guard_elapsed_ms`, `cross_check_elapsed_ms`, `remote_elapsed_ms`, and `normalization_elapsed_ms`,
+- batch timing fields: `batch_elapsed_ms_at_start`, `batch_elapsed_ms_at_finish`, and `remaining_budget_ms`,
 - token fields,
+- token estimates: `prompt_token_estimate`, `completion_tokens`, and `total_tokens` when available,
 - pass/fail,
 - score,
 - elapsed batch time,
@@ -194,12 +202,18 @@ Every eval row should include scenario metadata plus runtime decision data when 
 
 - Unit tests for classifier risk components.
 - Unit tests for validators.
+- Unit tests for constraint extraction.
+- Unit tests for trap guards: sarcasm, mixed sentiment, incomplete logic, multi-step math, current/live factual claims, ambiguous entities, and nontrivial code.
+- Unit tests for cheap cross-checkers: math recomputation, relation graph consistency, Python syntax, tiny code micro-tests, NER entity-count checks, and summary word counts where applicable.
+- Unit tests for local proof budget enforcement.
 - Unit tests for route decisions.
 - Expected-route assertion tests: safe local candidates should not call Fireworks unless validation fails; risky, ambiguous, exact-format, current-fact, and code-risk tasks should route to the planned remote mode.
 - Unit tests for answer normalization.
 - Unit tests for input validation and batch continuation.
 - Unit tests for config/env parsing.
 - Unit tests for optional telemetry with no secrets.
+- Unit tests that task-level telemetry includes timing metrics for local, remote, fallback, and error paths.
+- Unit tests that telemetry overhead is optional and never changes official `/output/results.json`.
 - Mock Fireworks tests for timeouts, HTTP errors, invalid JSON, and missing usage.
 - Deadline tests for remaining time, safety margin, retry suppression, and valid output under near-timeout conditions.
 - Bounded concurrency tests for remote-needed tasks.

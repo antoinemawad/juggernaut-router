@@ -73,14 +73,21 @@ flowchart TD
     P[Prompt] --> C[Local classification]
     C --> S{Supported category<br/>and confident?}
     S -->|no| RF[Route Fireworks]
-    S -->|yes| R{Risk acceptable<br/>for router mode?}
+    S -->|yes| X[Extract constraints<br/>answer shape + format rules]
+    X --> R{Risk acceptable<br/>for router mode?}
     R -->|no| RF
     R -->|yes| L[Try local solver]
     L --> E{Evidence strong?}
     E -->|no| RF
-    E -->|yes| V{Validator proves answer<br/>and format?}
+    E -->|yes| V{Independent validator<br/>proves answer?}
     V -->|no| RF
-    V -->|yes| LA[Accept local answer]
+    V -->|yes| F{Format validator<br/>passes after normalization?}
+    F -->|no| RF
+    F -->|yes| T{Trap guard clear?<br/>sarcasm, ambiguity, current facts,<br/>multi-step, nontrivial code}
+    T -->|no| RF
+    T -->|yes| K{Cheap cross-check passes<br/>inside local proof budget?}
+    K -->|no| RF
+    K -->|yes| LA[Accept local answer]
     RF --> M[Choose remote mode + model]
     M --> D{Deadline allows call?}
     D -->|yes| RA[Remote answer + verify]
@@ -94,6 +101,9 @@ Local acceptance requires all of these to pass:
 - risk threshold for selected router mode,
 - category validator,
 - output-format validator,
+- trap guard,
+- cheap independent cross-check,
+- local proof time budget,
 - deadline-safe execution path.
 
 ## Remote Call Compliance
