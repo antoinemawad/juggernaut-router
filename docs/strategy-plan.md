@@ -18,6 +18,7 @@ This plan targets rank #1 for Track 1 only. It separates source-backed constrain
 - Treat routing as a risk engine: prove local safety first, otherwise route to Fireworks.
 - Use confidence-gated local solvers for deterministic or high-confidence tasks.
 - Use category-specific validators as the main defense against overconfident zero-token answers.
+- Maintain category playbooks for local acceptance, remote fallback, validators, and known traps.
 - Use category-specific Fireworks fallback when local solvers are uncertain, output validation fails, or the task is naturally high risk.
 - Use Fireworks accuracy mode for hard/risky tasks: richer prompts, more careful instructions, and model selection optimized for correctness.
 - Maintain configurable `conservative`, `balanced`, and `aggressive` router modes for official submission comparisons.
@@ -71,6 +72,8 @@ Every task should pass through this decision sequence:
 The router must never use Fireworks as the first step for all tasks. Fireworks is the fallback or accuracy path after local classification decides it is needed.
 
 See `docs/elite-routing-plan.md` for the full risk-engine design.
+See `docs/category-playbooks.md` for category-specific acceptance rules.
+See `docs/accuracy-gates.md` for promotion thresholds and A/B config rules.
 
 ## Prompt Size Policy
 
@@ -93,6 +96,8 @@ Prompt resizing is allowed only when metrics show it preserves accuracy.
 - Compare always-Fireworks, strict hybrid, and aggressive hybrid router modes on the same dataset.
 - Keep router decision logs for experiments so every local-vs-Fireworks choice can be audited.
 - Test adversarial examples for every category before promoting a local solver, validator, prompt policy, or model choice.
+- Maintain tiered golden datasets: smoke, regression, adversarial, and full model matrix.
+- Compare candidate eval reports against baselines before changing defaults.
 - Test the full risk-engine scenario matrix: risk components, remote modes, router modes, validators, prompt policies, and model maps.
 - Test timeout, retry, fallback, and answer-normalization behavior as first-class quality gates.
 - Test hard-task Fireworks accuracy mode.

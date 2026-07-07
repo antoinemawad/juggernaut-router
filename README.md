@@ -58,6 +58,14 @@ Run the current local quality gate:
 python3 scripts/run_local_quality_gate.py
 ```
 
+Tiered eval coverage can also be checked directly:
+
+```bash
+python3 scripts/check_eval_coverage.py
+python3 scripts/check_eval_coverage.py eval/golden_tier_2_regression.jsonl --profile tier
+python3 scripts/check_eval_coverage.py eval/golden_tier_3_adversarial.jsonl --profile tier
+```
+
 ## Docker Smoke Test
 
 ```bash
@@ -92,6 +100,8 @@ Planning docs for final presentation and demo:
 - `docs/elite-routing-plan.md`
 - `docs/implementation-phases.md`
 - `docs/risk-register.md`
+- `docs/category-playbooks.md`
+- `docs/accuracy-gates.md`
 - `docs/eval-field-glossary.md`
 - `docs/official-submission-decision-tree.md`
 - `docs/live-eval-budget-plan.md`

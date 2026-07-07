@@ -25,6 +25,27 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 
 ## Planned Experiments
 
+### Golden Tier Quality Gate
+
+- Name: Golden Tier Quality Gate
+- Date: TBD
+- Goal: Keep smoke, regression, adversarial, and core model-matrix coverage passing as router logic changes.
+- Strategy tested: Run `scripts/run_local_quality_gate.py`, then compare candidate reports against the previous accepted baseline.
+- Dataset: `local_test/input/tasks.json`, `eval/golden_tier_2_regression.jsonl`, `eval/golden_tier_3_adversarial.jsonl`, and `eval/model_matrix_scenarios.jsonl`.
+- Local solver coverage: Measured by router sweep.
+- Fireworks calls required: Mocked locally by default; live only for selected mini-matrix slices.
+- Expected token impact: Prevents token savings from being promoted when accuracy regresses.
+- Log file: `eval_runs/local_quality_gate_latest.json`.
+- Report file: router/model matrix markdown reports under `eval_runs/`.
+- Models tested: Runtime `ALLOWED_MODELS` in live mode.
+- Categories covered: all 8 Track 1 categories.
+- Accuracy observations: TBD.
+- Token observations: TBD.
+- Latency observations: TBD.
+- Prompt policy observations: TBD.
+- Failure cases: Unsafe local acceptance, wrong remote mode, exact-format failure, category regression, token increase without score improvement.
+- Decision: Promote only if `docs/accuracy-gates.md` is satisfied.
+
 ### Baseline Fireworks All
 
 - Name: Baseline Fireworks All

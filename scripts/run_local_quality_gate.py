@@ -57,11 +57,14 @@ def main():
         "eval/model_matrix.py",
         "eval/router_config_sweep.py",
         "scripts/check_eval_coverage.py",
+        "scripts/compare_eval_reports.py",
         "scripts/validate_submission_io.py",
     ]
 
     results.append(run([py, "-m", "py_compile", *compile_targets]))
     results.append(run([py, "scripts/check_eval_coverage.py"]))
+    results.append(run([py, "scripts/check_eval_coverage.py", "eval/golden_tier_2_regression.jsonl", "--profile", "tier"]))
+    results.append(run([py, "scripts/check_eval_coverage.py", "eval/golden_tier_3_adversarial.jsonl", "--profile", "tier"]))
 
     local_env = os.environ.copy()
     local_env["INPUT_PATH"] = "local_test/input/tasks.json"

@@ -1,5 +1,5 @@
+import argparse
 import json
-import sys
 from collections import Counter
 from pathlib import Path
 
@@ -119,8 +119,26 @@ def require(name, found, required):
     return []
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Check Track 1 eval scenario coverage.")
+    parser.add_argument(
+        "path",
+        nargs="?",
+        default="eval/model_matrix_scenarios.jsonl",
+        help="Scenario JSONL path.",
+    )
+    parser.add_argument(
+        "--profile",
+        choices=("core", "tier"),
+        default="core",
+        help="core requires full matrix breadth; tier checks schema and category breadth.",
+    )
+    return parser.parse_args()
+
+
 def main():
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("eval/model_matrix_scenarios.jsonl")
+    args = parse_args()
+    path = Path(args.path)
     rows = load_rows(path)
     errors = []
 
@@ -133,15 +151,19 @@ def main():
         errors.append("duplicate task_id values: " + ", ".join(sorted(duplicate_task_ids)))
 
     errors.extend(require("category coverage", collect(rows, "category"), REQUIRED_CATEGORIES))
-    errors.extend(require("difficulty coverage", collect(rows, "difficulty"), REQUIRED_DIFFICULTIES))
-    errors.extend(require("scenario_class coverage", collect(rows, "scenario_class"), REQUIRED_SCENARIO_CLASSES))
-    errors.extend(require("risk_components coverage", collect(rows, "risk_components"), REQUIRED_RISK_COMPONENTS))
-    errors.extend(require("output_constraints coverage", collect(rows, "output_constraints"), REQUIRED_OUTPUT_CONSTRAINTS))
-    errors.extend(require("answer_shape coverage", collect(rows, "answer_shape"), REQUIRED_ANSWER_SHAPES))
-    errors.extend(require("constraints coverage", collect(rows, "constraints"), REQUIRED_CONSTRAINTS))
-    errors.extend(require("remote_mode_hint coverage", collect(rows, "remote_mode_hint"), REQUIRED_REMOTE_MODES))
-    errors.extend(require("verifier coverage", collect(rows, "verifier"), REQUIRED_VERIFIERS))
-    errors.extend(require("failure_taxonomy coverage", collect(rows, "failure_taxonomy"), REQUIRED_FAILURE_TAXONOMY))
+
+    if args.profile == "core":
+        errors.extend(require("difficulty coverage", collect(rows, "difficulty"), REQUIRED_DIFFICULTIES))
+        errors.extend(require("scenario_class coverage", collect(rows, "scenario_class"), REQUIRED_SCENARIO_CLASSES))
+        errors.extend(require("risk_components coverage", collect(rows, "risk_components"), REQUIRED_RISK_COMPONENTS))
+        errors.extend(require("output_constraints coverage", collect(rows, "output_constraints"), REQUIRED_OUTPUT_CONSTRAINTS))
+        errors.extend(require("answer_shape coverage", collect(rows, "answer_shape"), REQUIRED_ANSWER_SHAPES))
+        errors.extend(require("constraints coverage", collect(rows, "constraints"), REQUIRED_CONSTRAINTS))
+        errors.extend(require("remote_mode_hint coverage", collect(rows, "remote_mode_hint"), REQUIRED_REMOTE_MODES))
+        errors.extend(require("verifier coverage", collect(rows, "verifier"), REQUIRED_VERIFIERS))
+        errors.extend(require("failure_taxonomy coverage", collect(rows, "failure_taxonomy"), REQUIRED_FAILURE_TAXONOMY))
+    elif len(rows) < len(REQUIRED_CATEGORIES):
+        errors.append(f"{path} should contain at least one scenario per required category")
 
     required_fields = {
         "task_id",
@@ -173,7 +195,7 @@ def main():
             print("ERROR:", error)
         raise SystemExit(1)
 
-    print(f"OK: {len(rows)} scenarios in {path}")
+    print(f"OK: {len(rows)} scenarios in {path} ({args.profile} profile)")
     print(f"Categories: {len(collect(rows, 'category'))}")
     print(f"Scenario classes: {', '.join(sorted(collect(rows, 'scenario_class')))}")
     print(f"Risk components: {', '.join(sorted(collect(rows, 'risk_components')))}")

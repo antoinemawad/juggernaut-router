@@ -12,6 +12,8 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Track 1 execution discipline reviewed: `docs/track1-execution-discipline.md`.
 - [ ] Implementation phase status reviewed: `docs/implementation-phases.md`.
 - [ ] Risk register reviewed: `docs/risk-register.md`.
+- [ ] Category playbooks reviewed: `docs/category-playbooks.md`.
+- [ ] Accuracy gates reviewed: `docs/accuracy-gates.md`.
 - [ ] Local testing and submission use the same code path; only `INPUT_PATH`, `OUTPUT_PATH`, and runtime environment variables change.
 - [ ] Final manual review complete.
 
@@ -35,6 +37,8 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Tests pass.
 - [ ] Local quality gate passes: `python3 scripts/run_local_quality_gate.py`.
 - [ ] Eval coverage checker passes: `python3 scripts/check_eval_coverage.py`.
+- [ ] Regression tier coverage passes: `python3 scripts/check_eval_coverage.py eval/golden_tier_2_regression.jsonl --profile tier`.
+- [ ] Adversarial tier coverage passes: `python3 scripts/check_eval_coverage.py eval/golden_tier_3_adversarial.jsonl --profile tier`.
 - [ ] Local fixture test passes.
 - [ ] Malformed input tests pass: bad JSON, non-array JSON, missing task fields, non-string prompt.
 - [ ] Docker fixture test passes.
@@ -54,8 +58,10 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Optional telemetry test passes and confirms no API key/secret is logged.
 - [ ] Production readiness failure matrix reviewed.
 - [ ] Always-Fireworks baseline compared against final hybrid router on the same dataset.
+- [ ] Candidate eval reports compared against accepted baseline with `scripts/compare_eval_reports.py`.
 - [ ] Router config sweep report reviewed and winning config selected.
 - [ ] Adversarial routing set passes the configured accuracy target.
+- [ ] No tier 3 adversarial scenario is accepted locally without a proof/verifier.
 - [ ] New routing features have both positive scenarios and adversarial fail-safe scenarios.
 - [ ] Valid JSON output verified manually.
 - [ ] Representative output formats manually inspected: exact numeric, label, summary, entity list, code, and corrected code.
