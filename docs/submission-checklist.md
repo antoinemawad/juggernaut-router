@@ -9,13 +9,9 @@ Final pre-submit checklist for Track 1 only.
 - [ ] README documents local test commands.
 - [ ] README documents Docker run with mounted `/input` and `/output`.
 - [ ] README documents required environment variables.
-- [ ] Requirements traceability reviewed: `docs/requirements-traceability.md`.
-- [ ] HackerRank lessons checklist reviewed: `docs/hackathon-lessons-learned.md`.
+- [ ] Track 1 execution discipline reviewed: `docs/track1-execution-discipline.md`.
 - [ ] Local testing and submission use the same code path; only `INPUT_PATH`, `OUTPUT_PATH`, and runtime environment variables change.
 - [ ] Final manual review complete.
-- [ ] Manual verification log updated: `docs/manual-verification-log.md`.
-- [ ] Final release audit complete: `docs/final-release-audit.md`.
-- [ ] Judge/interview prep checked against actual implementation: `docs/judge-interview-prep.md`.
 
 ## Docker and Runtime
 
@@ -53,6 +49,9 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Adversarial routing set passes the configured accuracy target.
 - [ ] New routing features have both positive scenarios and adversarial fail-safe scenarios.
 - [ ] Valid JSON output verified manually.
+- [ ] Representative output formats manually inspected: exact numeric, label, summary, entity list, code, and corrected code.
+- [ ] Latest model matrix and router sweep reports reviewed before Docker push/submission.
+- [ ] Weak or wrong outputs recorded in `docs/experiments.md` or `docs/official-submission-log.md`.
 - [ ] All 8 Track 1 categories have at least one local test example.
 - [ ] No regression after final image build.
 
@@ -105,7 +104,7 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Local-first routing explanation captured.
 - [ ] Model matrix report selected for slides.
 - [ ] Token comparison table selected for slides.
-- [ ] Failure analysis selected for slides/interview.
+- [ ] Failure analysis selected for slides/demo if it strengthens the evidence story.
 - [ ] Docker run proof captured.
 - [ ] Valid output JSON proof captured.
 - [ ] No secrets visible in screenshots or recordings.
