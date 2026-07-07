@@ -50,7 +50,7 @@ def answer_task(
 
     if local_result is not None and validation.accepted:
         normalize_timer = StageTimer()
-        answer = normalize_answer(local_result.answer, code_only=_requests_code_only(prompt))
+        answer = _normalize_for_classification(local_result.answer, prompt, classification)
         timings.normalization_elapsed_ms = normalize_timer.elapsed_ms()
         _finish_timings(timings, task_timer, deadline)
         return AgentResult(
@@ -121,7 +121,7 @@ def answer_task(
     )
     timings.remote_elapsed_ms = remote.elapsed_ms
     normalize_timer = StageTimer()
-    answer = normalize_answer(remote.answer, code_only=_requests_code_only(prompt))
+    answer = _normalize_for_classification(remote.answer, prompt, classification)
     timings.normalization_elapsed_ms = normalize_timer.elapsed_ms()
     _finish_timings(timings, task_timer, deadline)
 
@@ -166,6 +166,24 @@ def estimate_tokens(text: str) -> int:
 def _requests_code_only(prompt: str) -> bool:
     lower = prompt.lower()
     return "code only" in lower or "return only code" in lower
+
+
+def _normalize_for_classification(answer, prompt: str, classification) -> str:
+    constraints = set(classification.constraints)
+    return normalize_answer(
+        answer,
+        code_only=_requests_code_only(prompt) or "code_only" in constraints,
+        exact_numeric="exact_numeric" in constraints,
+        answer_only="answer_only" in constraints,
+        entity_labels="entity_labels" in constraints,
+        allowed_labels=_allowed_labels_for_classification(classification),
+    )
+
+
+def _allowed_labels_for_classification(classification) -> tuple[str, ...] | None:
+    if classification.category == "sentiment_classification":
+        return ("positive", "negative", "neutral")
+    return None
 
 
 def _deadline_decision(deadline: DeadlineManager | None, config: RuntimeConfig) -> str | None:

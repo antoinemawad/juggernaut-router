@@ -148,6 +148,23 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.route, "fireworks")
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
 
+    def test_remote_ner_answer_is_normalized_to_entity_lines(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked_remote:
+            mocked_remote.return_value = FireworksResult(
+                answer="Entities:\n- PERSON: Lisa Chen\n- ORG: AMD\n- LOCATION: Austin\n- DATE: July 6, 2026",
+                model="minimax-m3",
+            )
+            result = answer_task(
+                "ner",
+                "Extract named entities and label them: Google DeepMind announced Gemma support with AMD in London on July 7, 2026.",
+            )
+
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.remote_mode, "remote_format_strict")
+        self.assertEqual(result.answer, "PERSON: Lisa Chen\nORG: AMD\nLOCATION: Austin\nDATE: July 6, 2026")
+
     def test_exact_summary_routes_remote_for_format_control(self):
         captured = {}
 
@@ -288,6 +305,40 @@ class Phase2RouterTests(unittest.TestCase):
 
         self.assertEqual(result.route, "fireworks")
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+
+    def test_remote_numeric_answer_is_normalized_to_exact_value(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked_remote:
+            mocked_remote.return_value = FireworksResult(
+                answer="The final price is $66.00 after applying discount and tax.",
+                model="minimax-m3",
+            )
+            result = answer_task(
+                "math",
+                "A product costs $80 and is discounted by 25%, then taxed at 10%. What is the final price?",
+            )
+
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.remote_mode, "remote_accuracy")
+        self.assertEqual(result.answer, "$66.00")
+
+    def test_remote_sentiment_answer_is_normalized_to_label(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked_remote:
+            mocked_remote.return_value = FireworksResult(
+                answer="The sentiment is negative because the wording is sarcastic.",
+                model="minimax-m3",
+            )
+            result = answer_task(
+                "sentiment",
+                "Classify the sentiment as positive, negative, or neutral: Yeah right, the outage was just perfect.",
+            )
+
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.remote_mode, "remote_accuracy")
+        self.assertEqual(result.answer, "negative")
 
     def test_incomplete_logic_routes_remote_even_if_simple_pattern_matches(self):
         with patch.dict(

@@ -4,7 +4,14 @@ import re
 from app.types import SAFE_FALLBACK_ANSWER
 
 
-def normalize_answer(answer, code_only: bool = False) -> str:
+def normalize_answer(
+    answer,
+    code_only: bool = False,
+    exact_numeric: bool = False,
+    answer_only: bool = False,
+    entity_labels: bool = False,
+    allowed_labels: tuple[str, ...] | list[str] | None = None,
+) -> str:
     if answer is None:
         return SAFE_FALLBACK_ANSWER
 
@@ -14,11 +21,78 @@ def normalize_answer(answer, code_only: bool = False) -> str:
     normalized = answer.strip()
     if code_only:
         normalized = _extract_code_only(normalized).strip()
+    elif entity_labels:
+        normalized = _normalize_entity_labels(normalized)
+    elif allowed_labels:
+        normalized = _extract_allowed_label(normalized, allowed_labels)
+    elif exact_numeric:
+        normalized = _extract_exact_numeric(normalized)
+    elif answer_only:
+        normalized = _extract_answer_only(normalized)
 
     if not normalized:
         return SAFE_FALLBACK_ANSWER
 
     return normalized
+
+
+def _normalize_entity_labels(text: str) -> str:
+    labels = ("PERSON", "ORG", "LOCATION", "DATE")
+    cleaned_lines = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        line = re.sub(r"^[-*•]\s*", "", line).strip()
+        if not line or line.lower().rstrip(":") in {"entities", "named entities", "answer"}:
+            continue
+        if any(re.search(rf"\b{label}\b", line) for label in labels) and ":" in line:
+            cleaned_lines.append(line.rstrip(";,"))
+
+    if cleaned_lines:
+        return "\n".join(cleaned_lines)
+
+    paren_matches = re.findall(r"([A-Z][A-Za-z0-9 .&-]+?)\s*\((PERSON|ORG|LOCATION|DATE)\)", text)
+    if paren_matches:
+        return "\n".join(f"{entity.strip()}: {label}" for entity, label in paren_matches)
+
+    return _extract_answer_only(text)
+
+
+def _extract_allowed_label(text: str, allowed_labels: tuple[str, ...] | list[str]) -> str:
+    lowered = text.lower()
+    matches = []
+    for label in allowed_labels:
+        if re.search(rf"\b{re.escape(label.lower())}\b", lowered):
+            matches.append(label)
+    if len(matches) == 1:
+        return matches[0]
+    return _extract_answer_only(text)
+
+
+def _extract_exact_numeric(text: str) -> str:
+    money_match = re.search(r"[-+]?\$\s*\d+(?:,\d{3})*(?:\.\d+)?", text)
+    if money_match:
+        return money_match.group(0).replace("$ ", "$")
+
+    percent_match = re.search(r"[-+]?\d+(?:,\d{3})*(?:\.\d+)?\s*%", text)
+    if percent_match:
+        return percent_match.group(0).replace(" %", "%")
+
+    number_match = re.search(r"[-+]?\d+(?:,\d{3})*(?:\.\d+)?", text)
+    if number_match:
+        return number_match.group(0)
+
+    return _extract_answer_only(text)
+
+
+def _extract_answer_only(text: str) -> str:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return text
+    first = lines[0]
+    for prefix in ("Answer:", "Final answer:", "Result:"):
+        if first.lower().startswith(prefix.lower()):
+            return first[len(prefix):].strip()
+    return first
 
 
 def _extract_code_only(text: str) -> str:

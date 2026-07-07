@@ -88,6 +88,21 @@ class Phase1RuntimeTests(unittest.TestCase):
         answer = normalize_answer("Sure:\ndef f():\n    return 1\n\nThis returns one.", code_only=True)
         self.assertEqual(answer, "def f():\n    return 1")
 
+    def test_normalize_answer_extracts_exact_numeric_when_requested(self):
+        answer = normalize_answer("The final price is $66.00 after tax.", exact_numeric=True)
+        self.assertEqual(answer, "$66.00")
+
+    def test_normalize_answer_extracts_allowed_label_when_requested(self):
+        answer = normalize_answer("The sentiment is negative because the service failed.", allowed_labels=("positive", "negative", "neutral"))
+        self.assertEqual(answer, "negative")
+
+    def test_normalize_answer_cleans_entity_label_lines_when_requested(self):
+        answer = normalize_answer(
+            "Entities:\n- PERSON: Lisa Chen\n- ORG: AMD\n- LOCATION: Austin\n- DATE: July 6, 2026",
+            entity_labels=True,
+        )
+        self.assertEqual(answer, "PERSON: Lisa Chen\nORG: AMD\nLOCATION: Austin\nDATE: July 6, 2026")
+
     def test_telemetry_redacts_secret_fields(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "router.jsonl"
