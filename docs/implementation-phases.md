@@ -158,7 +158,9 @@ Required tests/checks:
 - remote timeout remains below per-response ceiling,
 - local proof budget config parsing test,
 - Docker runtime guard command is available and documented,
-- `python3 scripts/run_local_quality_gate.py`.
+- `python3 scripts/run_local_quality_gate.py`,
+- `python3 scripts/run_phase1_acceptance.py`,
+- `python3 scripts/run_phase1_acceptance.py --include-docker` when Docker Desktop is available.
 
 Quality bar:
 
@@ -172,6 +174,7 @@ Quality bar:
 Trace artifacts:
 
 - quality gate output,
+- `eval_runs/phase1_acceptance_latest.json`,
 - malformed-input test output,
 - deadline-near-exhaustion test output,
 - sanitized telemetry example,
@@ -182,7 +185,8 @@ Definition of done:
 - all required tests/checks pass,
 - no recoverable single-task failure can prevent valid final JSON,
 - local quality gate passes,
-- Docker smoke/size guard command is ready to run.
+- Phase 1 acceptance report is produced,
+- Docker smoke/size guard command is ready to run and passes before Docker-dependent work.
 
 Stop rules:
 

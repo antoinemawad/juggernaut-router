@@ -58,6 +58,20 @@ Run the current local quality gate:
 python3 scripts/run_local_quality_gate.py
 ```
 
+Run the Phase 1 acceptance gate before moving into routing implementation:
+
+```bash
+python3 scripts/run_phase1_acceptance.py
+```
+
+Include Docker when Docker Desktop is running:
+
+```bash
+python3 scripts/run_phase1_acceptance.py --include-docker
+```
+
+The acceptance gate writes `eval_runs/phase1_acceptance_latest.json` for demo and submission-prep evidence.
+
 Tiered eval coverage can also be checked directly:
 
 ```bash
