@@ -5,6 +5,7 @@ Purpose: provide a reviewable picture of the intended Track 1 runtime before imp
 ## End-to-End Runtime
 
 ```mermaid
+%%{init: {"flowchart": {"htmlLabels": true}, "themeVariables": {"fontSize": "16px"}}}%%
 flowchart TD
     H[Judging Harness] -->|mounts /input/tasks.json| M[app/main.py]
     M --> CFG[app/config.py]
@@ -31,7 +32,7 @@ flowchart TD
     FW --> ENV[Runtime env only<br/>FIREWORKS_API_KEY<br/>FIREWORKS_BASE_URL<br/>ALLOWED_MODELS]
     ENV --> URL[Build URL from FIREWORKS_BASE_URL<br/>/chat/completions]
     ENV --> MODEL[Select only from ALLOWED_MODELS<br/>category/model map]
-    URL --> CALL[Fireworks judging proxy call<br/>bounded timeout < 30s]
+    URL --> CALL[Fireworks judging proxy call<br/>bounded timeout below 30s]
     MODEL --> CALL
 
     CALL --> RV[Remote Output Verifier<br/>format + syntax + answer-shape checks]
@@ -41,7 +42,7 @@ flowchart TD
     F1 --> N
     F2 --> N
 
-    N --> OUT[Official result object<br/>{task_id, answer}]
+    N --> OUT[Official result object<br/>task_id + answer only]
     OUT --> W[Write /output/results.json<br/>valid JSON array]
     W --> H
 
