@@ -8,7 +8,7 @@ from urllib.error import URLError
 
 from app.config import RuntimeConfig, parse_allowed_models
 from app.deadline import DeadlineManager
-from app.fireworks_client import ask_fireworks_structured
+from app.fireworks_client import ask_fireworks_structured, select_allowed_model
 from app.main import main
 from app.normalization import normalize_answer
 from app.telemetry import TelemetryLogger
@@ -130,6 +130,54 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(result.total_tokens, 9)
         self.assertEqual(captured["url"], "https://judge-proxy.example/v1/chat/completions")
         self.assertEqual(captured["timeout"], 7)
+
+    def test_fireworks_uses_first_allowed_preferred_model(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse(json.dumps({
+                "choices": [{"message": {"content": "Code answer"}}],
+                "usage": {"completion_tokens": 3, "total_tokens": 9},
+            }))
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3,kimi-k2p7-code",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", fake_urlopen):
+            result = ask_fireworks_structured(
+                "write code",
+                preferred_models=("kimi-k2p7-code", "gemma-4-31b-it"),
+            )
+
+        self.assertEqual(result.model, "kimi-k2p7-code")
+        self.assertEqual(captured["payload"]["model"], "kimi-k2p7-code")
+
+    def test_model_selection_never_uses_disallowed_preferred_model(self):
+        config = RuntimeConfig(
+            input_path=Path("/input/tasks.json"),
+            output_path=Path("/output/results.json"),
+            router_mode="conservative",
+            local_confidence_threshold=0.95,
+            fireworks_timeout_seconds=25,
+            fireworks_max_retries=0,
+            batch_deadline_seconds=600,
+            deadline_safety_margin_seconds=60,
+            remote_worker_count=1,
+            local_proof_budget_ms=100,
+            local_cross_check_enabled=True,
+            router_log_path=None,
+            fireworks_api_key="secret",
+            fireworks_base_url="https://judge-proxy.example",
+            allowed_models=("minimax-m3",),
+            fireworks_max_tokens=256,
+        )
+        self.assertEqual(select_allowed_model(config, ("kimi-k2p7-code",)), "minimax-m3")
 
     def test_fireworks_invalid_json_fails_soft(self):
         with patch.dict(

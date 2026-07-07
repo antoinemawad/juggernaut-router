@@ -76,7 +76,12 @@ def answer_task(
         )
 
     remote_mode = _select_remote_mode(classification, local_result)
-    remote = ask_fireworks_structured(prompt, config=config, deadline=deadline)
+    remote = ask_fireworks_structured(
+        prompt,
+        config=config,
+        deadline=deadline,
+        preferred_models=_preferred_models_for_remote_mode(remote_mode),
+    )
     timings.remote_elapsed_ms = remote.elapsed_ms
     normalize_timer = StageTimer()
     answer = normalize_answer(remote.answer, code_only=_requests_code_only(prompt))
@@ -163,3 +168,13 @@ def _select_remote_mode(classification, local_result=None) -> str:
     if classification.risk_components.get("format_strictness", 0) >= 0.45:
         return "remote_format_strict"
     return "remote_concise"
+
+
+def _preferred_models_for_remote_mode(remote_mode: str) -> tuple[str, ...]:
+    if remote_mode == "remote_code":
+        return ("kimi-k2p7-code", "minimax-m3", "gemma-4-31b-it")
+    if remote_mode == "remote_accuracy":
+        return ("minimax-m3", "gemma-4-31b-it", "kimi-k2p7-code")
+    if remote_mode == "remote_format_strict":
+        return ("minimax-m3", "kimi-k2p7-code", "gemma-4-31b-it")
+    return ("minimax-m3", "gemma-4-26b-a4b-it", "gemma-4-31b-it")

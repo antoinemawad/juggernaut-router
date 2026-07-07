@@ -202,6 +202,7 @@ Timing fields must never be written to the official `/output/results.json`. They
 - Calls Fireworks fallback when local confidence is too low or validation fails.
 - Must not call Fireworks for high-confidence deterministic/local answers.
 - Labels remote needs as `remote_concise`, `remote_accuracy`, `remote_format_strict`, or `remote_code` for downstream model/prompt selection.
+- Passes remote-mode model preferences to the Fireworks wrapper, while the wrapper only selects models present in `ALLOWED_MODELS`.
 - Uses a programmable/configurable accuracy-gate target in local evaluation so the threshold can change without architecture changes.
 - Enforces English-only response policy. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - Should record a local router decision object for each task during experiments: `task_id`, category, classifier confidence, local solver confidence, validator result, route, selected model, prompt policy, `max_tokens`, token usage when available, latency, and route reason.
@@ -223,6 +224,7 @@ Timing fields must never be written to the official `/output/results.json`. They
 - Must select only from `ALLOWED_MODELS`. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - Current planning model set is `minimax-m3`, `kimi-k2p7-code`, `gemma-4-31b-it`, `gemma-4-26b-a4b-it`, and `gemma-4-31b-it-nvfp4`; final behavior still validates against `ALLOWED_MODELS`.
 - Must not hardcode any fixed model as mandatory.
+- Accepts optional preferred model ordering from the router but falls back to the first allowed model when preferred models are unavailable.
 - Must handle missing env vars, HTTP errors, timeouts, invalid JSON, missing `choices`, missing `usage`, and disallowed models without leaking secrets.
 - Must bound timeout and retry behavior through config.
 

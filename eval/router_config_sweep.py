@@ -109,7 +109,7 @@ def run_scenario(config, scenario):
     remote_completion_tokens = estimate_tokens(remote_answer)
     remote_total_tokens = estimate_remote_tokens(config, scenario, remote_answer)
 
-    def mock_fireworks(remote_prompt, config=None, deadline=None):
+    def mock_fireworks(remote_prompt, config=None, deadline=None, preferred_models=None):
         return FireworksResult(
             answer=remote_answer,
             model=config.first_allowed_model() if config is not None else None,

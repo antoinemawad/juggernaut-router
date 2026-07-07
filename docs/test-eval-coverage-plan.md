@@ -208,7 +208,7 @@ Every eval row should include scenario metadata plus runtime decision data when 
 
 ## Required Test Types
 
-- Current Phase 2 implementation includes `tests/test_phase2_router.py` for classifier coverage, risk components, local no-Fireworks routing, risky remote routing, remote mode selection, classifier-before-remote ordering, proof-budget rejection, near-deadline fallback behavior, ambiguous NER rejection, exact-summary rejection, sarcasm rejection, multi-step math rejection, incomplete logic rejection, nontrivial-code rejection, NER/code/corrected-code cross-check failures, real-router sweep rows, full-fixture expected-route and remote-mode assertions, route-match checks, ranking-order checks, and verifier-aware eval scoring.
+- Current Phase 2 implementation includes `tests/test_phase2_router.py` for classifier coverage, risk components, local no-Fireworks routing, risky remote routing, remote mode selection, preferred model selection, classifier-before-remote ordering, proof-budget rejection, near-deadline fallback behavior, ambiguous NER rejection, exact-summary rejection, sarcasm rejection, multi-step math rejection, incomplete logic rejection, nontrivial-code rejection, NER/code/corrected-code cross-check failures, real-router sweep rows, full-fixture expected-route and remote-mode assertions, route-match checks, ranking-order checks, and verifier-aware eval scoring.
 - Unit tests for classifier risk components.
 - Unit tests for validators.
 - Unit tests for constraint extraction.

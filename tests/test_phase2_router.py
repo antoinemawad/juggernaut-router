@@ -89,7 +89,7 @@ class Phase2RouterTests(unittest.TestCase):
             seen.append("classify")
             return classify_prompt(prompt)
 
-        def fake_remote(prompt, config=None, deadline=None):
+        def fake_remote(prompt, config=None, deadline=None, preferred_models=None):
             seen.append("remote")
             from app.fireworks_client import FireworksResult
 
@@ -218,6 +218,32 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.remote_mode, "remote_code")
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+
+    def test_agent_prefers_code_model_when_allowed(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse()
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3,kimi-k2p7-code",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", fake_urlopen):
+            result = answer_task(
+                "code",
+                "Write a Python function named is_even that returns True if a number is even and False otherwise. Return only code.",
+            )
+
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.remote_mode, "remote_code")
+        self.assertEqual(result.selected_model, "kimi-k2p7-code")
+        self.assertEqual(captured["payload"]["model"], "kimi-k2p7-code")
 
     def test_multistep_discount_math_routes_remote(self):
         with patch.dict(

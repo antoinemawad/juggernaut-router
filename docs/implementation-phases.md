@@ -216,10 +216,11 @@ Current status:
 - `app/validators.py` cross-checks simple NER mentions, simple code-generation semantics, and corrected-code fixes before local acceptance,
 - `app/agent.py` now accepts local answers only when validator/proof layers pass,
 - `app/agent.py` now labels remote needs as `remote_concise`, `remote_accuracy`, `remote_format_strict`, or `remote_code`,
+- `app/agent.py` passes remote-mode model preferences and `app/fireworks_client.py` enforces that selected models are still in `ALLOWED_MODELS`,
 - `eval/router_config_sweep.py` now exercises the real router with mocked Fireworks responses,
 - `scripts/check_expected_routes.py` asserts full-fixture expected routes and remote-mode hints, then writes `eval_runs/expected_routes_latest.{json,md}`,
 - latest mock sweep recommends `strict_hybrid` with 100% pass rate, 100% expected-route match, and fewer tokens than always-Fireworks,
-- `tests/test_phase2_router.py` covers classifier categories, risk components, local no-Fireworks routing, remote fallback through the wrapper, remote mode selection, proof-budget rejection, classifier-before-remote ordering, ambiguous NER rejection, exact-summary rejection, sarcasm rejection, multi-step math rejection, incomplete logic rejection, nontrivial-code rejection, NER/code/corrected-code cross-check failures, real-router sweep rows, full-fixture expected-route and remote-mode assertions, ranking order, and verifier-aware scoring.
+- `tests/test_phase2_router.py` covers classifier categories, risk components, local no-Fireworks routing, remote fallback through the wrapper, remote mode selection, preferred model selection, proof-budget rejection, classifier-before-remote ordering, ambiguous NER rejection, exact-summary rejection, sarcasm rejection, multi-step math rejection, incomplete logic rejection, nontrivial-code rejection, NER/code/corrected-code cross-check failures, real-router sweep rows, full-fixture expected-route and remote-mode assertions, ranking order, and verifier-aware scoring.
 
 Deliverables:
 

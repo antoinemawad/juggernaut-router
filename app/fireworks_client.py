@@ -27,6 +27,7 @@ def ask_fireworks_structured(
     prompt: str,
     config: RuntimeConfig | None = None,
     deadline: DeadlineManager | None = None,
+    preferred_models: tuple[str, ...] | list[str] | None = None,
 ) -> FireworksResult:
     config = config or RuntimeConfig.from_env()
     timer = StageTimer()
@@ -45,7 +46,7 @@ def ask_fireworks_structured(
             error="deadline_suppressed_remote",
         )
 
-    model = config.first_allowed_model()
+    model = select_allowed_model(config, preferred_models)
     if model is None:
         return FireworksResult(
             answer=SAFE_FALLBACK_ANSWER,
@@ -139,3 +140,14 @@ def _usage_int(usage, key: str) -> int | None:
         return None
     value = usage.get(key)
     return value if isinstance(value, int) else None
+
+
+def select_allowed_model(
+    config: RuntimeConfig,
+    preferred_models: tuple[str, ...] | list[str] | None = None,
+) -> str | None:
+    allowed = set(config.allowed_models)
+    for model in preferred_models or ():
+        if model in allowed:
+            return model
+    return config.first_allowed_model()
