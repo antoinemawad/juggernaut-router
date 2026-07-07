@@ -48,6 +48,24 @@ python3 eval/router_config_sweep.py --accuracy-threshold 0.85
 
 This produces `eval_runs/router_sweep_*.jsonl` and `eval_runs/router_sweep_*.md`, ranking configurations by accuracy first and token usage second.
 
+## Production Readiness Checks
+
+Before final submission, verify malformed input handling, Fireworks failure handling, answer normalization, optional router telemetry, and Docker mounted IO. These checks are tracked in `docs/submission-checklist.md` and `docs/test-eval-coverage-plan.md`.
+
+Run the current local quality gate:
+
+```bash
+python3 scripts/run_local_quality_gate.py
+```
+
+Tiered eval coverage can also be checked directly:
+
+```bash
+python3 scripts/check_eval_coverage.py
+python3 scripts/check_eval_coverage.py eval/golden_tier_2_regression.jsonl --profile tier
+python3 scripts/check_eval_coverage.py eval/golden_tier_3_adversarial.jsonl --profile tier
+```
+
 ## Docker Smoke Test
 
 ```bash
@@ -79,7 +97,15 @@ Planning docs for final presentation and demo:
 
 - `docs/presentation-plan.md`
 - `docs/video-demo-plan.md`
+- `docs/planned-architecture-diagram.md`
 - `docs/elite-routing-plan.md`
+- `docs/implementation-phases.md`
+- `docs/risk-register.md`
+- `docs/category-playbooks.md`
+- `docs/accuracy-gates.md`
+- `docs/eval-field-glossary.md`
+- `docs/official-submission-decision-tree.md`
+- `docs/live-eval-budget-plan.md`
 - `docs/test-eval-coverage-plan.md`
 - `docs/model-matrix-evaluation.md`
 - `docs/track1-execution-discipline.md`

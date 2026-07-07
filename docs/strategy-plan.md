@@ -17,10 +17,14 @@ This plan targets rank #1 for Track 1 only. It separates source-backed constrain
 - Classify every task locally before any Fireworks call.
 - Treat routing as a risk engine: prove local safety first, otherwise route to Fireworks.
 - Use confidence-gated local solvers for deterministic or high-confidence tasks.
+- Use a bounded local proof ladder before accepting any zero-token local answer.
 - Use category-specific validators as the main defense against overconfident zero-token answers.
+- Maintain category playbooks for local acceptance, remote fallback, validators, and known traps.
 - Use category-specific Fireworks fallback when local solvers are uncertain, output validation fails, or the task is naturally high risk.
 - Use Fireworks accuracy mode for hard/risky tasks: richer prompts, more careful instructions, and model selection optimized for correctness.
 - Maintain configurable `conservative`, `balanced`, and `aggressive` router modes for official submission comparisons.
+- Use a global deadline manager so the container always finishes under the 10-minute runtime ceiling and still writes valid output.
+- Use bounded parallel Fireworks calls only after local classification identifies remote-needed tasks.
 - Use model selection only from runtime `ALLOWED_MODELS`. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - Use AMD AI Notebooks / AMD Developer Cloud for validation evidence and optional local-model experiments, not as a required final runtime unless organizers confirm that path. Sources: `Guides/Hackathon Act II.txt`, `Guides/AMD Developer Hackathon Participant Guide.txt`.
 - Keep final container CPU-safe unless local LLM runtime is proven to fit the standardized environment, 10-minute runtime, 60-second startup, 30-second per-response, and 10GB compressed image limits. Sources: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`, `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
@@ -56,21 +60,25 @@ This plan targets rank #1 for Track 1 only. It separates source-backed constrain
 Every task should pass through this decision sequence:
 
 1. Local classification: identify category, confidence, and risk.
-2. Risk scoring: estimate ambiguity, reasoning depth, format strictness, code risk, factual freshness, and validator weakness.
-3. Local solvability check: decide whether any local solver can prove correctness.
-4. Local solver attempt: only for categories with deterministic or high-confidence local coverage.
-5. Local validation: reject empty, malformed, non-English, low-confidence, unchecked, or structurally wrong answers.
-6. Route decision:
+2. Constraint extraction: identify answer shape, exact-format rules, and hard output requirements.
+3. Risk scoring: estimate ambiguity, reasoning depth, format strictness, code risk, factual freshness, and validator weakness.
+4. Local solvability check: decide whether any local solver can prove correctness.
+5. Local solver attempt: only for categories with deterministic or high-confidence local coverage.
+6. Local proof ladder: require solver evidence, independent category validation, format validation, trap guard, cheap cross-check, and local proof budget compliance.
+7. Route decision:
    - Stay local when category confidence, solver confidence, and validation all pass.
    - Use Fireworks when the category is risky, confidence is low, solver coverage is missing, or validation fails.
-7. Fireworks mode selection: choose concise, accuracy, format-strict, or code mode.
-8. Fireworks model selection: choose from `ALLOWED_MODELS` based on category/model matrix results.
-9. Prompt policy selection: use original prompt when exact wording matters; use compact or answer-only only when experiments show no accuracy loss.
-10. Decision logging: record route, risk, validator notes, model, prompt policy, tokens, latency, and errors.
+8. Fireworks mode selection: choose concise, accuracy, format-strict, or code mode.
+9. Fireworks model selection: choose from `ALLOWED_MODELS` based on category/model matrix results.
+10. Prompt policy selection: use original prompt when exact wording matters; use compact or answer-only only when experiments show no accuracy loss.
+11. Deadline check: skip unsafe retries or choose a safe fallback when remaining batch time is too low.
+12. Decision logging: record route, risk, validator notes, model, prompt policy, tokens, latency, deadline decisions, and errors.
 
 The router must never use Fireworks as the first step for all tasks. Fireworks is the fallback or accuracy path after local classification decides it is needed.
 
 See `docs/elite-routing-plan.md` for the full risk-engine design.
+See `docs/category-playbooks.md` for category-specific acceptance rules.
+See `docs/accuracy-gates.md` for promotion thresholds and A/B config rules.
 
 ## Prompt Size Policy
 
@@ -93,8 +101,12 @@ Prompt resizing is allowed only when metrics show it preserves accuracy.
 - Compare always-Fireworks, strict hybrid, and aggressive hybrid router modes on the same dataset.
 - Keep router decision logs for experiments so every local-vs-Fireworks choice can be audited.
 - Test adversarial examples for every category before promoting a local solver, validator, prompt policy, or model choice.
+- Test local proof ladder layers independently: constraint extraction, trap guard, cross-check, and local proof budget.
+- Maintain tiered golden datasets: smoke, regression, adversarial, and full model matrix.
+- Compare candidate eval reports against baselines before changing defaults.
 - Test the full risk-engine scenario matrix: risk components, remote modes, router modes, validators, prompt policies, and model maps.
 - Test timeout, retry, fallback, and answer-normalization behavior as first-class quality gates.
+- Test deadline behavior with fake clocks: remaining time, safety margin, retry suppression, bounded worker count, and valid output near timeout.
 - Test hard-task Fireworks accuracy mode.
 - Run Docker with mounted `/input` and `/output` on `linux/amd64`.
 
@@ -110,6 +122,14 @@ Use official submissions only after local evidence selects a candidate.
 6. Record the official result and change only one major variable before the next attempt.
 
 This lets us use the submission limit as measured feedback while avoiding random leaderboard poking.
+
+Detailed rules:
+
+- implementation order: `docs/implementation-phases.md`
+- official submission decisions: `docs/official-submission-decision-tree.md`
+- live Fireworks spend: `docs/live-eval-budget-plan.md`
+- risks and mitigations: `docs/risk-register.md`
+- eval field definitions: `docs/eval-field-glossary.md`
 
 ## Current Assumptions
 

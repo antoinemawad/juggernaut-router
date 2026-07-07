@@ -10,6 +10,10 @@ Final pre-submit checklist for Track 1 only.
 - [ ] README documents Docker run with mounted `/input` and `/output`.
 - [ ] README documents required environment variables.
 - [ ] Track 1 execution discipline reviewed: `docs/track1-execution-discipline.md`.
+- [ ] Implementation phase status reviewed: `docs/implementation-phases.md`.
+- [ ] Risk register reviewed: `docs/risk-register.md`.
+- [ ] Category playbooks reviewed: `docs/category-playbooks.md`.
+- [ ] Accuracy gates reviewed: `docs/accuracy-gates.md`.
 - [ ] Local testing and submission use the same code path; only `INPUT_PATH`, `OUTPUT_PATH`, and runtime environment variables change.
 - [ ] Final manual review complete.
 
@@ -22,8 +26,14 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Output is valid JSON. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Exit code is 0 on success. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Runtime stays under 10 minutes. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
+- [ ] Runtime measurement is treated as total process/container wall-clock time, including startup, imports, input reading, output writing, and shutdown.
+- [ ] Runtime reserves a safety margin and never relies on using the full 10 minutes.
 - [ ] Startup is under 60 seconds. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
+- [ ] Startup is treated as a sub-budget inside the 10-minute runtime budget unless official harness behavior proves otherwise.
 - [ ] Per-response time is under 30 seconds. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
+- [ ] Fireworks per-call timeout is configured below the 30-second per-response ceiling.
+- [ ] Remote retry policy is disabled/suppressed when the batch deadline is near.
+- [ ] Bounded remote worker count is configured and tested.
 - [ ] linux/amd64 image built. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - [ ] Image compressed size is under 10GB. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Image is publicly pullable. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
@@ -31,9 +41,14 @@ Final pre-submit checklist for Track 1 only.
 ## Tests and Validation
 
 - [ ] Tests pass.
+- [ ] Local quality gate passes: `python3 scripts/run_local_quality_gate.py`.
 - [ ] Eval coverage checker passes: `python3 scripts/check_eval_coverage.py`.
+- [ ] Regression tier coverage passes: `python3 scripts/check_eval_coverage.py eval/golden_tier_2_regression.jsonl --profile tier`.
+- [ ] Adversarial tier coverage passes: `python3 scripts/check_eval_coverage.py eval/golden_tier_3_adversarial.jsonl --profile tier`.
 - [ ] Local fixture test passes.
+- [ ] Malformed input tests pass: bad JSON, non-array JSON, missing task fields, non-string prompt.
 - [ ] Docker fixture test passes.
+- [ ] Config/env parsing tests pass for `ROUTER_MODE`, `LOCAL_CONFIDENCE_THRESHOLD`, `FIREWORKS_TIMEOUT_SECONDS`, `FIREWORKS_MAX_RETRIES`, and `ROUTER_LOG_PATH`.
 - [ ] Agent test proves classifier runs before any Fireworks call.
 - [ ] Agent test proves high-confidence local tasks do not call Fireworks.
 - [ ] Agent test proves low-confidence or risky tasks call Fireworks through the wrapper.
@@ -44,9 +59,16 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Router decision logs include risk score, risk components, validator notes, remote mode, final answer length, and errors when present.
 - [ ] Answer normalization test passes: no unintended markdown, surrounding whitespace stripped, exact requested formats preserved.
 - [ ] Timeout/fallback tests pass without crashing the batch or producing malformed JSON.
+- [ ] Deadline manager tests pass: remaining time, safety margin, retry suppression, and valid output near timeout.
+- [ ] Fireworks client failure tests pass: missing env, timeout, HTTP error, invalid JSON, missing `choices`, missing `usage`, and disallowed model.
+- [ ] Structured routing result tests pass while final `/output/results.json` still contains only `task_id` and `answer`.
+- [ ] Optional telemetry test passes and confirms no API key/secret is logged.
+- [ ] Production readiness failure matrix reviewed.
 - [ ] Always-Fireworks baseline compared against final hybrid router on the same dataset.
+- [ ] Candidate eval reports compared against accepted baseline with `scripts/compare_eval_reports.py`.
 - [ ] Router config sweep report reviewed and winning config selected.
 - [ ] Adversarial routing set passes the configured accuracy target.
+- [ ] No tier 3 adversarial scenario is accepted locally without a proof/verifier.
 - [ ] New routing features have both positive scenarios and adversarial fail-safe scenarios.
 - [ ] Valid JSON output verified manually.
 - [ ] Representative output formats manually inspected: exact numeric, label, summary, entity list, code, and corrected code.
