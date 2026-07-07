@@ -109,6 +109,8 @@ Fill after experiments:
 - failure categories,
 - Docker runtime metrics.
 
+Include a short failure-analysis note. Judges should see that weak outputs were inspected and used to improve routing, not hidden.
+
 ### 9. Demo
 
 Use the exact demo-video flow in `docs/video-demo-plan.md`.
@@ -124,6 +126,7 @@ Use the exact demo-video flow in `docs/video-demo-plan.md`.
 - Screenshot or snippet of model matrix report.
 - Docker build/pull/run command output.
 - Token comparison table.
+- Failure analysis summary.
 - Architecture diagram or text flow.
 - Public GitHub URL.
 - Public Docker image URL.

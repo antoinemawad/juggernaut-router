@@ -9,8 +9,13 @@ Final pre-submit checklist for Track 1 only.
 - [ ] README documents local test commands.
 - [ ] README documents Docker run with mounted `/input` and `/output`.
 - [ ] README documents required environment variables.
+- [ ] Requirements traceability reviewed: `docs/requirements-traceability.md`.
+- [ ] HackerRank lessons checklist reviewed: `docs/hackathon-lessons-learned.md`.
 - [ ] Local testing and submission use the same code path; only `INPUT_PATH`, `OUTPUT_PATH`, and runtime environment variables change.
 - [ ] Final manual review complete.
+- [ ] Manual verification log updated: `docs/manual-verification-log.md`.
+- [ ] Final release audit complete: `docs/final-release-audit.md`.
+- [ ] Judge/interview prep checked against actual implementation: `docs/judge-interview-prep.md`.
 
 ## Docker and Runtime
 
@@ -100,6 +105,7 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Local-first routing explanation captured.
 - [ ] Model matrix report selected for slides.
 - [ ] Token comparison table selected for slides.
+- [ ] Failure analysis selected for slides/interview.
 - [ ] Docker run proof captured.
 - [ ] Valid output JSON proof captured.
 - [ ] No secrets visible in screenshots or recordings.

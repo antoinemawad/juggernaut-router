@@ -83,6 +83,11 @@ Planning docs for final presentation and demo:
 - `docs/test-eval-coverage-plan.md`
 - `docs/model-matrix-evaluation.md`
 - `docs/submission-checklist.md`
+- `docs/hackathon-lessons-learned.md`
+- `docs/requirements-traceability.md`
+- `docs/manual-verification-log.md`
+- `docs/final-release-audit.md`
+- `docs/judge-interview-prep.md`
 - `docs/official-submission-log.md`
 
 ## Goal
