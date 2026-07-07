@@ -30,8 +30,23 @@ Final pre-submit checklist for Track 1 only.
 ## Tests and Validation
 
 - [ ] Tests pass.
+- [ ] Eval coverage checker passes: `python3 scripts/check_eval_coverage.py`.
 - [ ] Local fixture test passes.
 - [ ] Docker fixture test passes.
+- [ ] Agent test proves classifier runs before any Fireworks call.
+- [ ] Agent test proves high-confidence local tasks do not call Fireworks.
+- [ ] Agent test proves low-confidence or risky tasks call Fireworks through the wrapper.
+- [ ] Risk engine tests cover ambiguity, reasoning depth, format strictness, code risk, factual freshness, and validator weakness.
+- [ ] Remote mode tests cover concise, accuracy, format-strict, and code modes where applicable.
+- [ ] Router mode tests cover conservative, balanced, and aggressive configurations on the same dataset.
+- [ ] Router decision logs include category, confidence, route, selected model, prompt policy, `max_tokens`, route reason, latency, and token usage when available.
+- [ ] Router decision logs include risk score, risk components, validator notes, remote mode, final answer length, and errors when present.
+- [ ] Answer normalization test passes: no unintended markdown, surrounding whitespace stripped, exact requested formats preserved.
+- [ ] Timeout/fallback tests pass without crashing the batch or producing malformed JSON.
+- [ ] Always-Fireworks baseline compared against final hybrid router on the same dataset.
+- [ ] Router config sweep report reviewed and winning config selected.
+- [ ] Adversarial routing set passes the configured accuracy target.
+- [ ] New routing features have both positive scenarios and adversarial fail-safe scenarios.
 - [ ] Valid JSON output verified manually.
 - [ ] All 8 Track 1 categories have at least one local test example.
 - [ ] No regression after final image build.
@@ -67,10 +82,24 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Track/category tags ready. Source: `Guides/Submission Guidelines.txt`.
 - [ ] Technology tags ready. Source: `Guides/Submission Guidelines.txt`.
 - [ ] Cover image ready. Sources: `Guides/Hackathon Act II.txt`, `Guides/Submission Guidelines.txt`.
+- [ ] Video plan complete: `docs/video-demo-plan.md`.
 - [ ] Video ready. Sources: `Guides/Hackathon Act II.txt`, `Guides/Submission Guidelines.txt`.
+- [ ] Slides plan complete: `docs/presentation-plan.md`.
 - [ ] Slides ready. Source: `Guides/Hackathon Act II.txt`.
 - [ ] Docker image URL ready.
+- [ ] Official submission attempt recorded in `docs/official-submission-log.md`.
 - [ ] Public GitHub URL ready. Source: `Guides/Hackathon Act II.txt`.
 - [ ] Demo platform / application URL ready if required by form. Source: `Guides/Submission Guidelines.txt`.
 - [ ] Submit before July 11, 7:00 PM EEST. Source: `Guides/Hackathon Act II.txt`.
 - [ ] Respect 10 submissions per hour per team. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
+
+## Presentation and Demo Evidence
+
+- [ ] Architecture flow captured.
+- [ ] Runtime contract captured.
+- [ ] Local-first routing explanation captured.
+- [ ] Model matrix report selected for slides.
+- [ ] Token comparison table selected for slides.
+- [ ] Docker run proof captured.
+- [ ] Valid output JSON proof captured.
+- [ ] No secrets visible in screenshots or recordings.

@@ -12,7 +12,14 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 - Local solver coverage:
 - Fireworks calls required:
 - Expected token impact:
+- Log file:
+- Report file:
+- Models tested:
+- Categories covered:
 - Accuracy observations:
+- Token observations:
+- Latency observations:
+- Prompt policy observations:
 - Failure cases:
 - Decision:
 
@@ -32,12 +39,30 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 - Failure cases: TBD.
 - Decision: TBD.
 
+### Always-Fireworks vs Hybrid Router
+
+- Name: Always-Fireworks vs Hybrid Router
+- Date: TBD
+- Goal: Prove the final router saves recorded tokens while preserving the accuracy target.
+- Strategy tested: Run the same dataset through always-Fireworks, strict hybrid, and aggressive hybrid configurations.
+- Dataset: Full category-balanced local eval with adversarial variants.
+- Local solver coverage: 0% for baseline; measured by category for hybrid runs.
+- Fireworks calls required: 100% for baseline; lower for hybrid runs.
+- Expected token impact: Hybrid must use fewer recorded tokens than baseline while preserving accuracy.
+- Log file: `eval_runs/router_sweep_<timestamp>.jsonl`.
+- Report file: `eval_runs/router_sweep_<timestamp>.md`.
+- Accuracy observations: TBD.
+- Token observations: TBD.
+- Latency observations: TBD.
+- Failure cases: Local overconfidence, validator misses, format drift, Fireworks timeout.
+- Decision: Promote the hybrid configuration only if it meets the accuracy target and beats baseline token usage.
+
 ### Local Deterministic High-Confidence Only
 
 - Name: Local Deterministic High-Confidence Only
 - Date: TBD
-- Goal: Identify safe zero-token coverage.
-- Strategy tested: Use only deterministic local solvers when confidence is high; otherwise Fireworks.
+- Goal: Identify safe zero-token coverage after local classification.
+- Strategy tested: Classify locally first, use deterministic local solvers when confidence is high, otherwise Fireworks.
 - Dataset: Local synthetic set plus any public examples released by organizers.
 - Local solver coverage: TBD by category.
 - Fireworks calls required: Expected lower than baseline.
@@ -46,12 +71,48 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 - Failure cases: TBD.
 - Decision: TBD.
 
+### Adversarial Routing Set
+
+- Name: Adversarial Routing Set
+- Date: TBD
+- Goal: Prevent overconfident zero-token answers from failing the accuracy gate.
+- Strategy tested: Include prompts that appear simple but contain sarcasm, multi-step arithmetic, strict formatting, negation, subtle code bugs, or entity ambiguity.
+- Dataset: Hand-authored adversarial scenarios across all 8 categories.
+- Local solver coverage: Expected low unless validator can prove correctness.
+- Fireworks calls required: Expected higher than simple fixtures.
+- Expected token impact: Slightly higher than optimistic routing; safer for the accuracy gate.
+- Accuracy observations: TBD.
+- Token observations: TBD.
+- Failure cases: False local acceptance, compact prompt losing constraints, answer-only mode omitting required detail.
+- Decision: Any adversarial failure becomes either a validator rule, classifier risk flag, prompt-template change, or model-routing adjustment.
+
+### Risk Engine Coverage Matrix
+
+- Name: Risk Engine Coverage Matrix
+- Date: TBD
+- Goal: Verify that every routing risk component and remote mode is exercised with metrics.
+- Strategy tested: Run scenario groups across ambiguity, reasoning depth, format strictness, code risk, factual freshness, and validator weakness.
+- Dataset: Expanded local eval with safe, borderline, adversarial, exact-format, timeout, and malformed-response scenarios.
+- Local solver coverage: Measured by category and router mode.
+- Fireworks calls required: Mocked first; live only for selected high-value slices.
+- Expected token impact: Indirect; improves routing safety and prevents accidental high-token/low-accuracy configs.
+- Log file: `eval_runs/risk_engine_<timestamp>.jsonl`.
+- Report file: `eval_runs/risk_engine_<timestamp>.md`.
+- Models tested: Selected from `ALLOWED_MODELS` when live.
+- Categories covered: all 8 Track 1 categories.
+- Accuracy observations: TBD.
+- Token observations: TBD.
+- Latency observations: TBD.
+- Prompt policy observations: TBD.
+- Failure cases: Missing log fields, untested risk component, unsafe local acceptance, wrong remote mode, invalid normalization.
+- Decision: Do not promote router changes until every risk component and remote mode has at least one passing scenario.
+
 ### Confidence Threshold Comparison: 0.85 vs 0.90 vs 0.95
 
 - Name: Confidence Threshold Comparison
 - Date: TBD
 - Goal: Find the safest configurable threshold for accepting local answers and keep the exact accuracy gate programmable/changeable.
-- Strategy tested: Run identical datasets with local accept thresholds at 0.85, 0.90, and 0.95.
+- Strategy tested: Run identical datasets through local classifier -> local solver -> validator with accept thresholds at 0.85, 0.90, and 0.95.
 - Dataset: Category-balanced local eval.
 - Local solver coverage: Varies by threshold.
 - Fireworks calls required: Increases as threshold rises.
@@ -73,6 +134,27 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 - Accuracy observations: TBD.
 - Failure cases: TBD.
 - Decision: TBD.
+
+### Remote Mode Comparison
+
+- Name: Remote Mode Comparison
+- Date: TBD
+- Goal: Decide when to use `remote_concise`, `remote_accuracy`, `remote_format_strict`, and `remote_code`.
+- Strategy tested: Run the same Fireworks-routed scenarios through each compatible remote mode and compare accuracy/tokens.
+- Dataset: Hard and format-sensitive scenarios from each Track 1 category.
+- Local solver coverage: Not used; this isolates remote routing behavior.
+- Fireworks calls required: `remote_modes * selected_scenarios * candidate_models` in live mode.
+- Expected token impact: Concise mode should save tokens; accuracy/format/code modes should protect the gate on risky tasks.
+- Log file: `eval_runs/remote_mode_<timestamp>.jsonl`.
+- Report file: `eval_runs/remote_mode_<timestamp>.md`.
+- Models tested: Selected from `ALLOWED_MODELS`.
+- Categories covered: all 8 Track 1 categories where applicable.
+- Accuracy observations: TBD.
+- Token observations: TBD.
+- Latency observations: TBD.
+- Prompt policy observations: TBD.
+- Failure cases: Truncation, verbose answers, invalid JSON/format, code syntax errors, unnecessary accuracy-mode token spend.
+- Decision: Promote remote mode defaults by category only when report metrics justify them.
 
 ### Model Preference Comparison by Category
 
@@ -98,9 +180,55 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 - Local solver coverage: Not used; this isolates Fireworks model behavior.
 - Fireworks calls required: `allowed_models_count * scenario_count` in live mode.
 - Expected token impact: Experiment-only token spend; informs final category/model routing.
+- Log file: `eval_runs/<run_id>.jsonl`.
+- Report file: `eval_runs/<run_id>.md`.
+- Models tested: `minimax-m3`, `kimi-k2p7-code`, `gemma-4-31b-it`, `gemma-4-26b-a4b-it`, `gemma-4-31b-it-nvfp4`.
+- Categories covered: all 8 Track 1 categories.
 - Accuracy observations: TBD.
+- Token observations: TBD.
+- Latency observations: TBD.
 - Failure cases: TBD.
 - Decision: TBD after live run.
+
+### Per-Category Rerun After Prompt Tuning
+
+- Name: Per-Category Rerun After Prompt Tuning
+- Date: TBD
+- Goal: Re-test only categories where the first matrix shows weak accuracy or excessive tokens.
+- Strategy tested: Category-specific prompt and `max_tokens` changes.
+- Dataset: Failed or borderline scenarios plus nearby variants.
+- Local solver coverage: Not used; this isolates Fireworks prompt/model behavior.
+- Fireworks calls required: `candidate_models * affected_category_scenarios`.
+- Expected token impact: Lower than full matrix because only affected categories rerun.
+- Log file: `eval_runs/<run_id>.jsonl`.
+- Report file: `eval_runs/<run_id>.md`.
+- Models tested: TBD per category.
+- Categories covered: TBD.
+- Accuracy observations: TBD.
+- Token observations: TBD.
+- Latency observations: TBD.
+- Failure cases: TBD.
+- Decision: Promote improved prompt/model settings if accuracy stays stable and tokens fall.
+
+### Router Config Promotion
+
+- Name: Router Config Promotion
+- Date: TBD
+- Goal: Convert model matrix evidence into final router configuration.
+- Strategy tested: Use per-category default model, accuracy-mode model, and `max_tokens` settings selected from evidence.
+- Dataset: Full local eval and Docker fixture eval.
+- Local solver coverage: As implemented.
+- Fireworks calls required: Only tasks routed to Fireworks.
+- Expected token impact: Lower than always-Fireworks baseline.
+- Log file: TBD.
+- Report file: TBD.
+- Models tested: Selected per category.
+- Categories covered: all 8 Track 1 categories.
+- Accuracy observations: TBD.
+- Token observations: TBD.
+- Latency observations: TBD.
+- Failure cases: TBD.
+- Decision: Accept only if accuracy target is met and token usage improves over all-Fireworks baseline.
 
 ### max_tokens Tuning
 
@@ -115,6 +243,27 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 - Accuracy observations: TBD.
 - Failure cases: Truncated answers, missing justification, invalid code.
 - Decision: TBD.
+
+### Prompt Policy Comparison
+
+- Name: Prompt Policy Comparison
+- Date: TBD
+- Goal: Decide when to send original input, compact prompt, or answer-only prompt to Fireworks.
+- Strategy tested: `original` vs `compact` vs `answer_only` prompt policies in `eval/model_matrix.py`.
+- Dataset: Category-balanced scenarios, with emphasis on exact-wording-sensitive categories.
+- Local solver coverage: Not used; this isolates Fireworks prompt-policy behavior.
+- Fireworks calls required: `models * scenarios * prompt_policies` in live mode.
+- Expected token impact: `answer_only` may reduce completion tokens; `compact` may improve format adherence; `original` may protect accuracy on exact-detail tasks.
+- Log file: `eval_runs/<run_id>.jsonl`.
+- Report file: `eval_runs/<run_id>.md`.
+- Models tested: all allowed models or selected candidates after initial matrix.
+- Categories covered: all 8 Track 1 categories.
+- Accuracy observations: TBD.
+- Token observations: TBD.
+- Latency observations: TBD.
+- Prompt policy observations: TBD.
+- Failure cases: Loss of constraints, missing exact details, over-short answers, malformed code.
+- Decision: Promote prompt policy by category only when accuracy stays at target and token usage improves.
 
 ### Hard-Task Fireworks Accuracy Mode
 
@@ -144,6 +293,20 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 - Failure cases: Missing env vars, invalid output path, non-linux/amd64 image, slow startup.
 - Decision: TBD.
 
+### Timeout and Fallback Test
+
+- Name: Timeout and Fallback Test
+- Date: TBD
+- Goal: Ensure one slow or failed Fireworks request does not break the whole batch.
+- Strategy tested: Mock Fireworks timeout, HTTP error, invalid JSON response, and missing usage fields.
+- Dataset: Small local fixture with one forced failure and several normal tasks.
+- Local solver coverage: Mixed.
+- Fireworks calls required: Mocked.
+- Expected token impact: Not measured; this is reliability/compliance protection.
+- Accuracy observations: TBD.
+- Failure cases: Batch crash, malformed `/output/results.json`, repeated retries wasting time.
+- Decision: Accept only if output remains valid JSON and successful tasks still return answers.
+
 ## Source-Backed Constraints for Experiments
 
 - Evaluation uses unseen variants; do not tune to exact public examples. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
@@ -151,3 +314,18 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 - Fireworks calls must use `FIREWORKS_BASE_URL` and models from `ALLOWED_MODELS`. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - Current planning model set is `minimax-m3`, `kimi-k2p7-code`, `gemma-4-31b-it`, `gemma-4-26b-a4b-it`, and `gemma-4-31b-it-nvfp4`. Source: `Guides/AMD Developer Hackathon Participant Guide.txt`.
 - Native.Builder is not part of the experiment plan for now; revisit only if it helps prototype without changing final runtime compliance.
+
+## Official Submission Attempt Strategy
+
+- Treat the 10-submissions-per-hour limit as a scarce optimization loop, not the main test harness.
+- Before each official submission, run local smoke tests, router config sweep, model matrix checks, and Docker fixture validation.
+- Use official submissions only for the best locally ranked candidate images.
+- After each official result, record timestamp, image tag/digest, router config, local report paths, official accuracy/pass status if shown, official token usage if shown, and observed failure notes.
+- Change only one major variable per official submission when possible: router threshold, model map, prompt policy, `max_tokens`, or local solver coverage.
+- Stop submitting immediately if output format, pullability, or env handling fails; fix compliance locally before spending another attempt.
+
+## Logging and Testing Integrity Rule
+
+- Every scenario row must include enough data to reproduce the routing decision: category, risk score, risk components, local confidence, validator status, route, route reason, remote mode, model, prompt policy, `max_tokens`, latency, token fields, score/pass result, and error if present.
+- Every markdown report must aggregate by category, router mode, remote mode, prompt policy, and model when those dimensions are present.
+- Any new router feature must add or update at least one scenario proving it works and one adversarial scenario proving it fails safely.

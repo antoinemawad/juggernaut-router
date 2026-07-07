@@ -19,6 +19,7 @@ ALLOWED_TRACK1_MODELS = [
 
 DEFAULT_SCENARIOS = Path(__file__).with_name("model_matrix_scenarios.jsonl")
 DEFAULT_OUT_DIR = Path(__file__).resolve().parents[1] / "eval_runs"
+PROMPT_POLICIES = ("original", "compact", "answer_only")
 
 
 def load_scenarios(path):
@@ -39,6 +40,17 @@ def env_models():
 
 def estimate_tokens(text):
     return max(1, (len(text) + 3) // 4)
+
+
+def prompt_for_policy(scenario, policy):
+    prompt = scenario["prompt"]
+    if policy == "original":
+        return prompt
+    if policy == "compact":
+        return "Answer the task accurately and concisely. Preserve all constraints.\n\nTask:\n" + prompt
+    if policy == "answer_only":
+        return "Return only the final answer. Preserve exact requested format.\n\nTask:\n" + prompt
+    raise ValueError(f"Unknown prompt policy: {policy}")
 
 
 def score_answer(answer, scenario):
@@ -68,7 +80,7 @@ def mock_answer(model, scenario):
     return expected
 
 
-def call_fireworks(model, scenario, max_tokens):
+def call_fireworks(model, scenario, prompt, max_tokens):
     api_key = os.environ["FIREWORKS_API_KEY"]
     base_url = os.environ["FIREWORKS_BASE_URL"].rstrip("/")
     url = base_url + "/chat/completions"
@@ -82,7 +94,7 @@ def call_fireworks(model, scenario, max_tokens):
                     "Follow the requested output format exactly."
                 ),
             },
-            {"role": "user", "content": scenario["prompt"]},
+            {"role": "user", "content": prompt},
         ],
         "temperature": 0,
         "max_tokens": max_tokens,
@@ -101,18 +113,19 @@ def call_fireworks(model, scenario, max_tokens):
     answer = data["choices"][0]["message"]["content"].strip()
     usage = data.get("usage", {})
     return answer, {
-        "prompt_tokens": usage.get("prompt_tokens", estimate_tokens(scenario["prompt"])),
+        "prompt_tokens": usage.get("prompt_tokens", estimate_tokens(prompt)),
         "completion_tokens": usage.get("completion_tokens", estimate_tokens(answer)),
         "total_tokens": usage.get("total_tokens"),
     }
 
 
-def run_case(model, scenario, live, max_tokens):
+def run_case(model, scenario, live, max_tokens, prompt_policy):
     start = time.perf_counter()
     error = None
+    prompt = prompt_for_policy(scenario, prompt_policy)
     if live:
         try:
-            answer, usage = call_fireworks(model, scenario, max_tokens)
+            answer, usage = call_fireworks(model, scenario, prompt, max_tokens)
         except (KeyError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
             answer = ""
             usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
@@ -120,9 +133,9 @@ def run_case(model, scenario, live, max_tokens):
     else:
         answer = mock_answer(model, scenario)
         usage = {
-            "prompt_tokens": estimate_tokens(scenario["prompt"]),
+            "prompt_tokens": estimate_tokens(prompt),
             "completion_tokens": estimate_tokens(answer),
-            "total_tokens": estimate_tokens(scenario["prompt"]) + estimate_tokens(answer),
+            "total_tokens": estimate_tokens(prompt) + estimate_tokens(answer),
         }
     if usage.get("total_tokens") is None:
         usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
@@ -135,7 +148,15 @@ def run_case(model, scenario, live, max_tokens):
     return {
         "task_id": scenario["task_id"],
         "category": scenario["category"],
+        "difficulty": scenario.get("difficulty"),
+        "scenario_class": scenario.get("scenario_class"),
+        "risk_components": scenario.get("risk_components", []),
+        "output_constraints": scenario.get("output_constraints", []),
+        "expected_route": scenario.get("expected_route"),
+        "remote_mode_hint": scenario.get("remote_mode_hint"),
         "model": model,
+        "prompt_policy": prompt_policy,
+        "prompt_chars": len(prompt),
         "prompt_tokens": usage["prompt_tokens"],
         "completion_tokens": usage["completion_tokens"],
         "total_tokens": usage["total_tokens"],
@@ -152,6 +173,7 @@ def run_case(model, scenario, live, max_tokens):
 def summarize(rows):
     by_model = defaultdict(lambda: {"cases": 0, "passed": 0, "score": 0.0, "tokens": 0, "latency": 0.0})
     by_model_category = defaultdict(lambda: {"cases": 0, "passed": 0, "score": 0.0, "tokens": 0})
+    by_policy = defaultdict(lambda: {"cases": 0, "passed": 0, "score": 0.0, "tokens": 0})
     for row in rows:
         model_row = by_model[row["model"]]
         model_row["cases"] += 1
@@ -166,11 +188,17 @@ def summarize(rows):
         category_row["passed"] += int(row["passed"])
         category_row["score"] += row["score"]
         category_row["tokens"] += row["total_tokens"]
-    return by_model, by_model_category
+
+        policy_row = by_policy[row["prompt_policy"]]
+        policy_row["cases"] += 1
+        policy_row["passed"] += int(row["passed"])
+        policy_row["score"] += row["score"]
+        policy_row["tokens"] += row["total_tokens"]
+    return by_model, by_model_category, by_policy
 
 
 def write_report(path, rows, live):
-    by_model, by_model_category = summarize(rows)
+    by_model, by_model_category, by_policy = summarize(rows)
     lines = [
         "# Track 1 Model Matrix Report",
         "",
@@ -206,6 +234,21 @@ def write_report(path, rows, live):
     lines.extend(
         [
             "",
+            "## Summary by Prompt Policy",
+            "",
+            "| Prompt Policy | Cases | Pass Rate | Avg Score | Total Tokens | Avg Tokens |",
+            "| --- | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for policy, data in sorted(by_policy.items()):
+        cases = data["cases"]
+        lines.append(
+            f"| {policy} | {cases} | {data['passed'] / cases:.1%} | "
+            f"{data['score'] / cases:.3f} | {data['tokens']} | {data['tokens'] / cases:.1f} |"
+        )
+    lines.extend(
+        [
+            "",
             "## Provisional Routing Recommendation",
             "",
         ]
@@ -237,6 +280,11 @@ def main():
     parser.add_argument("--scenarios", type=Path, default=DEFAULT_SCENARIOS)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--models", default=",".join(ALLOWED_TRACK1_MODELS))
+    parser.add_argument(
+        "--prompt-policies",
+        default="original",
+        help="Comma-separated prompt policies: original, compact, answer_only, or all.",
+    )
     parser.add_argument("--live", action="store_true", help="Call Fireworks through FIREWORKS_BASE_URL.")
     parser.add_argument("--max-tokens", type=int, default=256)
     args = parser.parse_args()
@@ -250,6 +298,13 @@ def main():
         for name in ("FIREWORKS_API_KEY", "FIREWORKS_BASE_URL", "ALLOWED_MODELS"):
             if not os.environ.get(name):
                 raise SystemExit(f"--live requires {name}")
+    if args.prompt_policies.strip() == "all":
+        prompt_policies = list(PROMPT_POLICIES)
+    else:
+        prompt_policies = [policy.strip() for policy in args.prompt_policies.split(",") if policy.strip()]
+    invalid_policies = [policy for policy in prompt_policies if policy not in PROMPT_POLICIES]
+    if invalid_policies:
+        raise SystemExit(f"Unknown prompt policies: {', '.join(invalid_policies)}")
 
     scenarios = load_scenarios(args.scenarios)
     run_id = datetime.now(timezone.utc).strftime("model_matrix_%Y%m%d_%H%M%S")
@@ -261,15 +316,17 @@ def main():
     with log_path.open("x", encoding="utf-8") as handle:
         for model in models:
             for scenario in scenarios:
-                row = run_case(model, scenario, args.live, args.max_tokens)
-                row["run_id"] = run_id
-                row["timestamp"] = datetime.now(timezone.utc).isoformat()
-                rows.append(row)
-                handle.write(json.dumps(row, ensure_ascii=True) + "\n")
+                for prompt_policy in prompt_policies:
+                    row = run_case(model, scenario, args.live, args.max_tokens, prompt_policy)
+                    row["run_id"] = run_id
+                    row["timestamp"] = datetime.now(timezone.utc).isoformat()
+                    rows.append(row)
+                    handle.write(json.dumps(row, ensure_ascii=True) + "\n")
 
     write_report(report_path, rows, args.live)
     print(f"Mode: {'live' if args.live else 'mock'}")
     print(f"Models: {', '.join(models)}")
+    print(f"Prompt policies: {', '.join(prompt_policies)}")
     print(f"Scenarios: {len(scenarios)}")
     print(f"Rows: {len(rows)}")
     print(f"Log: {log_path}")
