@@ -35,8 +35,8 @@ This checklist is source-backed by the current `Guides/` folder and should be up
 - [ ] Ensure the image is publicly pullable at submission time. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - [ ] Include a `linux/amd64` manifest. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - [ ] Keep compressed image size at or below 10GB. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
-- [ ] Finish within the 10-minute maximum runtime. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
-- [ ] Start and be ready within 60 seconds. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
+- [ ] Finish within the 10-minute maximum runtime. Treat this as total container/process wall-clock time, including startup, imports, input reading, output writing, and shutdown unless official harness behavior proves otherwise. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
+- [ ] Start and be ready within 60 seconds. Treat this as a stricter startup sub-budget inside the 10-minute maximum runtime unless official harness behavior proves otherwise. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - [ ] Keep per-response time under 30 seconds. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - [ ] Build on Apple Silicon with `docker buildx build --platform linux/amd64 ... --push .` if needed. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 

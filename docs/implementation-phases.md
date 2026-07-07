@@ -11,7 +11,8 @@ This is the execution spine for the project. Each phase has a clear objective, d
 - Keep all remote inference behind `FIREWORKS_BASE_URL`.
 - Keep model selection constrained to runtime `ALLOWED_MODELS`.
 - Prefer accuracy over token reduction until the accuracy gate is safe.
-- Treat the 10-minute container runtime as a hard ceiling and reserve safety time for writing valid output.
+- Treat the 10-minute container runtime as total wall-clock time from process start, including startup/import/input/output time, and reserve safety time for writing valid output.
+- Treat the 60-second startup rule as a stricter sub-budget inside the 10-minute total unless official harness behavior proves otherwise.
 - Do not promote a router behavior unless it has a test, a scenario, and a log/report path.
 - Do not expand live Fireworks spend until the local quality gate passes.
 
@@ -128,6 +129,8 @@ Implementation requirements:
 - handle missing Fireworks env vars gracefully when remote fallback is needed,
 - handle Fireworks timeout, HTTP error, invalid JSON, missing `choices`, missing `usage`, and disallowed models.
 - start a monotonic batch timer early in `main.py`,
+- include startup/import/config/input-read time in deadline accounting where practical,
+- keep startup work below the 60-second startup sub-budget,
 - suppress remote retries when remaining time is too low,
 - always leave enough time to normalize answers and write `/output/results.json`,
 - keep per-call Fireworks timeout below the 30-second response ceiling.
@@ -148,6 +151,7 @@ Required tests/checks:
 - telemetry includes task timing metrics for local, remote, fallback, and error paths,
 - telemetry does not add timing fields to official `/output/results.json`,
 - deadline manager remaining-time tests with a fake clock,
+- startup budget accounting test,
 - no-retry-near-deadline test,
 - valid-output-near-deadline test,
 - remote timeout remains below per-response ceiling,

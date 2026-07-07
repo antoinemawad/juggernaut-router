@@ -26,8 +26,10 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Output is valid JSON. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Exit code is 0 on success. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Runtime stays under 10 minutes. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
+- [ ] Runtime measurement is treated as total process/container wall-clock time, including startup, imports, input reading, output writing, and shutdown.
 - [ ] Runtime reserves a safety margin and never relies on using the full 10 minutes.
 - [ ] Startup is under 60 seconds. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
+- [ ] Startup is treated as a sub-budget inside the 10-minute runtime budget unless official harness behavior proves otherwise.
 - [ ] Per-response time is under 30 seconds. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - [ ] Fireworks per-call timeout is configured below the 30-second per-response ceiling.
 - [ ] Remote retry policy is disabled/suppressed when the batch deadline is near.

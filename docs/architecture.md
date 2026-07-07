@@ -263,14 +263,16 @@ Final output must always be a valid JSON array of `{ "task_id": ..., "answer": .
 - Maximum runtime is 10 minutes. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - Container must start and be ready within 60 seconds. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - Per-response time must be under 30 seconds. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
+- Conservative interpretation: treat the 10-minute maximum runtime as total container wall-clock time, including Python startup, imports, configuration loading, input reading, task execution, output writing, and shutdown. Treat the 60-second startup rule as a stricter sub-budget inside that 10-minute total unless official harness behavior proves otherwise.
 
 ## Deadline Management Strategy
 
-The 10-minute runtime limit is a hard ceiling, not a target. The final container should finish comfortably under it and must prefer valid output over one extra remote retry.
+The 10-minute runtime limit is a hard ceiling, not a target. Budget it from process start, including startup/import time. The final container should finish comfortably under it and must prefer valid output over one extra remote retry.
 
 Planned behavior:
 
-- start a monotonic batch timer before reading tasks,
+- start a monotonic process timer as early as possible, before heavy imports or task reading when practical,
+- keep startup/import/config/input-read work comfortably under the 60-second startup sub-budget,
 - reserve a safety margin, initially 60 seconds, for normalization and writing `/output/results.json`,
 - keep Fireworks per-call timeouts below the 30-second per-response limit,
 - cap retries by both `FIREWORKS_MAX_RETRIES` and remaining batch time,

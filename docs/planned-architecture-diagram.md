@@ -57,7 +57,7 @@ flowchart TD
 | --- | --- | --- |
 | `app/main.py` | Read official input, validate tasks, call agent, write official output. | Crash whole batch on one bad task or write extra fields to `/output/results.json`. |
 | `app/config.py` | Load runtime config from environment with safe defaults. | Require `.env` in final container or log secrets. |
-| `app/deadline.py` | Track 10-minute batch budget, safety margin, retry eligibility, and remaining remote-call time. | Sleep, block, or rely on real-time waits in tests. |
+| `app/deadline.py` | Track 10-minute total process budget, 60-second startup sub-budget, safety margin, retry eligibility, and remaining remote-call time. | Sleep, block, or rely on real-time waits in tests. |
 | `app/classifier.py` | Classify locally before any Fireworks call. Extract category, confidence, answer shape, constraints, and risks. | Call Fireworks or make final answers directly. |
 | `app/solvers/*` | Produce high-confidence local answers with evidence when deterministic. | Guess when confidence or validation is weak. |
 | `app/validators.py` | Prove local answers and check remote outputs by category/format. | Accept unverifiable local answers for risky tasks. |
@@ -147,9 +147,10 @@ flowchart TD
     SKIP --> WRITE
 ```
 
-Deadline defaults should be conservative:
+Deadline defaults should be conservative. Treat the 10-minute limit as total process/container wall-clock time, including startup, imports, input reading, output writing, and shutdown. Treat 60-second startup as a sub-budget inside that total.
 
 - `BATCH_DEADLINE_SECONDS=600`
+- startup/import/input-read budget below 60 seconds
 - `DEADLINE_SAFETY_MARGIN_SECONDS=60`
 - `FIREWORKS_TIMEOUT_SECONDS` below 30 seconds
 - small `REMOTE_WORKER_COUNT`, tuned by tests
