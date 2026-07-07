@@ -13,6 +13,7 @@ from app.main import main
 from app.normalization import normalize_answer
 from app.telemetry import TelemetryLogger
 from app.types import SAFE_FALLBACK_ANSWER
+from scripts import check_submission_static
 
 
 class FakeClock:
@@ -38,6 +39,12 @@ class FakeResponse:
 
 
 class Phase1RuntimeTests(unittest.TestCase):
+    def test_static_submission_guard_core_checks_pass(self):
+        self.assertEqual(check_submission_static.check_no_forbidden_runtime_url(), [])
+        self.assertEqual(check_submission_static.check_no_forbidden_tracked_files(), [])
+        self.assertEqual(check_submission_static.check_ignore_files(), [])
+        self.assertEqual(check_submission_static.check_dockerfile_is_submission_scoped(), [])
+
     def test_parse_allowed_models_deduplicates_and_strips(self):
         self.assertEqual(parse_allowed_models(" a, b ,,a "), ["a", "b"])
 

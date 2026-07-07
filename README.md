@@ -85,10 +85,11 @@ python3 scripts/check_eval_coverage.py eval/golden_tier_3_adversarial.jsonl --pr
 Recommended local guard:
 
 ```bash
+python3 scripts/check_submission_static.py
 python3 scripts/check_docker_runtime.py
 ```
 
-This builds a local `linux/amd64` image, checks the image architecture, enforces an 8GB conservative local image-size ceiling, runs mounted `/input` and `/output`, and validates `results.json`.
+The static guard checks for forbidden Fireworks URL hardcoding, tracked secrets/env files, Dockerfile scope, and ignore rules. The Docker guard builds a local `linux/amd64` image, checks the image architecture, enforces an 8GB conservative local image-size ceiling, runs mounted `/input` and `/output`, and validates `results.json`.
 
 Manual equivalent:
 

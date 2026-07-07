@@ -162,6 +162,7 @@ Required production-readiness coverage:
 - valid output when deadline is almost exhausted,
 - per-call remote timeout below the 30-second response ceiling,
 - bounded remote worker count,
+- static submission guard for forbidden Fireworks URL hardcoding, tracked secrets/env files, Dockerfile scope, and ignore rules,
 - Docker mounted `/input` and `/output`.
 
 Required router modes:

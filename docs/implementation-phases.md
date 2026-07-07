@@ -158,6 +158,7 @@ Required tests/checks:
 - valid-output-near-deadline test,
 - remote timeout remains below per-response ceiling,
 - local proof budget config parsing test,
+- static submission guard for forbidden Fireworks URL hardcoding, tracked secrets/env files, Dockerfile scope, and ignore rules,
 - Docker runtime guard command is available and documented,
 - `python3 scripts/run_local_quality_gate.py`,
 - `python3 scripts/run_phase1_acceptance.py`,

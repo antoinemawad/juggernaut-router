@@ -65,6 +65,7 @@ def main():
         "eval/router_config_sweep.py",
         "scripts/check_eval_coverage.py",
         "scripts/check_expected_routes.py",
+        "scripts/check_submission_static.py",
         "scripts/check_docker_runtime.py",
         "scripts/compare_eval_reports.py",
         "scripts/run_phase1_acceptance.py",
@@ -75,6 +76,7 @@ def main():
 
     results.append(run([py, "-m", "py_compile", *compile_targets]))
     results.append(run([py, "-m", "unittest", "discover", "-s", "tests"]))
+    results.append(run([py, "scripts/check_submission_static.py"]))
     results.append(run([py, "scripts/check_eval_coverage.py"]))
     results.append(run([py, "scripts/check_eval_coverage.py", "eval/golden_tier_2_regression.jsonl", "--profile", "tier"]))
     results.append(run([py, "scripts/check_eval_coverage.py", "eval/golden_tier_3_adversarial.jsonl", "--profile", "tier"]))
