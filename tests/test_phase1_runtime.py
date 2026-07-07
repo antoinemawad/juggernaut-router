@@ -80,6 +80,14 @@ class Phase1RuntimeTests(unittest.TestCase):
         answer = normalize_answer("```python\nprint('ok')\n```", code_only=True)
         self.assertEqual(answer, "print('ok')")
 
+    def test_normalize_answer_extracts_embedded_code_block_for_code_only(self):
+        answer = normalize_answer("Here is the code:\n\n```python\ndef f():\n    return 1\n```\nDone.", code_only=True)
+        self.assertEqual(answer, "def f():\n    return 1")
+
+    def test_normalize_answer_trims_prose_after_python_for_code_only(self):
+        answer = normalize_answer("Sure:\ndef f():\n    return 1\n\nThis returns one.", code_only=True)
+        self.assertEqual(answer, "def f():\n    return 1")
+
     def test_telemetry_redacts_secret_fields(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "router.jsonl"

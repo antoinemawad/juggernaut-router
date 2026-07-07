@@ -254,6 +254,23 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.selected_model, "kimi-k2p7-code")
         self.assertEqual(captured["payload"]["model"], "kimi-k2p7-code")
 
+    def test_remote_code_answer_is_normalized_to_code_only(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked_remote:
+            mocked_remote.return_value = FireworksResult(
+                answer="Here is the code:\n\n```python\ndef clamp(x, low, high):\n    return max(low, min(x, high))\n```\n",
+                model="kimi-k2p7-code",
+            )
+            result = answer_task(
+                "code",
+                "Write a Python function clamp(x, low, high) that returns low if x is below low, high if x is above high, otherwise x. Return only code.",
+            )
+
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.remote_mode, "remote_code")
+        self.assertEqual(result.answer, "def clamp(x, low, high):\n    return max(low, min(x, high))")
+
     def test_multistep_discount_math_routes_remote(self):
         with patch.dict(
             os.environ,
