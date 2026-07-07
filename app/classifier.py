@@ -47,7 +47,7 @@ def classify_prompt(prompt: str) -> ClassificationResult:
         confidence = 0.98
         answer_shape = "entity_list"
         constraints.append("entity_labels")
-    elif "debug" in lower and ("code" in lower or "def " in lower):
+    elif ("debug" in lower or "corrected code" in lower) and ("code" in lower or "def " in lower):
         category = "code_debugging"
         confidence = 0.98
         answer_shape = "corrected_code"
@@ -111,7 +111,7 @@ def _apply_constraint_risk(lower: str, constraints: list[str], risk: dict[str, f
 
 
 def _apply_trap_risk(lower: str, category: str, risk: dict[str, float]) -> None:
-    if "sarcasm" in lower or "yeah right" in lower or "as if" in lower:
+    if "sarcasm" in lower or "yeah right" in lower or "as if" in lower or "great, another" in lower:
         risk["ambiguity"] = max(risk["ambiguity"], 0.6)
     if " but " in lower or "however" in lower:
         risk["ambiguity"] = max(risk["ambiguity"], 0.5)

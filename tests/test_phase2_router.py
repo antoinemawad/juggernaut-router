@@ -71,6 +71,17 @@ class Phase2RouterTests(unittest.TestCase):
         )
         self.assertIn("ambiguity", sarcasm_classification.risk_components)
 
+        demo_sarcasm_classification = classify_prompt(
+            "Classify the sentiment as positive, negative, or neutral: Great, another crash right before the demo."
+        )
+        self.assertIn("ambiguity", demo_sarcasm_classification.risk_components)
+
+    def test_corrected_code_prompt_classifies_as_code_debugging(self):
+        classification = classify_prompt(
+            "Return only corrected code:\n\ndef is_adult(age):\n    return age > 18\n\nThe function should return True for age 18 and above."
+        )
+        self.assertEqual(classification.category, "code_debugging")
+
     def test_local_high_confidence_task_does_not_call_fireworks(self):
         with patch("app.agent.ask_fireworks_structured") as mocked:
             result = answer_task("math", "A product costs $80 and is discounted by 25%. What is the final price?")
@@ -589,6 +600,17 @@ class Phase2RouterTests(unittest.TestCase):
                 "prompt_policy",
             }.issubset(rows[0])
         )
+
+    def test_expected_route_script_rows_match_tier_fixtures(self):
+        for path in (
+            DEFAULT_SCENARIOS.with_name("golden_tier_2_regression.jsonl"),
+            DEFAULT_SCENARIOS.with_name("golden_tier_3_adversarial.jsonl"),
+        ):
+            with self.subTest(path=path.name):
+                rows = check_routes(config_by_name("strict_hybrid"), load_scenarios(path))
+                self.assertEqual(len(rows), 8)
+                self.assertTrue(all(row["expected_route_match"] for row in rows))
+                self.assertTrue(all(row["remote_mode_match"] for row in rows))
 
     def test_router_sweep_ranking_prioritizes_accuracy_then_tokens(self):
         rows = [

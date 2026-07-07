@@ -135,7 +135,9 @@ def _trap_guard_passes(prompt: str, classification: ClassificationResult) -> boo
         return False
     if classification.category == "sentiment_classification" and (" but " in lower or "however" in lower):
         return False
-    if classification.category == "sentiment_classification" and ("sarcasm" in lower or "yeah right" in lower or "as if" in lower):
+    if classification.category == "sentiment_classification" and (
+        "sarcasm" in lower or "yeah right" in lower or "as if" in lower or "great, another" in lower
+    ):
         return False
     if classification.category == "mathematical_reasoning" and _math_is_multistep(lower):
         return False

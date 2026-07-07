@@ -79,6 +79,8 @@ def main():
     results.append(run([py, "scripts/check_eval_coverage.py", "eval/golden_tier_2_regression.jsonl", "--profile", "tier"]))
     results.append(run([py, "scripts/check_eval_coverage.py", "eval/golden_tier_3_adversarial.jsonl", "--profile", "tier"]))
     results.append(run([py, "scripts/check_expected_routes.py", "--config", "strict_hybrid"]))
+    results.append(run([py, "scripts/check_expected_routes.py", "--config", "strict_hybrid", "--scenarios", "eval/golden_tier_2_regression.jsonl"]))
+    results.append(run([py, "scripts/check_expected_routes.py", "--config", "strict_hybrid", "--scenarios", "eval/golden_tier_3_adversarial.jsonl"]))
 
     local_env = os.environ.copy()
     local_env["INPUT_PATH"] = "local_test/input/tasks.json"
