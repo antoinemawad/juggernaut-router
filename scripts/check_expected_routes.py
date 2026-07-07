@@ -44,6 +44,7 @@ def check_routes(config: dict, scenarios: list[dict]) -> list[dict]:
             "remote_mode": row.get("remote_mode"),
             "remote_mode_hint": remote_mode_hint,
             "remote_mode_match": remote_mode_match,
+            "prompt_policy": row.get("prompt_policy"),
             "expected_route_match": row["expected_route_match"],
             "local_proof_layers_passed": row.get("local_proof_layers_passed", []),
             "local_proof_layers_failed": row.get("local_proof_layers_failed", []),
@@ -80,14 +81,15 @@ def write_artifacts(out_dir: Path, config_name: str, rows: list[dict]) -> tuple[
         f"Matches: {payload['matches']}",
         f"Remote Mode Matches: {payload['remote_mode_matches']}",
         "",
-        "| Task | Category | Expected | Actual | Remote Mode Hint | Remote Mode | Route Match | Mode Match | Route Reason |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Task | Category | Expected | Actual | Remote Mode Hint | Remote Mode | Prompt Policy | Route Match | Mode Match | Route Reason |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for row in rows:
         lines.append(
             f"| {row['task_id']} | {row['category']} | {row['expected_route']} | "
             f"{row['actual_route']} | {row.get('remote_mode_hint') or ''} | "
             f"{row.get('remote_mode') or ''} | "
+            f"{row.get('prompt_policy') or ''} | "
             f"{'yes' if row['expected_route_match'] else 'no'} | "
             f"{'yes' if row['remote_mode_match'] else 'no'} | "
             f"{row['route_reason']} |"

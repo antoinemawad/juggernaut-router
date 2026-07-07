@@ -89,7 +89,7 @@ class Phase2RouterTests(unittest.TestCase):
             seen.append("classify")
             return classify_prompt(prompt)
 
-        def fake_remote(prompt, config=None, deadline=None, preferred_models=None):
+        def fake_remote(prompt, config=None, deadline=None, preferred_models=None, system_prompt=None):
             seen.append("remote")
             from app.fireworks_client import FireworksResult
 
@@ -149,6 +149,12 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
 
     def test_exact_summary_routes_remote_for_format_control(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse()
+
         with patch.dict(
             os.environ,
             {
@@ -157,7 +163,7 @@ class Phase2RouterTests(unittest.TestCase):
                 "ALLOWED_MODELS": "minimax-m3",
             },
             clear=True,
-        ), patch("urllib.request.urlopen", return_value=FakeResponse()):
+        ), patch("urllib.request.urlopen", fake_urlopen):
             result = answer_task(
                 "summary",
                 "Summarise in exactly 12 words: A hybrid router should answer easy tasks locally and send risky tasks to Fireworks.",
@@ -165,6 +171,9 @@ class Phase2RouterTests(unittest.TestCase):
 
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.remote_mode, "remote_format_strict")
+        self.assertEqual(result.prompt_policy, "answer_only")
+        self.assertTrue(captured["payload"]["messages"][1]["content"].startswith("Return only the final answer."))
+        self.assertIn("output format exactly", captured["payload"]["messages"][0]["content"])
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
 
     def test_sarcasm_sentiment_routes_remote(self):
@@ -402,12 +411,15 @@ class Phase2RouterTests(unittest.TestCase):
                 "FIREWORKS_TIMEOUT_SECONDS": "5",
             },
             clear=True,
-        ), patch("urllib.request.urlopen") as mocked:
+        ), patch("app.agent.ask_fireworks_structured") as mocked:
             result = answer_task("fresh", "Who is the current CEO of AMD today?", deadline=deadline)
 
         mocked.assert_not_called()
         self.assertEqual(result.route, "fallback")
         self.assertEqual(result.route_reason, "deadline_suppressed_remote")
+        self.assertEqual(result.error, "deadline_suppressed_remote")
+        self.assertEqual(result.remote_mode, "remote_accuracy")
+        self.assertEqual(result.deadline_decision, "deadline_suppressed_remote_or_retry")
 
     def test_router_sweep_uses_real_router_for_safe_local_case(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid")
@@ -488,7 +500,17 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(len(rows), 16)
         self.assertTrue(all(row["expected_route_match"] for row in rows))
         self.assertTrue(all(row["remote_mode_match"] for row in rows))
-        self.assertTrue({"task_id", "expected_route", "actual_route", "route_reason", "remote_mode", "remote_mode_match"}.issubset(rows[0]))
+        self.assertTrue(
+            {
+                "task_id",
+                "expected_route",
+                "actual_route",
+                "route_reason",
+                "remote_mode",
+                "remote_mode_match",
+                "prompt_policy",
+            }.issubset(rows[0])
+        )
 
     def test_router_sweep_ranking_prioritizes_accuracy_then_tokens(self):
         rows = [

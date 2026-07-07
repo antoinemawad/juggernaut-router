@@ -202,6 +202,7 @@ Timing fields must never be written to the official `/output/results.json`. They
 - Calls Fireworks fallback when local confidence is too low or validation fails.
 - Must not call Fireworks for high-confidence deterministic/local answers.
 - Labels remote needs as `remote_concise`, `remote_accuracy`, `remote_format_strict`, or `remote_code` for downstream model/prompt selection.
+- Applies mode-specific prompt policies before Fireworks calls: compact prompts for concise mode, answer-only prompts for format/code mode, and original prompts for accuracy mode.
 - Passes remote-mode model preferences to the Fireworks wrapper, while the wrapper only selects models present in `ALLOWED_MODELS`.
 - Uses a programmable/configurable accuracy-gate target in local evaluation so the threshold can change without architecture changes.
 - Enforces English-only response policy. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
@@ -259,7 +260,7 @@ Final output must always be a valid JSON array of `{ "task_id": ..., "answer": .
 - Runs the real router path with mocked Fireworks responses against `eval/model_matrix_scenarios.jsonl`.
 - Fails when a scenario route differs from its `expected_route`.
 - Fails when a remote-routed scenario's selected `remote_mode` differs from `remote_mode_hint`.
-- Includes selected `remote_mode` in JSON and Markdown evidence.
+- Includes selected `remote_mode` and `prompt_policy` in JSON and Markdown evidence.
 - Writes `eval_runs/expected_routes_latest.json` and `eval_runs/expected_routes_latest.md` for review and demo evidence.
 
 ### `local_test/`

@@ -158,6 +158,27 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(result.model, "kimi-k2p7-code")
         self.assertEqual(captured["payload"]["model"], "kimi-k2p7-code")
 
+    def test_fireworks_accepts_mode_specific_system_prompt(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse(json.dumps({"choices": [{"message": {"content": "Strict answer"}}]}))
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", fake_urlopen):
+            result = ask_fireworks_structured("hello", system_prompt="Follow format exactly.")
+
+        self.assertEqual(result.answer, "Strict answer")
+        self.assertEqual(captured["payload"]["messages"][0]["content"], "Follow format exactly.")
+
     def test_model_selection_never_uses_disallowed_preferred_model(self):
         config = RuntimeConfig(
             input_path=Path("/input/tasks.json"),
@@ -449,7 +470,11 @@ class Phase1RuntimeTests(unittest.TestCase):
             "route",
             "route_reason",
             "router_mode",
+            "prompt_char_count",
             "prompt_token_estimate",
+            "remote_prompt_token_estimate",
+            "answer_char_count",
+            "answer_token_estimate",
             "task_elapsed_ms",
             "classification_elapsed_ms",
             "constraint_extraction_elapsed_ms",

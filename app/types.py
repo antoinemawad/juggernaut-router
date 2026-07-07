@@ -50,7 +50,9 @@ class AgentResult:
     remote_mode: str | None = None
     prompt_policy: str = "original"
     max_tokens: int | None = None
+    prompt_char_count: int = 0
     prompt_token_estimate: int = 0
+    remote_prompt_token_estimate: int | None = None
     completion_tokens: int | None = None
     total_tokens: int | None = None
     retry_count: int = 0
@@ -70,7 +72,11 @@ class AgentResult:
             "remote_mode": self.remote_mode,
             "prompt_policy": self.prompt_policy,
             "max_tokens": self.max_tokens,
+            "prompt_char_count": self.prompt_char_count,
             "prompt_token_estimate": self.prompt_token_estimate,
+            "remote_prompt_token_estimate": self.remote_prompt_token_estimate,
+            "answer_char_count": len(self.answer),
+            "answer_token_estimate": _rough_token_estimate(self.answer),
             "completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
             "retry_count": self.retry_count,
@@ -80,3 +86,7 @@ class AgentResult:
         record.update(self.timings.as_dict())
         record.update(self.metadata)
         return record
+
+
+def _rough_token_estimate(text: str) -> int:
+    return max(1, (len(text) + 3) // 4)

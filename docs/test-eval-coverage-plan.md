@@ -52,7 +52,7 @@ Assert planned routes for the current recommended config with:
 python3 scripts/check_expected_routes.py --config strict_hybrid
 ```
 
-This checks both `expected_route` and `remote_mode_hint`, then writes `eval_runs/expected_routes_latest.json` and `eval_runs/expected_routes_latest.md` for review/demo evidence.
+This checks both `expected_route` and `remote_mode_hint`, then writes route, remote-mode, and prompt-policy evidence to `eval_runs/expected_routes_latest.json` and `eval_runs/expected_routes_latest.md`.
 
 Run all current local non-Docker quality checks with:
 
@@ -158,6 +158,7 @@ Required production-readiness coverage:
 - local cross-check timeout/fallback behavior,
 - batch deadline manager with fake-clock tests,
 - near-deadline retry suppression,
+- agent-level near-deadline fallback before Fireworks payload construction,
 - valid output when deadline is almost exhausted,
 - per-call remote timeout below the 30-second response ceiling,
 - bounded remote worker count,
@@ -199,7 +200,7 @@ Every eval row should include scenario metadata plus runtime decision data when 
 - task timing fields: `task_elapsed_ms`, `classification_elapsed_ms`, `constraint_extraction_elapsed_ms`, `local_solver_elapsed_ms`, `validation_elapsed_ms`, `local_proof_elapsed_ms`, `trap_guard_elapsed_ms`, `cross_check_elapsed_ms`, `remote_elapsed_ms`, and `normalization_elapsed_ms`,
 - batch timing fields: `batch_elapsed_ms_at_start`, `batch_elapsed_ms_at_finish`, and `remaining_budget_ms`,
 - token fields,
-- token estimates: `prompt_token_estimate`, `completion_tokens`, and `total_tokens` when available,
+- size and token estimates: `prompt_char_count`, `prompt_token_estimate`, `remote_prompt_token_estimate`, `answer_char_count`, `answer_token_estimate`, `completion_tokens`, and `total_tokens` when available,
 - pass/fail,
 - score,
 - elapsed batch time,
@@ -208,7 +209,7 @@ Every eval row should include scenario metadata plus runtime decision data when 
 
 ## Required Test Types
 
-- Current Phase 2 implementation includes `tests/test_phase2_router.py` for classifier coverage, risk components, local no-Fireworks routing, risky remote routing, remote mode selection, preferred model selection, classifier-before-remote ordering, proof-budget rejection, near-deadline fallback behavior, ambiguous NER rejection, exact-summary rejection, sarcasm rejection, multi-step math rejection, incomplete logic rejection, nontrivial-code rejection, NER/code/corrected-code cross-check failures, real-router sweep rows, full-fixture expected-route and remote-mode assertions, route-match checks, ranking-order checks, and verifier-aware eval scoring.
+- Current Phase 2 implementation includes `tests/test_phase2_router.py` for classifier coverage, risk components, local no-Fireworks routing, risky remote routing, remote mode selection, preferred model selection, classifier-before-remote ordering, proof-budget rejection, agent-level near-deadline fallback behavior before Fireworks payload construction, ambiguous NER rejection, exact-summary rejection, sarcasm rejection, multi-step math rejection, incomplete logic rejection, nontrivial-code rejection, NER/code/corrected-code cross-check failures, real-router sweep rows, full-fixture expected-route and remote-mode assertions, route-match checks, ranking-order checks, and verifier-aware eval scoring.
 - Unit tests for classifier risk components.
 - Unit tests for validators.
 - Unit tests for constraint extraction.

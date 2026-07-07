@@ -28,6 +28,7 @@ def ask_fireworks_structured(
     config: RuntimeConfig | None = None,
     deadline: DeadlineManager | None = None,
     preferred_models: tuple[str, ...] | list[str] | None = None,
+    system_prompt: str | None = None,
 ) -> FireworksResult:
     config = config or RuntimeConfig.from_env()
     timer = StageTimer()
@@ -59,7 +60,7 @@ def ask_fireworks_structured(
         "messages": [
             {
                 "role": "system",
-                "content": "Answer accurately and concisely in English."
+                "content": system_prompt or "Answer accurately and concisely in English."
             },
             {
                 "role": "user",

@@ -4,7 +4,7 @@ from app.deadline import DeadlineManager, StageTimer
 from app.fireworks_client import ask_fireworks_structured
 from app.normalization import normalize_answer
 from app.solvers.basic import try_basic_solver_structured
-from app.types import AgentResult, TimingMetrics
+from app.types import SAFE_FALLBACK_ANSWER, AgentResult, TimingMetrics
 from app.validators import validate_local_answer
 
 
@@ -25,6 +25,7 @@ def answer_task(
     task_timer = StageTimer()
 
     prompt = prompt if isinstance(prompt, str) else str(prompt)
+    prompt_char_count = len(prompt)
     prompt_token_estimate = estimate_tokens(prompt)
 
     classification_timer = StageTimer()
@@ -58,6 +59,7 @@ def answer_task(
             route_reason=local_result.solver_name,
             category=classification.category,
             router_mode=config.router_mode,
+            prompt_char_count=prompt_char_count,
             prompt_token_estimate=prompt_token_estimate,
             deadline_decision=_deadline_decision(deadline, config),
             timings=timings,
@@ -76,11 +78,46 @@ def answer_task(
         )
 
     remote_mode = _select_remote_mode(classification, local_result)
+    prompt_policy = _prompt_policy_for_remote_mode(remote_mode)
+    remote_prompt = _apply_prompt_policy(prompt, prompt_policy)
+    remote_prompt_token_estimate = estimate_tokens(remote_prompt)
+    if deadline is not None and not deadline.can_spend(config.fireworks_timeout_seconds):
+        _finish_timings(timings, task_timer, deadline)
+        return AgentResult(
+            answer=SAFE_FALLBACK_ANSWER,
+            route="fallback",
+            route_reason="deadline_suppressed_remote",
+            category=classification.category,
+            router_mode=config.router_mode,
+            remote_mode=remote_mode,
+            prompt_policy=prompt_policy,
+            max_tokens=config.fireworks_max_tokens,
+            prompt_char_count=prompt_char_count,
+            prompt_token_estimate=prompt_token_estimate,
+            remote_prompt_token_estimate=remote_prompt_token_estimate,
+            deadline_decision=_deadline_decision(deadline, config),
+            error="deadline_suppressed_remote",
+            timings=timings,
+            metadata={
+                "answer_shape": classification.answer_shape,
+                "constraints": list(classification.constraints),
+                "classification_confidence": classification.confidence,
+                "risk_score": classification.risk_score,
+                "risk_components": classification.risk_components,
+                "solver_confidence": local_result.confidence if local_result is not None else None,
+                "local_evidence": list(local_result.evidence) if local_result is not None else [],
+                "local_proof_layers_passed": list(validation.passed_layers),
+                "local_proof_layers_failed": list(validation.failed_layers),
+                "validator_notes": list(validation.notes),
+            },
+        )
+
     remote = ask_fireworks_structured(
-        prompt,
+        remote_prompt,
         config=config,
         deadline=deadline,
         preferred_models=_preferred_models_for_remote_mode(remote_mode),
+        system_prompt=_system_prompt_for_remote_mode(remote_mode),
     )
     timings.remote_elapsed_ms = remote.elapsed_ms
     normalize_timer = StageTimer()
@@ -96,8 +133,11 @@ def answer_task(
         router_mode=config.router_mode,
         selected_model=remote.model,
         remote_mode=remote_mode,
+        prompt_policy=prompt_policy,
         max_tokens=config.fireworks_max_tokens,
+        prompt_char_count=prompt_char_count,
         prompt_token_estimate=prompt_token_estimate,
+        remote_prompt_token_estimate=remote_prompt_token_estimate,
         completion_tokens=remote.completion_tokens,
         total_tokens=remote.total_tokens,
         retry_count=remote.retry_count,
@@ -178,3 +218,29 @@ def _preferred_models_for_remote_mode(remote_mode: str) -> tuple[str, ...]:
     if remote_mode == "remote_format_strict":
         return ("minimax-m3", "kimi-k2p7-code", "gemma-4-31b-it")
     return ("minimax-m3", "gemma-4-26b-a4b-it", "gemma-4-31b-it")
+
+
+def _prompt_policy_for_remote_mode(remote_mode: str) -> str:
+    if remote_mode in {"remote_code", "remote_format_strict"}:
+        return "answer_only"
+    if remote_mode == "remote_concise":
+        return "compact"
+    return "original"
+
+
+def _apply_prompt_policy(prompt: str, prompt_policy: str) -> str:
+    if prompt_policy == "compact":
+        return "Answer accurately and concisely. Preserve all constraints.\n\nTask:\n" + prompt
+    if prompt_policy == "answer_only":
+        return "Return only the final answer. Preserve exact requested format.\n\nTask:\n" + prompt
+    return prompt
+
+
+def _system_prompt_for_remote_mode(remote_mode: str) -> str:
+    if remote_mode == "remote_code":
+        return "Return correct code in English context only when requested. Preserve code-only constraints exactly."
+    if remote_mode == "remote_format_strict":
+        return "Follow the requested output format exactly. Return no extra explanation unless requested."
+    if remote_mode == "remote_accuracy":
+        return "Answer accurately in English. Reason carefully and preserve all task constraints."
+    return "Answer accurately and concisely in English."
