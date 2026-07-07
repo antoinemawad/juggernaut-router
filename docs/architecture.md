@@ -56,9 +56,19 @@ Local answers must earn trust. A local solver result should carry answer, confid
 
 - Planned runtime configuration loader.
 - Reads `ROUTER_MODE`, `LOCAL_CONFIDENCE_THRESHOLD`, `FIREWORKS_TIMEOUT_SECONDS`, `FIREWORKS_MAX_RETRIES`, and optional `ROUTER_LOG_PATH`.
+- Reads deadline-related settings such as `BATCH_DEADLINE_SECONDS`, `DEADLINE_SAFETY_MARGIN_SECONDS`, `REMOTE_WORKER_COUNT`, and optional per-mode timeout defaults.
 - Provides safe defaults for local/mock testing.
 - Must not require `.env` in the final container.
 - Must not log secrets.
+
+### `app/deadline.py`
+
+- Planned runtime deadline manager for the 10-minute container limit.
+- Starts a monotonic batch timer as early as possible in `main.py`.
+- Exposes remaining batch time, remote-call budget, retry eligibility, and graceful-degradation decisions.
+- Reserves a safety margin so the app can always write `/output/results.json` before the judge timeout.
+- Must be deterministic, lightweight, and CPU-safe.
+- Should make it easy to test "time almost exhausted" behavior without sleeping for real minutes.
 
 ### `app/types.py`
 
@@ -122,6 +132,8 @@ Local answers must earn trust. A local solver result should carry answer, confid
 - Should record a local router decision object for each task during experiments: `task_id`, category, classifier confidence, local solver confidence, validator result, route, selected model, prompt policy, `max_tokens`, token usage when available, latency, and route reason.
 - Must normalize final answers before writing output: strip surrounding whitespace, avoid markdown unless requested, keep answers concise, and preserve exact requested formats.
 - Must keep timeout and fallback behavior explicit: remote calls should have bounded timeouts, limited retry behavior, and a final local/error-safe answer path so one failed task does not crash the whole batch.
+- Must consult the batch deadline before remote calls and retries.
+- Should degrade gracefully near the deadline: skip retries, prefer concise remote mode when safe, or return the best validated fallback instead of risking container timeout.
 - Should support configurable router modes such as `conservative`, `balanced`, and `aggressive` so official submissions can compare clean hypotheses.
 - Should select remote modes such as `remote_concise`, `remote_accuracy`, `remote_format_strict`, and `remote_code` based on risk.
 - Should return a structured routing result internally, not only a raw string.
@@ -181,6 +193,23 @@ Final output must always be a valid JSON array of `{ "task_id": ..., "answer": .
 - Maximum runtime is 10 minutes. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - Container must start and be ready within 60 seconds. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - Per-response time must be under 30 seconds. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
+
+## Deadline Management Strategy
+
+The 10-minute runtime limit is a hard ceiling, not a target. The final container should finish comfortably under it and must prefer valid output over one extra remote retry.
+
+Planned behavior:
+
+- start a monotonic batch timer before reading tasks,
+- reserve a safety margin, initially 60 seconds, for normalization and writing `/output/results.json`,
+- keep Fireworks per-call timeouts below the 30-second per-response limit,
+- cap retries by both `FIREWORKS_MAX_RETRIES` and remaining batch time,
+- classify all tasks locally first when practical, then run remote-needed tasks with a small bounded worker pool,
+- avoid unbounded queues, unbounded retries, and slow startup work,
+- write a valid answer for every usable task even when some remote calls fail or the deadline is near,
+- log deadline skips, timeout fallbacks, retry suppression, and elapsed time when telemetry is enabled.
+
+This turns the limit into a competitive advantage: local tasks finish immediately, remote calls are spent only where needed, and the router can use limited parallelism without increasing recorded token usage.
 
 ## Security and Compliance
 

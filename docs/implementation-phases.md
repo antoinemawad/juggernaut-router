@@ -11,6 +11,7 @@ This is the execution spine for the project. Each phase has a clear objective, d
 - Keep all remote inference behind `FIREWORKS_BASE_URL`.
 - Keep model selection constrained to runtime `ALLOWED_MODELS`.
 - Prefer accuracy over token reduction until the accuracy gate is safe.
+- Treat the 10-minute container runtime as a hard ceiling and reserve safety time for writing valid output.
 - Do not promote a router behavior unless it has a test, a scenario, and a log/report path.
 - Do not expand live Fireworks spend until the local quality gate passes.
 
@@ -102,6 +103,7 @@ Deliverables:
 - `app/types.py`
 - `app/normalization.py`
 - `app/telemetry.py`
+- `app/deadline.py`
 - hardened `app/main.py`
 - hardened `app/fireworks_client.py`
 - structured internal result from `app/agent.py`
@@ -116,10 +118,17 @@ Implementation requirements:
 - support `LOCAL_CONFIDENCE_THRESHOLD`,
 - support `FIREWORKS_TIMEOUT_SECONDS`,
 - support `FIREWORKS_MAX_RETRIES`,
+- support `BATCH_DEADLINE_SECONDS`,
+- support `DEADLINE_SAFETY_MARGIN_SECONDS`,
+- support `REMOTE_WORKER_COUNT`,
 - support optional `ROUTER_LOG_PATH`,
 - never log secrets,
 - handle missing Fireworks env vars gracefully when remote fallback is needed,
 - handle Fireworks timeout, HTTP error, invalid JSON, missing `choices`, missing `usage`, and disallowed models.
+- start a monotonic batch timer early in `main.py`,
+- suppress remote retries when remaining time is too low,
+- always leave enough time to normalize answers and write `/output/results.json`,
+- keep per-call Fireworks timeout below the 30-second response ceiling.
 
 Required tests/checks:
 
@@ -134,12 +143,17 @@ Required tests/checks:
 - output normalization for empty/non-string answers,
 - telemetry JSONL writes when `ROUTER_LOG_PATH` is set,
 - telemetry excludes API keys/secrets,
+- deadline manager remaining-time tests with a fake clock,
+- no-retry-near-deadline test,
+- valid-output-near-deadline test,
+- remote timeout remains below per-response ceiling,
 - `python3 scripts/run_local_quality_gate.py`.
 
 Quality bar:
 
 - every recoverable failure produces valid final JSON,
 - no exception from one task prevents later tasks from completing,
+- no deadline path can prevent `/output/results.json` from being written,
 - Fireworks errors are sanitized,
 - telemetry is optional and never changes official output,
 - quality gate summary is produced for evidence.
@@ -148,6 +162,7 @@ Trace artifacts:
 
 - quality gate output,
 - malformed-input test output,
+- deadline-near-exhaustion test output,
 - sanitized telemetry example,
 - updated submission checklist.
 
@@ -162,6 +177,7 @@ Stop rules:
 
 - stop Phase 2 work if final JSON can be malformed,
 - stop Phase 2 work if missing Fireworks env crashes the batch,
+- stop Phase 2 work if a timeout/retry path can consume the whole 10-minute budget,
 - stop Phase 2 work if telemetry can leak secrets.
 
 Non-goals:
@@ -258,6 +274,9 @@ Implementation requirements:
 - every remote call selects only from runtime `ALLOWED_MODELS`,
 - remote mode is selected from category, answer shape, constraints, and risk,
 - retry count is capped by `FIREWORKS_MAX_RETRIES`,
+- retry eligibility is also capped by remaining batch time,
+- remote-needed tasks may use a bounded worker pool so independent Fireworks calls can finish faster without changing token usage,
+- worker count must be configurable and conservative by default,
 - retry happens only for fixable verification failures,
 - retry reason is logged,
 - prompt policy is logged,

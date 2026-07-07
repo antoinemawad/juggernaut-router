@@ -22,6 +22,8 @@ This plan targets rank #1 for Track 1 only. It separates source-backed constrain
 - Use category-specific Fireworks fallback when local solvers are uncertain, output validation fails, or the task is naturally high risk.
 - Use Fireworks accuracy mode for hard/risky tasks: richer prompts, more careful instructions, and model selection optimized for correctness.
 - Maintain configurable `conservative`, `balanced`, and `aggressive` router modes for official submission comparisons.
+- Use a global deadline manager so the container always finishes under the 10-minute runtime ceiling and still writes valid output.
+- Use bounded parallel Fireworks calls only after local classification identifies remote-needed tasks.
 - Use model selection only from runtime `ALLOWED_MODELS`. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - Use AMD AI Notebooks / AMD Developer Cloud for validation evidence and optional local-model experiments, not as a required final runtime unless organizers confirm that path. Sources: `Guides/Hackathon Act II.txt`, `Guides/AMD Developer Hackathon Participant Guide.txt`.
 - Keep final container CPU-safe unless local LLM runtime is proven to fit the standardized environment, 10-minute runtime, 60-second startup, 30-second per-response, and 10GB compressed image limits. Sources: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`, `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
@@ -67,7 +69,8 @@ Every task should pass through this decision sequence:
 7. Fireworks mode selection: choose concise, accuracy, format-strict, or code mode.
 8. Fireworks model selection: choose from `ALLOWED_MODELS` based on category/model matrix results.
 9. Prompt policy selection: use original prompt when exact wording matters; use compact or answer-only only when experiments show no accuracy loss.
-10. Decision logging: record route, risk, validator notes, model, prompt policy, tokens, latency, and errors.
+10. Deadline check: skip unsafe retries or choose a safe fallback when remaining batch time is too low.
+11. Decision logging: record route, risk, validator notes, model, prompt policy, tokens, latency, deadline decisions, and errors.
 
 The router must never use Fireworks as the first step for all tasks. Fireworks is the fallback or accuracy path after local classification decides it is needed.
 
@@ -100,6 +103,7 @@ Prompt resizing is allowed only when metrics show it preserves accuracy.
 - Compare candidate eval reports against baselines before changing defaults.
 - Test the full risk-engine scenario matrix: risk components, remote modes, router modes, validators, prompt policies, and model maps.
 - Test timeout, retry, fallback, and answer-normalization behavior as first-class quality gates.
+- Test deadline behavior with fake clocks: remaining time, safety margin, retry suppression, bounded worker count, and valid output near timeout.
 - Test hard-task Fireworks accuracy mode.
 - Run Docker with mounted `/input` and `/output` on `linux/amd64`.
 

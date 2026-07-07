@@ -26,8 +26,12 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Output is valid JSON. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Exit code is 0 on success. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Runtime stays under 10 minutes. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
+- [ ] Runtime reserves a safety margin and never relies on using the full 10 minutes.
 - [ ] Startup is under 60 seconds. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - [ ] Per-response time is under 30 seconds. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
+- [ ] Fireworks per-call timeout is configured below the 30-second per-response ceiling.
+- [ ] Remote retry policy is disabled/suppressed when the batch deadline is near.
+- [ ] Bounded remote worker count is configured and tested.
 - [ ] linux/amd64 image built. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - [ ] Image compressed size is under 10GB. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Image is publicly pullable. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
@@ -53,6 +57,7 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Router decision logs include risk score, risk components, validator notes, remote mode, final answer length, and errors when present.
 - [ ] Answer normalization test passes: no unintended markdown, surrounding whitespace stripped, exact requested formats preserved.
 - [ ] Timeout/fallback tests pass without crashing the batch or producing malformed JSON.
+- [ ] Deadline manager tests pass: remaining time, safety margin, retry suppression, and valid output near timeout.
 - [ ] Fireworks client failure tests pass: missing env, timeout, HTTP error, invalid JSON, missing `choices`, missing `usage`, and disallowed model.
 - [ ] Structured routing result tests pass while final `/output/results.json` still contains only `task_id` and `answer`.
 - [ ] Optional telemetry test passes and confirms no API key/secret is logged.

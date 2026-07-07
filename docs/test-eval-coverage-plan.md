@@ -146,6 +146,11 @@ Required production-readiness coverage:
 - disallowed model,
 - normalization of empty/non-string answers,
 - optional `ROUTER_LOG_PATH` JSONL telemetry,
+- batch deadline manager with fake-clock tests,
+- near-deadline retry suppression,
+- valid output when deadline is almost exhausted,
+- per-call remote timeout below the 30-second response ceiling,
+- bounded remote worker count,
 - Docker mounted `/input` and `/output`.
 
 Required router modes:
@@ -181,6 +186,8 @@ Every eval row should include scenario metadata plus runtime decision data when 
 - token fields,
 - pass/fail,
 - score,
+- elapsed batch time,
+- deadline skips or retry suppression,
 - errors.
 
 ## Required Test Types
@@ -194,6 +201,8 @@ Every eval row should include scenario metadata plus runtime decision data when 
 - Unit tests for config/env parsing.
 - Unit tests for optional telemetry with no secrets.
 - Mock Fireworks tests for timeouts, HTTP errors, invalid JSON, and missing usage.
+- Deadline tests for remaining time, safety margin, retry suppression, and valid output under near-timeout conditions.
+- Bounded concurrency tests for remote-needed tasks.
 - Config sweep tests for conservative/balanced/aggressive modes.
 - Regression tier tests using `eval/golden_tier_2_regression.jsonl`.
 - Adversarial tier tests using `eval/golden_tier_3_adversarial.jsonl`.
