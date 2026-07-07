@@ -82,6 +82,16 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertIn("risk_gate", result.metadata["local_proof_layers_passed"])
         self.assertFalse(result.metadata["local_proof_layers_failed"])
 
+    def test_stable_cpu_gpu_fact_uses_local_template(self):
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            result = answer_task("factual", "Explain in two concise sentences how a GPU differs from a CPU.")
+
+        mocked.assert_not_called()
+        self.assertEqual(result.route, "local")
+        self.assertEqual(result.category, "factual_knowledge")
+        self.assertEqual(result.route_reason, "stable_factual_template")
+        self.assertIn("parallel", result.answer)
+
     def test_classifier_runs_before_remote_call(self):
         seen = []
 

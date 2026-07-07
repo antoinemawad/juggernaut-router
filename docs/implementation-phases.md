@@ -211,7 +211,7 @@ Current status:
 - first implementation slice is complete,
 - `app/classifier.py` classifies the 8 Track 1 categories locally before any Fireworks call,
 - `app/classifier.py` flags sarcasm-style ambiguity, multi-step math, incomplete logic, and nontrivial code/reasoning markers,
-- `app/solvers/basic.py` returns structured local solver results internally,
+- `app/solvers/basic.py` returns structured local solver results internally and keeps stable CPU/GPU explanations local when proof layers pass,
 - `app/validators.py` gates local answers through the first proof ladder,
 - `app/validators.py` rejects weak local summaries, ambiguous NER, sarcasm-style sentiment, multi-step math, incomplete logic, and nontrivial code through trap guards,
 - `app/validators.py` cross-checks simple NER mentions, simple code-generation semantics, and corrected-code fixes before local acceptance,
@@ -224,7 +224,7 @@ Current status:
 - `eval/router_config_sweep.py` now exercises the real router with mocked Fireworks responses,
 - `scripts/check_expected_routes.py` asserts full-fixture expected routes and remote-mode hints, then writes route/mode/prompt-policy evidence to `eval_runs/expected_routes_latest.{json,md}`,
 - latest mock sweep recommends `strict_hybrid` with 100% pass rate, 100% expected-route match, and fewer tokens than always-Fireworks,
-- `tests/test_phase2_router.py` covers classifier categories, risk components, local no-Fireworks routing, remote fallback through the wrapper, remote mode selection, preferred model selection, remote code/numeric/label/entity cleanup, proof-budget rejection, classifier-before-remote ordering, ambiguous NER rejection, exact-summary rejection, sarcasm rejection, multi-step math rejection, incomplete logic rejection, nontrivial-code rejection, NER/code/corrected-code cross-check failures, real-router sweep rows, full-fixture expected-route and remote-mode assertions, ranking order, and verifier-aware scoring.
+- `tests/test_phase2_router.py` covers classifier categories, risk components, local no-Fireworks routing, stable CPU/GPU local factual routing, remote fallback through the wrapper, remote mode selection, preferred model selection, remote code/numeric/label/entity cleanup, proof-budget rejection, classifier-before-remote ordering, ambiguous NER rejection, exact-summary rejection, sarcasm rejection, multi-step math rejection, incomplete logic rejection, nontrivial-code rejection, NER/code/corrected-code cross-check failures, real-router sweep rows, full-fixture expected-route and remote-mode assertions, ranking order, and verifier-aware scoring.
 
 Deliverables:
 

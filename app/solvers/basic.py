@@ -174,7 +174,7 @@ def try_basic_solver_structured(prompt: str):
         ("order_logic_pattern", solve_simple_logic, 0.96),
         ("code_generation_template", solve_code_generation, 0.92),
         ("code_debugging_template", solve_code_debugging, 0.91),
-        ("stable_factual_template", solve_factual, 0.9),
+        ("stable_factual_template", solve_factual, 0.96),
     ]
 
     for solver_name, solver, confidence in solvers:
