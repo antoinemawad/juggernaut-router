@@ -10,6 +10,8 @@ Final pre-submit checklist for Track 1 only.
 - [ ] README documents Docker run with mounted `/input` and `/output`.
 - [ ] README documents required environment variables.
 - [ ] Track 1 execution discipline reviewed: `docs/track1-execution-discipline.md`.
+- [ ] Implementation phase status reviewed: `docs/implementation-phases.md`.
+- [ ] Risk register reviewed: `docs/risk-register.md`.
 - [ ] Local testing and submission use the same code path; only `INPUT_PATH`, `OUTPUT_PATH`, and runtime environment variables change.
 - [ ] Final manual review complete.
 
@@ -31,6 +33,7 @@ Final pre-submit checklist for Track 1 only.
 ## Tests and Validation
 
 - [ ] Tests pass.
+- [ ] Local quality gate passes: `python3 scripts/run_local_quality_gate.py`.
 - [ ] Eval coverage checker passes: `python3 scripts/check_eval_coverage.py`.
 - [ ] Local fixture test passes.
 - [ ] Malformed input tests pass: bad JSON, non-array JSON, missing task fields, non-string prompt.

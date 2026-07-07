@@ -2,6 +2,8 @@
 
 Purpose: keep tests and evaluations expanding with the routing architecture. Any new routing feature must add measurable coverage.
 
+Field definitions are maintained in `docs/eval-field-glossary.md`.
+
 ## Standing Rule
 
 When the router gains a new decision dimension, the test/eval system must gain:
@@ -40,6 +42,12 @@ Validate scenario coverage with:
 
 ```bash
 python3 scripts/check_eval_coverage.py
+```
+
+Run all current local non-Docker quality checks with:
+
+```bash
+python3 scripts/run_local_quality_gate.py
 ```
 
 ## Coverage Dimensions

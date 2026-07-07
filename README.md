@@ -52,6 +52,12 @@ This produces `eval_runs/router_sweep_*.jsonl` and `eval_runs/router_sweep_*.md`
 
 Before final submission, verify malformed input handling, Fireworks failure handling, answer normalization, optional router telemetry, and Docker mounted IO. These checks are tracked in `docs/submission-checklist.md` and `docs/test-eval-coverage-plan.md`.
 
+Run the current local quality gate:
+
+```bash
+python3 scripts/run_local_quality_gate.py
+```
+
 ## Docker Smoke Test
 
 ```bash
@@ -84,6 +90,11 @@ Planning docs for final presentation and demo:
 - `docs/presentation-plan.md`
 - `docs/video-demo-plan.md`
 - `docs/elite-routing-plan.md`
+- `docs/implementation-phases.md`
+- `docs/risk-register.md`
+- `docs/eval-field-glossary.md`
+- `docs/official-submission-decision-tree.md`
+- `docs/live-eval-budget-plan.md`
 - `docs/test-eval-coverage-plan.md`
 - `docs/model-matrix-evaluation.md`
 - `docs/track1-execution-discipline.md`

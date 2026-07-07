@@ -111,6 +111,14 @@ Use official submissions only after local evidence selects a candidate.
 
 This lets us use the submission limit as measured feedback while avoiding random leaderboard poking.
 
+Detailed rules:
+
+- implementation order: `docs/implementation-phases.md`
+- official submission decisions: `docs/official-submission-decision-tree.md`
+- live Fireworks spend: `docs/live-eval-budget-plan.md`
+- risks and mitigations: `docs/risk-register.md`
+- eval field definitions: `docs/eval-field-glossary.md`
+
 ## Current Assumptions
 
 - The hidden benchmark uses unseen variants in the same general task categories. Source-backed unseen-variant fact: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
