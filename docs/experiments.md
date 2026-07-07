@@ -307,6 +307,27 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 - Failure cases: Batch crash, malformed `/output/results.json`, repeated retries wasting time.
 - Decision: Accept only if output remains valid JSON and successful tasks still return answers.
 
+### Production Readiness Failure Matrix
+
+- Name: Production Readiness Failure Matrix
+- Date: TBD
+- Goal: Prove the container keeps valid output under common runtime failures.
+- Strategy tested: Mock or fixture-test malformed input, malformed task items, missing env vars, Fireworks timeout, HTTP error, invalid JSON response, missing `choices`, missing `usage`, disallowed models, normalization failures, and telemetry writes.
+- Dataset: Small local fixture set plus synthetic malformed files/tasks.
+- Local solver coverage: Mixed.
+- Fireworks calls required: Mocked only for failure scenarios.
+- Expected token impact: None directly; protects against zero-score failures.
+- Log file: `eval_runs/production_readiness_<timestamp>.jsonl` or test output.
+- Report file: `eval_runs/production_readiness_<timestamp>.md` or test summary.
+- Models tested: Mocked allowed/disallowed model selection.
+- Categories covered: IO/runtime failure cases plus at least one normal task.
+- Accuracy observations: TBD.
+- Token observations: TBD.
+- Latency observations: TBD.
+- Prompt policy observations: Not applicable.
+- Failure cases: Batch crash, malformed final JSON, leaked secret, retry loop, empty answer, telemetry corrupts official output.
+- Decision: Required before final Docker push.
+
 ## Source-Backed Constraints for Experiments
 
 - Evaluation uses unseen variants; do not tune to exact public examples. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.

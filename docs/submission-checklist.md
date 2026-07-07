@@ -33,7 +33,9 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Tests pass.
 - [ ] Eval coverage checker passes: `python3 scripts/check_eval_coverage.py`.
 - [ ] Local fixture test passes.
+- [ ] Malformed input tests pass: bad JSON, non-array JSON, missing task fields, non-string prompt.
 - [ ] Docker fixture test passes.
+- [ ] Config/env parsing tests pass for `ROUTER_MODE`, `LOCAL_CONFIDENCE_THRESHOLD`, `FIREWORKS_TIMEOUT_SECONDS`, `FIREWORKS_MAX_RETRIES`, and `ROUTER_LOG_PATH`.
 - [ ] Agent test proves classifier runs before any Fireworks call.
 - [ ] Agent test proves high-confidence local tasks do not call Fireworks.
 - [ ] Agent test proves low-confidence or risky tasks call Fireworks through the wrapper.
@@ -44,6 +46,10 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Router decision logs include risk score, risk components, validator notes, remote mode, final answer length, and errors when present.
 - [ ] Answer normalization test passes: no unintended markdown, surrounding whitespace stripped, exact requested formats preserved.
 - [ ] Timeout/fallback tests pass without crashing the batch or producing malformed JSON.
+- [ ] Fireworks client failure tests pass: missing env, timeout, HTTP error, invalid JSON, missing `choices`, missing `usage`, and disallowed model.
+- [ ] Structured routing result tests pass while final `/output/results.json` still contains only `task_id` and `answer`.
+- [ ] Optional telemetry test passes and confirms no API key/secret is logged.
+- [ ] Production readiness failure matrix reviewed.
 - [ ] Always-Fireworks baseline compared against final hybrid router on the same dataset.
 - [ ] Router config sweep report reviewed and winning config selected.
 - [ ] Adversarial routing set passes the configured accuracy target.

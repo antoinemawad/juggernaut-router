@@ -120,6 +120,24 @@ Required failure taxonomy coverage:
 - `max_tokens_too_low`
 - `output_format_failure`
 
+Required production-readiness coverage:
+
+- malformed input file,
+- non-array input JSON,
+- missing `task_id`,
+- missing `prompt`,
+- non-string prompt,
+- missing Fireworks env vars,
+- Fireworks timeout,
+- Fireworks HTTP error,
+- Fireworks invalid JSON response,
+- Fireworks response missing `choices`,
+- Fireworks response missing `usage`,
+- disallowed model,
+- normalization of empty/non-string answers,
+- optional `ROUTER_LOG_PATH` JSONL telemetry,
+- Docker mounted `/input` and `/output`.
+
 Required router modes:
 
 - conservative
@@ -161,6 +179,9 @@ Every eval row should include scenario metadata plus runtime decision data when 
 - Unit tests for validators.
 - Unit tests for route decisions.
 - Unit tests for answer normalization.
+- Unit tests for input validation and batch continuation.
+- Unit tests for config/env parsing.
+- Unit tests for optional telemetry with no secrets.
 - Mock Fireworks tests for timeouts, HTTP errors, invalid JSON, and missing usage.
 - Config sweep tests for conservative/balanced/aggressive modes.
 - Coverage tests using `scripts/check_eval_coverage.py`.
@@ -176,3 +197,4 @@ A router or eval change is not ready to become default unless:
 4. Model matrix mock mode produces a report.
 5. Any affected dimension has positive and adversarial coverage.
 6. Logs contain enough fields to reproduce the routing decision.
+7. Production-readiness failure modes pass or are explicitly documented as accepted risks.

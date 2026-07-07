@@ -44,11 +44,27 @@ Local answers must earn trust. A local solver result should carry answer, confid
 
 - Entrypoint for the Docker container.
 - Reads `/input/tasks.json`.
+- Validates that input is a JSON array and that each usable task has string-like `task_id` and `prompt`.
 - Calls the agent for each task.
 - Writes `/output/results.json`.
 - Ensures valid JSON output even if individual tasks fail.
+- Never lets one malformed task crash the whole batch.
 - Exits code 0 on successful batch completion.
 - For local testing, `INPUT_PATH` and `OUTPUT_PATH` may override the default harness paths. Submission mode uses the same code path with the defaults.
+
+### `app/config.py`
+
+- Planned runtime configuration loader.
+- Reads `ROUTER_MODE`, `LOCAL_CONFIDENCE_THRESHOLD`, `FIREWORKS_TIMEOUT_SECONDS`, `FIREWORKS_MAX_RETRIES`, and optional `ROUTER_LOG_PATH`.
+- Provides safe defaults for local/mock testing.
+- Must not require `.env` in the final container.
+- Must not log secrets.
+
+### `app/types.py`
+
+- Planned shared dataclasses or typed dictionaries.
+- Should define structured agent/routing results with answer, route, category, confidence, risk, selected model, prompt policy, token metrics, error, and metadata.
+- The submitted `/output/results.json` still contains only `task_id` and `answer`.
 
 ### `app/classifier.py`
 
@@ -73,6 +89,20 @@ Local answers must earn trust. A local solver result should carry answer, confid
 - Should validate math recomputation, sentiment polarity strength, NER schema/labels, summary length/key terms, simple logic relation graphs, code syntax, and exact-format requirements.
 - Must reject local answers that cannot be checked strongly enough for the selected router mode.
 
+### `app/normalization.py`
+
+- Planned final-answer normalizer.
+- Should strip surrounding whitespace, convert non-string answers to strings, remove code fences when code-only output is requested, preserve exact requested formats, and provide a nonempty fallback answer when needed.
+- Must run before writing `/output/results.json`.
+
+### `app/telemetry.py`
+
+- Planned optional local decision logger.
+- Writes JSONL records only when `ROUTER_LOG_PATH` is set.
+- Must never write secrets or API keys.
+- Must not alter official `/output/results.json`.
+- Should log route, category, risk, confidence, validator notes, selected model, remote mode, prompt policy, retry count, tokens, latency, and errors.
+
 ### `app/solvers/basic.py`
 
 - Planned deterministic local solvers for high-confidence tasks.
@@ -94,6 +124,8 @@ Local answers must earn trust. A local solver result should carry answer, confid
 - Must keep timeout and fallback behavior explicit: remote calls should have bounded timeouts, limited retry behavior, and a final local/error-safe answer path so one failed task does not crash the whole batch.
 - Should support configurable router modes such as `conservative`, `balanced`, and `aggressive` so official submissions can compare clean hypotheses.
 - Should select remote modes such as `remote_concise`, `remote_accuracy`, `remote_format_strict`, and `remote_code` based on risk.
+- Should return a structured routing result internally, not only a raw string.
+- Must keep the public answer path simple: callers can still retrieve the final answer string for `/output/results.json`.
 
 ### `app/fireworks_client.py`
 
@@ -104,6 +136,24 @@ Local answers must earn trust. A local solver result should carry answer, confid
 - Must select only from `ALLOWED_MODELS`. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - Current planning model set is `minimax-m3`, `kimi-k2p7-code`, `gemma-4-31b-it`, `gemma-4-26b-a4b-it`, and `gemma-4-31b-it-nvfp4`; final behavior still validates against `ALLOWED_MODELS`.
 - Must not hardcode any fixed model as mandatory.
+- Must handle missing env vars, HTTP errors, timeouts, invalid JSON, missing `choices`, missing `usage`, and disallowed models without leaking secrets.
+- Must bound timeout and retry behavior through config.
+
+## Production Readiness Contract
+
+The submitted runtime should fail soft and keep valid output whenever possible.
+
+Required behavior:
+
+- malformed input file: write valid JSON output for recoverable tasks or a safe empty result list if no tasks are usable.
+- malformed task item: log locally when enabled and continue.
+- local solver failure: route to Fireworks or safe fallback.
+- Fireworks missing env: return safe fallback for affected task rather than crashing the batch.
+- Fireworks timeout/HTTP/invalid JSON: retry only when configured and safe, then fallback.
+- unsupported model: choose another allowed model or fallback.
+- output normalization failure: return a safe nonempty answer.
+
+Final output must always be a valid JSON array of `{ "task_id": ..., "answer": ... }` objects.
 
 ### `tests/`
 
@@ -112,6 +162,7 @@ Local answers must earn trust. A local solver result should carry answer, confid
 - Should include adversarial category examples that look locally solvable but require fallback when confidence or validation is weak.
 - Should include tests for router decision logging, answer normalization, Fireworks timeout handling, and no batch crash on an individual task failure.
 - Should verify every scenario logs category, risk score, risk components, route reason, remote mode, selected model, prompt policy, token metrics, latency, validator notes, and errors when present.
+- Should include production-readiness tests for input validation, structured routing result shape, normalization, optional telemetry, Fireworks invalid responses, missing `usage`, disallowed models, missing env vars, and Docker fixture IO.
 
 ### `local_test/`
 

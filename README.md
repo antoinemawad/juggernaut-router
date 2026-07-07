@@ -48,6 +48,10 @@ python3 eval/router_config_sweep.py --accuracy-threshold 0.85
 
 This produces `eval_runs/router_sweep_*.jsonl` and `eval_runs/router_sweep_*.md`, ranking configurations by accuracy first and token usage second.
 
+## Production Readiness Checks
+
+Before final submission, verify malformed input handling, Fireworks failure handling, answer normalization, optional router telemetry, and Docker mounted IO. These checks are tracked in `docs/submission-checklist.md` and `docs/test-eval-coverage-plan.md`.
+
 ## Docker Smoke Test
 
 ```bash
