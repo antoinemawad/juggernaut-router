@@ -107,6 +107,7 @@ Deliverables:
 - `app/deadline.py`
 - hardened `app/main.py`
 - hardened `app/fireworks_client.py`
+- Docker runtime guard script,
 - structured internal result from `app/agent.py`
 
 Implementation requirements:
@@ -156,6 +157,7 @@ Required tests/checks:
 - valid-output-near-deadline test,
 - remote timeout remains below per-response ceiling,
 - local proof budget config parsing test,
+- Docker runtime guard command is available and documented,
 - `python3 scripts/run_local_quality_gate.py`.
 
 Quality bar:
@@ -180,7 +182,7 @@ Definition of done:
 - all required tests/checks pass,
 - no recoverable single-task failure can prevent valid final JSON,
 - local quality gate passes,
-- Docker smoke command is ready to run.
+- Docker smoke/size guard command is ready to run.
 
 Stop rules:
 

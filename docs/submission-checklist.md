@@ -20,6 +20,7 @@ Final pre-submit checklist for Track 1 only.
 ## Docker and Runtime
 
 - [ ] Dockerfile builds successfully.
+- [ ] Docker runtime guard passes: `python3 scripts/check_docker_runtime.py`.
 - [ ] Docker run works with mounted `/input` and `/output`.
 - [ ] Container reads `/input/tasks.json` on startup. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Container writes `/output/results.json` before exiting. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
@@ -36,6 +37,7 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Bounded remote worker count is configured and tested.
 - [ ] linux/amd64 image built. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - [ ] Image compressed size is under 10GB. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
+- [ ] Local image size guard is below the conservative 8GB ceiling before final push.
 - [ ] Image is publicly pullable. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 
 ## Tests and Validation
@@ -48,6 +50,7 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Local fixture test passes.
 - [ ] Malformed input tests pass: bad JSON, non-array JSON, missing task fields, non-string prompt.
 - [ ] Docker fixture test passes.
+- [ ] Docker image architecture and size guard pass.
 - [ ] Config/env parsing tests pass for `ROUTER_MODE`, `LOCAL_CONFIDENCE_THRESHOLD`, `FIREWORKS_TIMEOUT_SECONDS`, `FIREWORKS_MAX_RETRIES`, and `ROUTER_LOG_PATH`.
 - [ ] Agent test proves classifier runs before any Fireworks call.
 - [ ] Agent test proves high-confidence local tasks do not call Fireworks.

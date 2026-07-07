@@ -62,6 +62,7 @@ def main():
         "eval/model_matrix.py",
         "eval/router_config_sweep.py",
         "scripts/check_eval_coverage.py",
+        "scripts/check_docker_runtime.py",
         "scripts/compare_eval_reports.py",
         "scripts/validate_submission_io.py",
         "tests/test_phase1_runtime.py",

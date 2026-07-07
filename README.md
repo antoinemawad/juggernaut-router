@@ -68,8 +68,18 @@ python3 scripts/check_eval_coverage.py eval/golden_tier_3_adversarial.jsonl --pr
 
 ## Docker Smoke Test
 
+Recommended local guard:
+
 ```bash
-docker build -t juggernaut-router:local .
+python3 scripts/check_docker_runtime.py
+```
+
+This builds a local `linux/amd64` image, checks the image architecture, enforces an 8GB conservative local image-size ceiling, runs mounted `/input` and `/output`, and validates `results.json`.
+
+Manual equivalent:
+
+```bash
+docker build --platform linux/amd64 -t juggernaut-router:local .
 
 docker run --rm \
   -v "$PWD/local_test/input:/input:ro" \
@@ -78,6 +88,8 @@ docker run --rm \
 
 python3 scripts/validate_submission_io.py local_test/output/results.json
 ```
+
+The official compressed image limit is 10GB. The local guard uses an 8GB ceiling to keep margin.
 
 ## Final linux/amd64 Build and Push
 
