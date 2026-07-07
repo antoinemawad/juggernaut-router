@@ -6,6 +6,8 @@ This document defines the intended Track 1 implementation architecture. It is pl
 
 `/input/tasks.json -> main.py -> agent.py -> local classifier -> local solver/validator -> route decision -> Fireworks fallback only if needed -> /output/results.json`
 
+For a diagrammed view of this architecture, see `docs/planned-architecture-diagram.md`.
+
 ## Local-First Routing Contract
 
 The agent must not immediately forward every prompt to Fireworks. The planned control flow is:

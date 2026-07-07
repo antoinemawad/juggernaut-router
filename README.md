@@ -97,6 +97,7 @@ Planning docs for final presentation and demo:
 
 - `docs/presentation-plan.md`
 - `docs/video-demo-plan.md`
+- `docs/planned-architecture-diagram.md`
 - `docs/elite-routing-plan.md`
 - `docs/implementation-phases.md`
 - `docs/risk-register.md`
