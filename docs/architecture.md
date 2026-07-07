@@ -4,7 +4,39 @@ This document defines the intended Track 1 implementation architecture. It is pl
 
 ## Runtime Flow
 
-`/input/tasks.json -> main.py -> agent.py -> classifier/local solver -> Fireworks fallback if needed -> /output/results.json`
+`/input/tasks.json -> main.py -> agent.py -> local classifier -> local solver/validator -> route decision -> Fireworks fallback only if needed -> /output/results.json`
+
+## Local-First Routing Contract
+
+The agent must not immediately forward every prompt to Fireworks. The planned control flow is:
+
+1. `main.py` reads each task and passes only the task object/prompt to `agent.py`.
+2. `agent.py` calls `classifier.py` locally to identify the task category and routing risk.
+3. The classifier returns category, confidence, and risk flags without using Fireworks.
+4. The agent asks local deterministic solvers whether they can produce a high-confidence answer.
+5. The agent validates the local answer when available.
+6. The agent accepts the local answer only if confidence and validation pass the configured threshold.
+7. The agent calls Fireworks only when local classification says the task is risky, local solvers cannot answer, confidence is below threshold, or validation fails.
+8. The Fireworks client selects an allowed model and sends the request through `FIREWORKS_BASE_URL`.
+
+This preserves the rank #1 objective: spend zero remote tokens on safe tasks and reserve Fireworks tokens for tasks where accuracy risk is high.
+
+## Elite Risk Engine
+
+The router should be implemented as a risk engine, not only a category classifier. See `docs/elite-routing-plan.md` for the full design.
+
+Core routing stages:
+
+1. Category detection.
+2. Risk scoring across ambiguity, reasoning depth, format strictness, code risk, factual freshness, and validator strength.
+3. Local solvability check.
+4. Local solver attempt with structured evidence.
+5. Category-specific validation.
+6. Route decision across local, concise Fireworks, accuracy Fireworks, format-strict Fireworks, and code Fireworks modes.
+7. Answer normalization.
+8. Router decision logging.
+
+Local answers must earn trust. A local solver result should carry answer, confidence, category, evidence, validator status, risk flags, and failure reason. The agent should accept it only when category confidence, solver confidence, risk score, and validation all pass the selected router mode thresholds.
 
 ## Planned Files
 
@@ -23,12 +55,23 @@ This document defines the intended Track 1 implementation architecture. It is pl
 - Planned task classifier for the 8 Track 1 categories.
 - Should use simple, inspectable heuristics first.
 - Must return category and confidence.
+- Must run locally before any Fireworks call.
+- Must expose risk flags such as `requires_reasoning`, `requires_code`, `requires_summary`, `requires_entities`, `likely_deterministic`, and `ambiguous`.
+- Should contribute risk components for ambiguity, reasoning depth, format strictness, code risk, factual freshness, and local validator weakness.
 - Should avoid overfitting to public examples because evaluation uses unseen variants. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 
 ### `app/solvers/result.py`
 
 - Planned shared result object for local solvers.
 - Should include `answer`, `confidence`, `needs_fireworks`, `failure_reason`, and optional validation metadata.
+- Should include the classifier category and route reason so local-vs-Fireworks decisions can be audited.
+- Should include evidence and risk flags so the router can prove why a local answer is safe.
+
+### `app/validators.py`
+
+- Planned category-specific validators for local and remote outputs.
+- Should validate math recomputation, sentiment polarity strength, NER schema/labels, summary length/key terms, simple logic relation graphs, code syntax, and exact-format requirements.
+- Must reject local answers that cannot be checked strongly enough for the selected router mode.
 
 ### `app/solvers/basic.py`
 
@@ -40,10 +83,17 @@ This document defines the intended Track 1 implementation architecture. It is pl
 
 - Planned routing coordinator.
 - Receives a task from `main.py`.
-- Uses classifier and local solvers.
+- Always classifies locally before deciding whether Fireworks is needed.
+- Uses classifier output and local solvers to decide whether the task can stay local.
 - Calls Fireworks fallback when local confidence is too low or validation fails.
+- Must not call Fireworks for high-confidence deterministic/local answers.
 - Uses a programmable/configurable accuracy-gate target in local evaluation so the threshold can change without architecture changes.
 - Enforces English-only response policy. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
+- Should record a local router decision object for each task during experiments: `task_id`, category, classifier confidence, local solver confidence, validator result, route, selected model, prompt policy, `max_tokens`, token usage when available, latency, and route reason.
+- Must normalize final answers before writing output: strip surrounding whitespace, avoid markdown unless requested, keep answers concise, and preserve exact requested formats.
+- Must keep timeout and fallback behavior explicit: remote calls should have bounded timeouts, limited retry behavior, and a final local/error-safe answer path so one failed task does not crash the whole batch.
+- Should support configurable router modes such as `conservative`, `balanced`, and `aggressive` so official submissions can compare clean hypotheses.
+- Should select remote modes such as `remote_concise`, `remote_accuracy`, `remote_format_strict`, and `remote_code` based on risk.
 
 ### `app/fireworks_client.py`
 
@@ -59,6 +109,9 @@ This document defines the intended Track 1 implementation architecture. It is pl
 
 - Unit tests for classifier, local solvers, Fireworks client config, output JSON shape, and agent routing.
 - Should include tests for malformed input, missing env vars, and mounted input/output paths.
+- Should include adversarial category examples that look locally solvable but require fallback when confidence or validation is weak.
+- Should include tests for router decision logging, answer normalization, Fireworks timeout handling, and no batch crash on an individual task failure.
+- Should verify every scenario logs category, risk score, risk components, route reason, remote mode, selected model, prompt policy, token metrics, latency, validator notes, and errors when present.
 
 ### `local_test/`
 

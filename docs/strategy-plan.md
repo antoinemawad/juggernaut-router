@@ -14,9 +14,13 @@ This plan targets rank #1 for Track 1 only. It separates source-backed constrain
 
 ## Rank #1 Strategy
 
+- Classify every task locally before any Fireworks call.
+- Treat routing as a risk engine: prove local safety first, otherwise route to Fireworks.
 - Use confidence-gated local solvers for deterministic or high-confidence tasks.
+- Use category-specific validators as the main defense against overconfident zero-token answers.
 - Use category-specific Fireworks fallback when local solvers are uncertain, output validation fails, or the task is naturally high risk.
 - Use Fireworks accuracy mode for hard/risky tasks: richer prompts, more careful instructions, and model selection optimized for correctness.
+- Maintain configurable `conservative`, `balanced`, and `aggressive` router modes for official submission comparisons.
 - Use model selection only from runtime `ALLOWED_MODELS`. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - Use AMD AI Notebooks / AMD Developer Cloud for validation evidence and optional local-model experiments, not as a required final runtime unless organizers confirm that path. Sources: `Guides/Hackathon Act II.txt`, `Guides/AMD Developer Hackathon Participant Guide.txt`.
 - Keep final container CPU-safe unless local LLM runtime is proven to fit the standardized environment, 10-minute runtime, 60-second startup, 30-second per-response, and 10GB compressed image limits. Sources: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`, `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
@@ -29,6 +33,10 @@ This plan targets rank #1 for Track 1 only. It separates source-backed constrain
 - The short guide currently lists Track 1 models: `minimax-m3`, `kimi-k2p7-code`, `gemma-4-31b-it`, `gemma-4-26b-a4b-it`, and `gemma-4-31b-it-nvfp4`. Source: `Guides/AMD Developer Hackathon Participant Guide.txt`.
 - Planning model set: `minimax-m3`, `kimi-k2p7-code`, `gemma-4-31b-it`, `gemma-4-26b-a4b-it`, `gemma-4-31b-it-nvfp4`.
 - Runtime enforcement: select only models present in `ALLOWED_MODELS`.
+- Per-category model defaults should be selected from logged model-matrix evidence, not guesses.
+- Model selection should remain configuration-driven so we can update category preferences after experiments without rewriting router logic.
+- For each category, track both the best-accuracy model and the cheapest passing model.
+- Prompt policy should also be selected from evidence: original input, compact prompt, or answer-only prompt.
 
 ## Category-by-Category Strategy
 
@@ -43,6 +51,37 @@ This plan targets rank #1 for Track 1 only. It separates source-backed constrain
 | Logical / deductive reasoning | Fireworks by default; local only for simple deterministic constraints | Accuracy mode | Constraint satisfaction failures |
 | Code generation | Fireworks by default; local templates only for extremely simple functions | Accuracy mode, tuned max tokens | Hidden tests may punish subtle bugs |
 
+## Local-First Decision Policy
+
+Every task should pass through this decision sequence:
+
+1. Local classification: identify category, confidence, and risk.
+2. Risk scoring: estimate ambiguity, reasoning depth, format strictness, code risk, factual freshness, and validator weakness.
+3. Local solvability check: decide whether any local solver can prove correctness.
+4. Local solver attempt: only for categories with deterministic or high-confidence local coverage.
+5. Local validation: reject empty, malformed, non-English, low-confidence, unchecked, or structurally wrong answers.
+6. Route decision:
+   - Stay local when category confidence, solver confidence, and validation all pass.
+   - Use Fireworks when the category is risky, confidence is low, solver coverage is missing, or validation fails.
+7. Fireworks mode selection: choose concise, accuracy, format-strict, or code mode.
+8. Fireworks model selection: choose from `ALLOWED_MODELS` based on category/model matrix results.
+9. Prompt policy selection: use original prompt when exact wording matters; use compact or answer-only only when experiments show no accuracy loss.
+10. Decision logging: record route, risk, validator notes, model, prompt policy, tokens, latency, and errors.
+
+The router must never use Fireworks as the first step for all tasks. Fireworks is the fallback or accuracy path after local classification decides it is needed.
+
+See `docs/elite-routing-plan.md` for the full risk-engine design.
+
+## Prompt Size Policy
+
+Prompt resizing is allowed only when metrics show it preserves accuracy.
+
+- Preserve original task text for math word problems, logic puzzles, code debugging, code generation, NER, and strict summarization constraints.
+- Prefer reducing wrapper text and `max_tokens` before trimming user content.
+- Test `original`, `compact`, and `answer_only` prompt policies by category.
+- Promote prompt policy decisions into configuration, not hardcoded branches.
+- Any uncertain prompt-size decision must be tested and logged before becoming default behavior.
+
 ## Experiments Needed Before Finalizing
 
 - Measure all-Fireworks baseline accuracy and tokens.
@@ -51,8 +90,26 @@ This plan targets rank #1 for Track 1 only. It separates source-backed constrain
 - Compare category-specific Fireworks prompts.
 - Compare allowed model preference by category once `ALLOWED_MODELS` is known.
 - Tune `max_tokens` by category without hurting answer quality.
+- Compare always-Fireworks, strict hybrid, and aggressive hybrid router modes on the same dataset.
+- Keep router decision logs for experiments so every local-vs-Fireworks choice can be audited.
+- Test adversarial examples for every category before promoting a local solver, validator, prompt policy, or model choice.
+- Test the full risk-engine scenario matrix: risk components, remote modes, router modes, validators, prompt policies, and model maps.
+- Test timeout, retry, fallback, and answer-normalization behavior as first-class quality gates.
 - Test hard-task Fireworks accuracy mode.
 - Run Docker with mounted `/input` and `/output` on `linux/amd64`.
+
+## Submission Optimization Loop
+
+Use official submissions only after local evidence selects a candidate.
+
+1. Run local smoke tests and JSON validation.
+2. Run `eval/router_config_sweep.py` and select the best eligible config by accuracy first, tokens second.
+3. Run the allowed-model matrix for any changed model/prompt settings.
+4. Build and test the Docker image locally.
+5. Submit one candidate image.
+6. Record the official result and change only one major variable before the next attempt.
+
+This lets us use the submission limit as measured feedback while avoiding random leaderboard poking.
 
 ## Current Assumptions
 

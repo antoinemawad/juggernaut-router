@@ -34,6 +34,20 @@ python3 -m app.main
 python3 scripts/validate_submission_io.py local_test/output/results.json
 ```
 
+## AMD AI Notebook Checkpoint
+
+Open `notebooks/amd_ai_manual_checkpoint.ipynb` in the AMD AI Notebook connected to this repo. It runs safe local tests, prints commit/manual-test commands, then intentionally stops before live Fireworks or Docker submission work.
+
+## Router Config Sweep
+
+Before spending official submission attempts, compare candidate router configurations locally:
+
+```bash
+python3 eval/router_config_sweep.py --accuracy-threshold 0.85
+```
+
+This produces `eval_runs/router_sweep_*.jsonl` and `eval_runs/router_sweep_*.md`, ranking configurations by accuracy first and token usage second.
+
 ## Docker Smoke Test
 
 ```bash
@@ -58,6 +72,19 @@ docker buildx build --platform linux/amd64 \
 ```
 
 Before submitting, pull the public image and run it with mounted `/input` and `/output`.
+
+## Submission Materials
+
+Planning docs for final presentation and demo:
+
+- `docs/presentation-plan.md`
+- `docs/video-demo-plan.md`
+- `docs/elite-routing-plan.md`
+- `docs/test-eval-coverage-plan.md`
+- `docs/model-matrix-evaluation.md`
+- `docs/track1-execution-discipline.md`
+- `docs/submission-checklist.md`
+- `docs/official-submission-log.md`
 
 ## Goal
 

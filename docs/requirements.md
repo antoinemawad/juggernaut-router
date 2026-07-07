@@ -6,6 +6,10 @@ This checklist is source-backed by the current `Guides/` folder and should be up
 
 - [ ] Build Track 1 only: Hybrid Token-Efficient Routing Agent / General-Purpose AI Agent. Sources: `Guides/Hackathon Act II.txt`, `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Handle all 8 task categories: factual knowledge, math reasoning, sentiment classification, summarization, named entity recognition, code debugging, logical/deductive reasoning, and code generation. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
+- [ ] Classify each task locally before any Fireworks call.
+- [ ] Decide local-vs-Fireworks routing from local classification, local solver confidence, validation, and category risk.
+- [ ] Keep safe deterministic/high-confidence tasks local.
+- [ ] Call Fireworks only when local classification/validation says remote inference is needed.
 - [ ] Read `/input/tasks.json` on startup. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Accept JSON array input items with `task_id` and `prompt`. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Write `/output/results.json` before exiting. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
