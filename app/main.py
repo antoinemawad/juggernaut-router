@@ -23,8 +23,11 @@ def load_tasks(config: RuntimeConfig) -> tuple[list[dict], str | None]:
         return [], "input_not_array"
 
     tasks = []
+    seen_task_ids = set()
     for index, item in enumerate(data):
-        tasks.append(coerce_task(item, index))
+        task = coerce_task(item, index)
+        task["task_id"] = unique_task_id(task["task_id"], index, seen_task_ids)
+        tasks.append(task)
     return tasks, None
 
 
@@ -53,6 +56,20 @@ def coerce_task(item, index: int) -> dict:
         "prompt": prompt,
         "input_error": error,
     }
+
+
+def unique_task_id(task_id: str, index: int, seen_task_ids: set[str]) -> str:
+    candidate = task_id.strip() or f"invalid_{index}"
+    if candidate not in seen_task_ids:
+        seen_task_ids.add(candidate)
+        return candidate
+
+    suffix = 2
+    while f"{candidate}_{suffix}" in seen_task_ids:
+        suffix += 1
+    unique = f"{candidate}_{suffix}"
+    seen_task_ids.add(unique)
+    return unique
 
 
 def main():

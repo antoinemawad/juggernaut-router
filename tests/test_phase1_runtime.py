@@ -210,6 +210,45 @@ class Phase1RuntimeTests(unittest.TestCase):
             self.assertTrue(row["answer"].strip())
         self.assertTrue(any(row.get("task_elapsed_ms") is not None for row in telemetry_rows))
 
+    def test_main_makes_duplicate_task_ids_unique_for_valid_output(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "tasks.json"
+            output_path = Path(tmpdir) / "results.json"
+            input_path.write_text(
+                json.dumps([
+                    {"task_id": "dup", "prompt": "2+2"},
+                    {"task_id": "dup", "prompt": "2+2"},
+                    {"task_id": "", "prompt": "2+2"},
+                    {"prompt": "2+2"},
+                ]),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                os.environ,
+                {"INPUT_PATH": str(input_path), "OUTPUT_PATH": str(output_path)},
+                clear=True,
+            ):
+                main()
+            rows = json.loads(output_path.read_text(encoding="utf-8"))
+
+        task_ids = [row["task_id"] for row in rows]
+        self.assertEqual(len(task_ids), len(set(task_ids)))
+        self.assertEqual(task_ids[:2], ["dup", "dup_2"])
+
+    def test_main_writes_empty_results_for_non_array_input(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "tasks.json"
+            output_path = Path(tmpdir) / "results.json"
+            input_path.write_text(json.dumps({"task_id": "x"}), encoding="utf-8")
+            with patch.dict(
+                os.environ,
+                {"INPUT_PATH": str(input_path), "OUTPUT_PATH": str(output_path)},
+                clear=True,
+            ):
+                main()
+            rows = json.loads(output_path.read_text(encoding="utf-8"))
+        self.assertEqual(rows, [])
+
     def test_main_writes_empty_results_for_invalid_input_json(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "tasks.json"
@@ -223,6 +262,66 @@ class Phase1RuntimeTests(unittest.TestCase):
                 main()
             rows = json.loads(output_path.read_text(encoding="utf-8"))
         self.assertEqual(rows, [])
+
+    def test_main_writes_empty_results_for_missing_input_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "missing.json"
+            output_path = Path(tmpdir) / "results.json"
+            with patch.dict(
+                os.environ,
+                {"INPUT_PATH": str(input_path), "OUTPUT_PATH": str(output_path)},
+                clear=True,
+            ):
+                main()
+            rows = json.loads(output_path.read_text(encoding="utf-8"))
+        self.assertEqual(rows, [])
+
+    def test_task_telemetry_includes_timing_contract_fields(self):
+        required_fields = {
+            "task_id",
+            "route",
+            "route_reason",
+            "router_mode",
+            "prompt_token_estimate",
+            "task_elapsed_ms",
+            "classification_elapsed_ms",
+            "constraint_extraction_elapsed_ms",
+            "local_solver_elapsed_ms",
+            "validation_elapsed_ms",
+            "local_proof_elapsed_ms",
+            "trap_guard_elapsed_ms",
+            "cross_check_elapsed_ms",
+            "remote_elapsed_ms",
+            "normalization_elapsed_ms",
+            "batch_elapsed_ms_at_start",
+            "batch_elapsed_ms_at_finish",
+            "remaining_budget_ms",
+            "local_proof_layers_passed",
+            "local_proof_layers_failed",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "tasks.json"
+            output_path = Path(tmpdir) / "results.json"
+            log_path = Path(tmpdir) / "router.jsonl"
+            input_path.write_text(json.dumps([{"task_id": "ok", "prompt": "2+2"}]), encoding="utf-8")
+            with patch.dict(
+                os.environ,
+                {
+                    "INPUT_PATH": str(input_path),
+                    "OUTPUT_PATH": str(output_path),
+                    "ROUTER_LOG_PATH": str(log_path),
+                },
+                clear=True,
+            ):
+                main()
+            records = [
+                json.loads(line)
+                for line in log_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertEqual(len(records), 1)
+        self.assertTrue(required_fields.issubset(records[0]))
 
 
 if __name__ == "__main__":
