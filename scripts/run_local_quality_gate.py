@@ -64,6 +64,7 @@ def main():
         "eval/model_matrix.py",
         "eval/router_config_sweep.py",
         "scripts/check_eval_coverage.py",
+        "scripts/check_expected_routes.py",
         "scripts/check_docker_runtime.py",
         "scripts/compare_eval_reports.py",
         "scripts/run_phase1_acceptance.py",
@@ -77,6 +78,7 @@ def main():
     results.append(run([py, "scripts/check_eval_coverage.py"]))
     results.append(run([py, "scripts/check_eval_coverage.py", "eval/golden_tier_2_regression.jsonl", "--profile", "tier"]))
     results.append(run([py, "scripts/check_eval_coverage.py", "eval/golden_tier_3_adversarial.jsonl", "--profile", "tier"]))
+    results.append(run([py, "scripts/check_expected_routes.py", "--config", "strict_hybrid"]))
 
     local_env = os.environ.copy()
     local_env["INPUT_PATH"] = "local_test/input/tasks.json"

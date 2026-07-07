@@ -159,6 +159,7 @@ def run_scenario(config, scenario):
         "expected_route": expected_route,
         "expected_route_match": route_matches_expected(route, expected_route),
         "remote_mode_hint": scenario.get("remote_mode_hint"),
+        "remote_mode": result.remote_mode,
         "verifier": scenario.get("verifier"),
         "retry_policy": scenario.get("retry_policy"),
         "failure_taxonomy": scenario.get("failure_taxonomy", []),

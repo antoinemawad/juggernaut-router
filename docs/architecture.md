@@ -122,7 +122,8 @@ Performance rule: local verification must be bounded. A good default is a small 
 - Implemented first category-aware validator/proof gate for local outputs.
 - Checks category confidence, constraint extraction, risk threshold, solver confidence, category validation, format validation, trap guard, cheap cross-check, and proof-budget enforcement.
 - Rejects local answers that cannot be checked strongly enough for the selected router mode.
-- Current trap guards force ambiguous NER, weak/exact-summary tasks, sarcasm-style sentiment, and nontrivial code to Fireworks rather than accepting brittle local answers.
+- Current trap guards force ambiguous NER, weak/exact-summary tasks, sarcasm-style sentiment, multi-step math, incomplete logic, and nontrivial code to Fireworks rather than accepting brittle local answers.
+- Current cheap cross-checks independently reject missing NER mentions, semantically wrong simple code templates, and corrected-code answers that leave the known bug unfixed.
 - Planned expansion: richer relation graphs, tiny code micro-tests, summary key-term checks, and more adversarial trap guards.
 
 ### `app/normalization.py`
@@ -200,6 +201,7 @@ Timing fields must never be written to the official `/output/results.json`. They
 - Uses classifier output, structured local solver results, and validator proof gates to decide whether the task can stay local.
 - Calls Fireworks fallback when local confidence is too low or validation fails.
 - Must not call Fireworks for high-confidence deterministic/local answers.
+- Labels remote needs as `remote_concise`, `remote_accuracy`, `remote_format_strict`, or `remote_code` for downstream model/prompt selection.
 - Uses a programmable/configurable accuracy-gate target in local evaluation so the threshold can change without architecture changes.
 - Enforces English-only response policy. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - Should record a local router decision object for each task during experiments: `task_id`, category, classifier confidence, local solver confidence, validator result, route, selected model, prompt policy, `max_tokens`, token usage when available, latency, and route reason.
@@ -248,6 +250,15 @@ Final output must always be a valid JSON array of `{ "task_id": ..., "answer": .
 - Should include tests for router decision logging, answer normalization, Fireworks timeout handling, and no batch crash on an individual task failure.
 - Should verify every scenario logs category, risk score, risk components, route reason, remote mode, selected model, prompt policy, token metrics, latency, validator notes, and errors when present.
 - Should include production-readiness tests for input validation, structured routing result shape, normalization, optional telemetry, Fireworks invalid responses, missing `usage`, disallowed models, missing env vars, and Docker fixture IO.
+
+### `scripts/check_expected_routes.py`
+
+- Implemented expected-route assertion tool for the current recommended router config.
+- Runs the real router path with mocked Fireworks responses against `eval/model_matrix_scenarios.jsonl`.
+- Fails when a scenario route differs from its `expected_route`.
+- Fails when a remote-routed scenario's selected `remote_mode` differs from `remote_mode_hint`.
+- Includes selected `remote_mode` in JSON and Markdown evidence.
+- Writes `eval_runs/expected_routes_latest.json` and `eval_runs/expected_routes_latest.md` for review and demo evidence.
 
 ### `local_test/`
 

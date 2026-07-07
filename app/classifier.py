@@ -119,6 +119,8 @@ def _apply_trap_risk(lower: str, category: str, risk: dict[str, float]) -> None:
         risk["factual_freshness"] = max(risk["factual_freshness"], 0.75)
     if "for two months" in lower or "compound" in lower or "ranked by" in lower:
         risk["reasoning_depth"] = max(risk["reasoning_depth"], 0.55)
+    if ("discount" in lower and ("tax" in lower or "then" in lower or "after that" in lower)) or "also in the group" in lower:
+        risk["reasoning_depth"] = max(risk["reasoning_depth"], 0.55)
     if "if x is below" in lower or "otherwise" in lower or "sum of all numbers" in lower:
         risk["reasoning_depth"] = max(risk["reasoning_depth"], 0.55)
     if category in {"text_summarisation", "factual_knowledge"} and len(lower) > 400:

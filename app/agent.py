@@ -75,6 +75,7 @@ def answer_task(
             },
         )
 
+    remote_mode = _select_remote_mode(classification, local_result)
     remote = ask_fireworks_structured(prompt, config=config, deadline=deadline)
     timings.remote_elapsed_ms = remote.elapsed_ms
     normalize_timer = StageTimer()
@@ -89,7 +90,7 @@ def answer_task(
         category=classification.category,
         router_mode=config.router_mode,
         selected_model=remote.model,
-        remote_mode="remote_concise",
+        remote_mode=remote_mode,
         max_tokens=config.fireworks_max_tokens,
         prompt_token_estimate=prompt_token_estimate,
         completion_tokens=remote.completion_tokens,
@@ -143,3 +144,22 @@ def _remote_route_reason(local_result, validation, remote_error: str | None) -> 
     if validation.failed_layers:
         return "local_validation_failed:" + ",".join(validation.failed_layers)
     return "remote_selected"
+
+
+def _select_remote_mode(classification, local_result=None) -> str:
+    constraints = set(classification.constraints)
+    if classification.category in {"code_generation", "code_debugging"}:
+        return "remote_code"
+    if classification.risk_components.get("reasoning_depth", 0) >= 0.5:
+        return "remote_accuracy"
+    if classification.risk_components.get("factual_freshness", 0) >= 0.5:
+        return "remote_accuracy"
+    if classification.risk_components.get("ambiguity", 0) >= 0.5:
+        return "remote_accuracy"
+    if classification.category == "factual_knowledge" and local_result is None:
+        return "remote_accuracy"
+    if constraints & {"code_only", "entity_labels", "exact_numeric"}:
+        return "remote_format_strict"
+    if classification.risk_components.get("format_strictness", 0) >= 0.45:
+        return "remote_format_strict"
+    return "remote_concise"

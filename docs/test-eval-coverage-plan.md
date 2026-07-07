@@ -46,6 +46,14 @@ python3 scripts/check_eval_coverage.py eval/golden_tier_2_regression.jsonl --pro
 python3 scripts/check_eval_coverage.py eval/golden_tier_3_adversarial.jsonl --profile tier
 ```
 
+Assert planned routes for the current recommended config with:
+
+```bash
+python3 scripts/check_expected_routes.py --config strict_hybrid
+```
+
+This checks both `expected_route` and `remote_mode_hint`, then writes `eval_runs/expected_routes_latest.json` and `eval_runs/expected_routes_latest.md` for review/demo evidence.
+
 Run all current local non-Docker quality checks with:
 
 ```bash
@@ -200,7 +208,7 @@ Every eval row should include scenario metadata plus runtime decision data when 
 
 ## Required Test Types
 
-- Current Phase 2 implementation includes `tests/test_phase2_router.py` for classifier coverage, risk components, local no-Fireworks routing, risky remote routing, classifier-before-remote ordering, proof-budget rejection, near-deadline fallback behavior, ambiguous NER rejection, exact-summary rejection, sarcasm rejection, nontrivial-code rejection, real-router sweep rows, full-fixture expected-route assertions, route-match checks, ranking-order checks, and verifier-aware eval scoring.
+- Current Phase 2 implementation includes `tests/test_phase2_router.py` for classifier coverage, risk components, local no-Fireworks routing, risky remote routing, remote mode selection, classifier-before-remote ordering, proof-budget rejection, near-deadline fallback behavior, ambiguous NER rejection, exact-summary rejection, sarcasm rejection, multi-step math rejection, incomplete logic rejection, nontrivial-code rejection, NER/code/corrected-code cross-check failures, real-router sweep rows, full-fixture expected-route and remote-mode assertions, route-match checks, ranking-order checks, and verifier-aware eval scoring.
 - Unit tests for classifier risk components.
 - Unit tests for validators.
 - Unit tests for constraint extraction.

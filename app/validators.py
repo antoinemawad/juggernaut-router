@@ -103,7 +103,7 @@ def _answer_matches_category(prompt: str, answer: str, classification: Classific
     if category == "code_generation":
         return "def " in answer and _python_syntax_valid(answer)
     if category == "code_debugging":
-        return "def " in answer and "return a + b" in answer and _python_syntax_valid(_extract_code(answer))
+        return "def " in answer and _python_syntax_valid(_extract_code(answer))
     if category == "logical_deductive_reasoning":
         return len(answer.split()) <= 3
     if category == "text_summarisation":
@@ -137,9 +137,9 @@ def _trap_guard_passes(prompt: str, classification: ClassificationResult) -> boo
         return False
     if classification.category == "sentiment_classification" and ("sarcasm" in lower or "yeah right" in lower or "as if" in lower):
         return False
-    if classification.category == "mathematical_reasoning" and ("for two months" in lower or "compound" in lower):
+    if classification.category == "mathematical_reasoning" and _math_is_multistep(lower):
         return False
-    if classification.category == "logical_deductive_reasoning" and "ranked by" in lower:
+    if classification.category == "logical_deductive_reasoning" and _logic_is_incomplete_or_multistep(lower):
         return False
     if classification.category in {"code_generation", "code_debugging"} and _code_is_nontrivial(lower):
         return False
@@ -162,6 +162,16 @@ def _code_is_nontrivial(lower: str) -> bool:
     return any(marker in lower for marker in nontrivial_markers)
 
 
+def _math_is_multistep(lower: str) -> bool:
+    if "for two months" in lower or "compound" in lower:
+        return True
+    return "discount" in lower and ("tax" in lower or "then" in lower or "after that" in lower)
+
+
+def _logic_is_incomplete_or_multistep(lower: str) -> bool:
+    return "ranked by" in lower or "also in the group" in lower or "unknown" in lower
+
+
 def _cheap_cross_check_passes(
     prompt: str,
     solver_result: LocalSolverResult | None,
@@ -177,6 +187,47 @@ def _cheap_cross_check_passes(
         return answer.lower() in {"positive", "negative", "neutral"}
     if classification.category == "logical_deductive_reasoning" and "shortest" in lower:
         return answer.lower() == "carol"
+    if classification.category == "named_entity_recognition":
+        return _ner_cross_check_passes(prompt, answer)
+    if classification.category == "code_generation":
+        return _code_cross_check_passes(lower, answer)
+    if classification.category == "code_debugging":
+        return _corrected_code_cross_check_passes(lower, answer)
+    return True
+
+
+def _ner_cross_check_passes(prompt: str, answer: str) -> bool:
+    expected_mentions = []
+    content = prompt.split(":", 1)[1] if ":" in prompt else prompt
+    person_match = re.search(r"([A-Z][a-z]+\s+[A-Z][a-z]+)", content)
+    if person_match:
+        expected_mentions.append(person_match.group(1))
+    for marker in ("AMD", "OpenAI", "Google", "Microsoft", "Apple", "NVIDIA"):
+        if marker in content:
+            expected_mentions.append(marker)
+    location_match = re.search(r"\bin\s+([A-Z][a-z]+)\b", content)
+    if location_match:
+        expected_mentions.append(location_match.group(1))
+    date_match = re.search(
+        r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b",
+        content,
+    )
+    if date_match:
+        expected_mentions.append(date_match.group(0))
+    return all(mention in answer for mention in expected_mentions)
+
+
+def _code_cross_check_passes(lower_prompt: str, answer: str) -> bool:
+    if "function named is_even" in lower_prompt:
+        compact = re.sub(r"\s+", "", answer)
+        return "%2==0" in compact or "%2==0" in compact.replace("return", "")
+    return True
+
+
+def _corrected_code_cross_check_passes(lower_prompt: str, answer: str) -> bool:
+    if "add_numbers" in lower_prompt and "return a - b" in lower_prompt:
+        compact = re.sub(r"\s+", "", answer)
+        return "returna+b" in compact
     return True
 
 

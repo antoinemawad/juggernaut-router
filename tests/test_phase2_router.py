@@ -11,6 +11,7 @@ from app.solvers.basic import LocalSolverResult
 from app.validators import validate_local_answer
 from eval.model_matrix import DEFAULT_SCENARIOS, load_scenarios, score_answer
 from eval.router_config_sweep import DEFAULT_CONFIGS, route_matches_expected, run_scenario, summarize
+from scripts.check_expected_routes import check_routes, config_by_name
 
 
 class FakeClock:
@@ -125,6 +126,7 @@ class Phase2RouterTests(unittest.TestCase):
 
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.selected_model, "minimax-m3")
+        self.assertEqual(result.remote_mode, "remote_accuracy")
         self.assertEqual(captured["url"], "https://judge-proxy.example/v1/chat/completions")
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
 
@@ -162,6 +164,7 @@ class Phase2RouterTests(unittest.TestCase):
             )
 
         self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.remote_mode, "remote_format_strict")
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
 
     def test_sarcasm_sentiment_routes_remote(self):
@@ -213,6 +216,43 @@ class Phase2RouterTests(unittest.TestCase):
             )
 
         self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.remote_mode, "remote_code")
+        self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+
+    def test_multistep_discount_math_routes_remote(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse()):
+            result = answer_task(
+                "math",
+                "A product costs $80 and is discounted by 25%, then taxed at 10%. What is the final price?",
+            )
+
+        self.assertEqual(result.route, "fireworks")
+        self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+
+    def test_incomplete_logic_routes_remote_even_if_simple_pattern_matches(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse()):
+            result = answer_task(
+                "logic",
+                "Alice is taller than Bob. Bob is taller than Carol. Dave is also in the group. Who is the shortest?",
+            )
+
+        self.assertEqual(result.route, "fireworks")
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
 
     def test_local_proof_budget_exhaustion_rejects_local_answer(self):
@@ -228,6 +268,100 @@ class Phase2RouterTests(unittest.TestCase):
         )
         self.assertFalse(validation.accepted)
         self.assertIn("proof_budget", validation.failed_layers)
+
+    def test_ner_cross_check_rejects_missing_entity(self):
+        config = RuntimeConfig.from_env()
+        prompt = "Extract named entities and label them: Lisa Chen joined AMD in Austin on July 6, 2026."
+        classification = classify_prompt(prompt)
+        solver_result = LocalSolverResult(
+            "Lisa Chen: PERSON; AMD: ORG; July 6, 2026: DATE",
+            0.99,
+            "test_ner",
+            ("evidence",),
+        )
+        validation = validate_local_answer(
+            prompt=prompt,
+            classification=classification,
+            solver_result=solver_result,
+            config=config,
+            proof_elapsed_ms=1,
+        )
+        self.assertFalse(validation.accepted)
+        self.assertIn("cross_check", validation.failed_layers)
+
+    def test_code_cross_check_rejects_semantically_wrong_is_even(self):
+        config = RuntimeConfig(
+            input_path=RuntimeConfig.from_env().input_path,
+            output_path=RuntimeConfig.from_env().output_path,
+            router_mode="aggressive",
+            local_confidence_threshold=0.8,
+            fireworks_timeout_seconds=25,
+            fireworks_max_retries=0,
+            batch_deadline_seconds=600,
+            deadline_safety_margin_seconds=60,
+            remote_worker_count=1,
+            local_proof_budget_ms=100,
+            local_cross_check_enabled=True,
+            router_log_path=None,
+            fireworks_api_key=None,
+            fireworks_base_url=None,
+            allowed_models=(),
+            fireworks_max_tokens=256,
+        )
+        prompt = "Write a Python function named is_even that returns True if a number is even and False otherwise. Return only code."
+        classification = classify_prompt(prompt)
+        solver_result = LocalSolverResult(
+            "def is_even(n):\n    return n % 2 == 1",
+            0.99,
+            "test_code",
+            ("evidence",),
+        )
+        validation = validate_local_answer(
+            prompt=prompt,
+            classification=classification,
+            solver_result=solver_result,
+            config=config,
+            proof_elapsed_ms=1,
+        )
+        self.assertFalse(validation.accepted)
+        self.assertIn("cross_check", validation.failed_layers)
+
+    def test_corrected_code_cross_check_rejects_unfixed_bug(self):
+        config = RuntimeConfig(
+            input_path=RuntimeConfig.from_env().input_path,
+            output_path=RuntimeConfig.from_env().output_path,
+            router_mode="aggressive",
+            local_confidence_threshold=0.8,
+            fireworks_timeout_seconds=25,
+            fireworks_max_retries=0,
+            batch_deadline_seconds=600,
+            deadline_safety_margin_seconds=60,
+            remote_worker_count=1,
+            local_proof_budget_ms=100,
+            local_cross_check_enabled=True,
+            router_log_path=None,
+            fireworks_api_key=None,
+            fireworks_base_url=None,
+            allowed_models=(),
+            fireworks_max_tokens=256,
+        )
+        prompt = "Debug this Python code and provide the corrected implementation:\n\ndef add_numbers(a, b):\n    return a - b"
+        classification = classify_prompt(prompt)
+        solver_result = LocalSolverResult(
+            "def add_numbers(a, b):\n    return a - b",
+            0.99,
+            "test_debug",
+            ("evidence",),
+        )
+        validation = validate_local_answer(
+            prompt=prompt,
+            classification=classification,
+            solver_result=solver_result,
+            config=config,
+            proof_elapsed_ms=1,
+        )
+        self.assertFalse(validation.accepted)
+        self.assertIn("cross_check", validation.failed_layers)
 
     def test_deadline_suppressed_remote_still_returns_fallback(self):
         clock = FakeClock()
@@ -322,6 +456,13 @@ class Phase2RouterTests(unittest.TestCase):
                 mismatches.append((row["task_id"], row["expected_route"], row["route"], row["route_reason"]))
 
         self.assertEqual(mismatches, [])
+
+    def test_expected_route_script_rows_match_full_fixture(self):
+        rows = check_routes(config_by_name("strict_hybrid"), load_scenarios(DEFAULT_SCENARIOS))
+        self.assertEqual(len(rows), 16)
+        self.assertTrue(all(row["expected_route_match"] for row in rows))
+        self.assertTrue(all(row["remote_mode_match"] for row in rows))
+        self.assertTrue({"task_id", "expected_route", "actual_route", "route_reason", "remote_mode", "remote_mode_match"}.issubset(rows[0]))
 
     def test_router_sweep_ranking_prioritizes_accuracy_then_tokens(self):
         rows = [
