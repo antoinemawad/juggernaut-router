@@ -351,6 +351,20 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 
 ## Source-Backed Constraints for Experiments
 
+### Certified Local Proof Solver Expansion
+
+- Name: Certified Local Proof Solver Expansion
+- Date: July 8, 2026
+- Goal: Reduce scored Fireworks tokens without weakening the accuracy gate.
+- Strategy tested: Accept local answers only when deterministic solvers attach proof evidence and validators verify format/behavior. Added proof-backed exact arithmetic, stable ROCm/AMD Developer Cloud text, and executable Python templates.
+- Dataset: Core model matrix scenarios plus tier 2 and tier 3 golden fixtures.
+- Local solver coverage: Increased for exact arithmetic and executable code templates; ambiguous/current/exact-format tasks remain remote.
+- Fireworks calls required: Reduced in mock sweep.
+- Expected token impact: Latest `strict_hybrid` sweep estimated 382 total Fireworks tokens across 24 scenarios, with 62.5% local rate.
+- Accuracy observations: Sweep remained at 95.8% pass rate and 0.962 average score with 100% expected-route match.
+- Failure cases: Unsupported code prompts such as `merge_sorted` still route to Fireworks; current facts, sarcasm, ambiguous NER, and exact word-count summaries remain remote.
+- Decision: Keep certified local proofs enabled. Do not broaden local acceptance without executable proof or similarly strong validators.
+
 - Evaluation uses unseen variants; do not tune to exact public examples. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - Submissions are rate-limited to 10 per hour per team, so local and Docker testing must happen before repeated submission. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - Fireworks calls must use `FIREWORKS_BASE_URL` and models from `ALLOWED_MODELS`. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.

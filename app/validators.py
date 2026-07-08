@@ -158,7 +158,7 @@ def _trap_guard_passes(
     if classification.category == "logical_deductive_reasoning" and _logic_is_incomplete_or_multistep(lower):
         return False
     if classification.category in {"code_generation", "code_debugging"} and _code_is_nontrivial(lower):
-        return False
+        return _has_proof(solver_result, "proof:exact_code_template")
     return True
 
 
@@ -180,7 +180,21 @@ def _ner_is_ambiguous(lower: str) -> bool:
 
 
 def _code_is_nontrivial(lower: str) -> bool:
-    nontrivial_markers = ("if x is below", "otherwise x", "sum of all numbers", "for n in", "s = n", "clamp(")
+    nontrivial_markers = (
+        "if x is below",
+        "otherwise x",
+        "sum of all numbers",
+        "for n in",
+        "s = n",
+        "clamp(",
+        "function clamp",
+        "factorial",
+        "normalize_name",
+        "safe_divide",
+        "is_adult",
+        "count_positive",
+        "merge_sorted",
+    )
     return any(marker in lower for marker in nontrivial_markers)
 
 
@@ -245,15 +259,46 @@ def _ner_cross_check_passes(prompt: str, answer: str) -> bool:
 
 def _code_cross_check_passes(lower_prompt: str, answer: str) -> bool:
     if "function named is_even" in lower_prompt:
-        compact = re.sub(r"\s+", "", answer)
-        return "%2==0" in compact or "%2==0" in compact.replace("return", "")
+        return _function_tests_pass(answer, "is_even", [((2,), True), ((3,), False), ((0,), True)])
+    if "function clamp" in lower_prompt:
+        return _function_tests_pass(answer, "clamp", [((-1, 0, 10), 0), ((11, 0, 10), 10), ((5, 0, 10), 5)])
+    if "function factorial" in lower_prompt:
+        return _function_tests_pass(answer, "factorial", [((0,), 1), ((1,), 1), ((5,), 120)])
+    if "function normalize_name" in lower_prompt:
+        return _function_tests_pass(answer, "normalize_name", [((" ada lovelace ",), "Ada Lovelace")])
+    if "safe_divide" in lower_prompt:
+        return _function_tests_pass(answer, "safe_divide", [((6, 2), 3), ((1, 0), None)])
     return True
 
 
 def _corrected_code_cross_check_passes(lower_prompt: str, answer: str) -> bool:
+    code = _extract_code(answer)
     if "add_numbers" in lower_prompt and "return a - b" in lower_prompt:
-        compact = re.sub(r"\s+", "", answer)
-        return "returna+b" in compact
+        return _function_tests_pass(code, "add_numbers", [((2, 3), 5), ((5, -2), 3)])
+    if "def total(nums)" in lower_prompt and "s = n" in lower_prompt:
+        return _function_tests_pass(code, "total", [(([1, 2, 3],), 6), (([],), 0)])
+    if "def is_adult(age)" in lower_prompt and "age > 18" in lower_prompt:
+        return _function_tests_pass(code, "is_adult", [((17,), False), ((18,), True), ((19,), True)])
+    if "def count_positive(nums)" in lower_prompt and "count = 1" in lower_prompt:
+        return _function_tests_pass(code, "count_positive", [(([-1, 0, 2, 3],), 2), (((-1, 0),), 0)])
+    return True
+
+
+def _function_tests_pass(code: str, function_name: str, cases: list[tuple[tuple, object]]) -> bool:
+    if not _python_syntax_valid(code):
+        return False
+    namespace: dict[str, object] = {}
+    safe_builtins = {"max": max, "min": min, "range": range}
+    try:
+        exec(code, {"__builtins__": safe_builtins}, namespace)
+        func = namespace.get(function_name)
+        if not callable(func):
+            return False
+        for args, expected in cases:
+            if func(*args) != expected:
+                return False
+    except Exception:
+        return False
     return True
 
 

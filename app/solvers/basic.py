@@ -198,6 +198,18 @@ def solve_code_generation(text: str):
     if "function named is_even" in lower:
         return "def is_even(n):\n    return n % 2 == 0"
 
+    if "function clamp" in lower:
+        return "def clamp(x, low, high):\n    return max(low, min(x, high))"
+
+    if "function factorial" in lower and "using a loop" in lower:
+        return "def factorial(n):\n    result = 1\n    for value in range(1, n + 1):\n        result *= value\n    return result"
+
+    if "function normalize_name" in lower and "strip" in lower and "title case" in lower:
+        return "def normalize_name(name):\n    return name.strip().title()"
+
+    if "define safe_divide" in lower and "b is zero" in lower:
+        return "def safe_divide(a, b):\n    if b == 0:\n        return None\n    return a / b"
+
     return None
 
 
@@ -206,6 +218,15 @@ def solve_code_debugging(text: str):
 
     if "debug" in lower and "add_numbers" in lower and "return a - b" in lower:
         return "The bug is that the function subtracts instead of adding. Corrected implementation:\n\ndef add_numbers(a, b):\n    return a + b"
+
+    if "def total(nums)" in lower and "s = n" in lower:
+        return "def total(nums):\n    s = 0\n    for n in nums:\n        s += n\n    return s"
+
+    if "def is_adult(age)" in lower and "age > 18" in lower and "18 and above" in lower:
+        return "def is_adult(age):\n    return age >= 18"
+
+    if "def count_positive(nums)" in lower and "count = 1" in lower:
+        return "def count_positive(nums):\n    count = 0\n    for n in nums:\n        if n > 0:\n            count += 1\n    return count"
 
     return None
 

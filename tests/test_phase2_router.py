@@ -342,7 +342,7 @@ class Phase2RouterTests(unittest.TestCase):
             mocked_remote.return_value = FireworksResult(answer="def clamp(x, low, high):\n    return max(low, min(x, high))", model="minimax-m3")
             result = answer_task(
                 "code",
-                "Write a Python function clamp(x, low, high) that returns low if x is below low, high if x is above high, otherwise x. Return only code.",
+                "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
                 config=config,
             )
 
@@ -368,7 +368,7 @@ class Phase2RouterTests(unittest.TestCase):
         ), patch("urllib.request.urlopen", fake_urlopen):
             result = answer_task(
                 "code",
-                "Write a Python function clamp(x, low, high) that returns low if x is below low, high if x is above high, otherwise x. Return only code.",
+                "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
             )
 
         self.assertEqual(result.route, "fireworks")
@@ -386,12 +386,32 @@ class Phase2RouterTests(unittest.TestCase):
             )
             result = answer_task(
                 "code",
-                "Write a Python function clamp(x, low, high) that returns low if x is below low, high if x is above high, otherwise x. Return only code.",
+                "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
             )
 
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.remote_mode, "remote_code")
         self.assertEqual(result.answer, "def clamp(x, low, high):\n    return max(low, min(x, high))")
+
+    def test_certified_code_templates_use_local_proof(self):
+        prompts = {
+            "clamp": "Write a Python function clamp(x, low, high) that returns low if x is below low, high if x is above high, otherwise x. Return only code.",
+            "factorial": "Write a Python function factorial(n) that multiplies numbers from 1 through n using a loop. Return only code.",
+            "normalize_name": "Write a Python function normalize_name(name) that strips surrounding whitespace and converts the result to title case. Return only code.",
+            "safe_divide": "Write Python code only: define safe_divide(a, b) returning None when b is zero, otherwise a / b. Do not import anything.",
+            "total": "Debug this Python function. Return only corrected code:\n\ndef total(nums):\n    s = 0\n    for n in nums:\n        s = n\n    return s",
+            "is_adult": "Return only corrected code:\n\ndef is_adult(age):\n    return age > 18\n\nThe function should return True for age 18 and above.",
+            "count_positive": "Return only corrected code:\n\ndef count_positive(nums):\n    count = 0\n    for n in nums:\n        if n > 0:\n            count = 1\n    return count",
+        }
+
+        for name, prompt in prompts.items():
+            with self.subTest(name=name), patch("app.agent.ask_fireworks_structured") as mocked_remote:
+                result = answer_task(name, prompt)
+
+            mocked_remote.assert_not_called()
+            self.assertEqual(result.route, "local")
+            self.assertIn("proof:exact_code_template", result.metadata["local_evidence"])
+            self.assertFalse(result.metadata["local_proof_layers_failed"])
 
     def test_multistep_discount_math_uses_certified_local_proof(self):
         with patch("app.agent.ask_fireworks_structured") as mocked_remote:
@@ -777,7 +797,18 @@ class Phase2RouterTests(unittest.TestCase):
 
     def test_router_sweep_validation_escalation_records_extra_remote_cost(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "gemma_first_router_with_validation_escalation")
-        scenario = next(item for item in load_scenarios(DEFAULT_SCENARIOS) if item["task_id"] == "codegen_factorial")
+        scenario = {
+            "task_id": "codegen_merge_sorted",
+            "category": "code_generation",
+            "difficulty": "medium",
+            "scenario_class": "adversarial",
+            "prompt": "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+            "expected_keywords": ["def merge_sorted", "sorted", "return"],
+            "expected_answer": "def merge_sorted(a, b):\n    return sorted(a + b)",
+            "expected_route": "remote_code",
+            "constraints": ["code_only"],
+            "verifier": "python_syntax",
+        }
 
         row = run_scenario(config, scenario)
 
@@ -790,7 +821,18 @@ class Phase2RouterTests(unittest.TestCase):
 
     def test_router_sweep_supports_category_prompt_policy_overrides(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid_kimi_prompt_evidence")
-        scenario = next(item for item in load_scenarios(DEFAULT_SCENARIOS) if item["task_id"] == "codegen_factorial")
+        scenario = {
+            "task_id": "codegen_merge_sorted",
+            "category": "code_generation",
+            "difficulty": "medium",
+            "scenario_class": "adversarial",
+            "prompt": "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+            "expected_keywords": ["def merge_sorted", "sorted", "return"],
+            "expected_answer": "def merge_sorted(a, b):\n    return sorted(a + b)",
+            "expected_route": "remote_code",
+            "constraints": ["code_only"],
+            "verifier": "python_syntax",
+        }
 
         row = run_scenario(config, scenario)
 
