@@ -1,19 +1,21 @@
 # Implementation Phases
 
-Purpose: define the exact implementation order for moving from planning/eval scaffolding to a competitive Track 1 runtime.
+Purpose: define the exact implementation order for moving from a passing Track 1 runtime to a competitive, evidence-backed final submission.
 
-This is the execution spine for the project. Each phase has a clear objective, dependencies, deliverables, tests, exit criteria, quality bar, trace artifacts, and non-goals.
+This plan reflects the clarified scoring rule: final rank is driven by Fireworks token usage through the injected `FIREWORKS_BASE_URL`, using only models from `ALLOWED_MODELS`, after meeting the accuracy threshold. Local inference is optional and untracked as Fireworks token usage, but it can still hurt final output quality, routing decisions, image size, startup time, and runtime reliability.
 
 ## Global Engineering Rules
 
 - Keep the submitted runtime CPU-safe unless organizers explicitly confirm final GPU access.
 - Keep `/output/results.json` minimal: only `task_id` and `answer`.
-- Keep all remote inference behind `FIREWORKS_BASE_URL`.
-- Keep model selection constrained to runtime `ALLOWED_MODELS`.
+- Keep all scored Fireworks calls behind `FIREWORKS_BASE_URL`.
+- Keep scored model selection constrained to runtime `ALLOWED_MODELS`.
 - Prefer accuracy over token reduction until the accuracy gate is safe.
-- Treat the 10-minute container runtime as total wall-clock time from process start, including startup/import/input/output time, and reserve safety time for writing valid output.
+- Treat the 10-minute container runtime as total wall-clock time from process start, including startup/import/input/output time.
 - Treat the 60-second startup rule as a stricter sub-budget inside the 10-minute total unless official harness behavior proves otherwise.
-- Do not promote a router behavior unless it has a test, a scenario, and a log/report path.
+- Keep the compressed Docker image under 10GB.
+- Do not bundle large local LLM weights unless measured benefit and image/runtime safety justify it.
+- Do not promote a router behavior unless it has a test, scenario, log/report path, and rollback path.
 - Do not expand live Fireworks spend until the local quality gate passes.
 
 ## Global Quality Gates
@@ -25,455 +27,253 @@ python3 scripts/run_local_quality_gate.py
 python3 scripts/validate_submission_io.py local_test/output/results.json
 ```
 
+After this plan update, Phase 1 must be rerun with:
+
+```bash
+python3 -m unittest discover -s tests
+python3 scripts/check_submission_static.py
+INPUT_PATH=local_test/input/tasks.json OUTPUT_PATH=local_test/output/results_check.json python3 -m app.main
+python3 scripts/validate_submission_io.py local_test/output/results_check.json
+```
+
 Before official submission, also run Docker:
 
 ```bash
-docker build -t juggernaut-router:local .
+docker buildx build --platform linux/amd64 --tag juggernaut-router:local --load .
 docker run --rm -v "$PWD/local_test/input:/input:ro" -v "$PWD/local_test/output:/output" juggernaut-router:local
 python3 scripts/validate_submission_io.py local_test/output/results.json
+python3 scripts/check_docker_runtime.py
 ```
 
 ## Phase Dependencies
 
 | Phase | Depends On | Unlocks |
 | --- | --- | --- |
-| Phase 0 | none | measurable planning baseline |
-| Phase 1 | Phase 0 | safe runtime for all later work |
-| Phase 2 | Phase 1 | real local-first routing |
-| Phase 3 | Phase 2, with Phase 1 stable | official config comparisons |
-| Phase 4 | Phase 1 plus selected Phase 2/3 features | live eval and official submissions |
+| Phase 1 | none | safe official IO/runtime contract |
+| Phase 2 | Phase 1 | measurable mock/golden routing quality |
+| Phase 3 | Phase 2 | live Fireworks model evidence |
+| Phase 4 | Phase 3 | optimized router and local inference decision |
+| Phase 5 | Phase 4 | judge-safe Docker image |
+| Phase 6 | Phase 5 | final evidence package and presentation/demo proof |
 
-## Phase 0: Planning and Eval Foundation
+## Phase 1: Local Runtime Contract
 
-Status: mostly complete.
+Status: completed once, but rerun required after this plan update.
 
-Objective: make the strategy measurable before changing runtime behavior.
+Purpose: prove the app runs correctly with the official input/output contract.
 
-Deliverables:
+Include:
 
-- source-backed requirements docs,
-- elite routing plan,
-- test/eval coverage plan,
-- model matrix harness,
-- router config sweep harness,
-- AMD Notebook checkpoint,
-- local quality gate script.
+- unit tests,
+- official `/input/tasks.json` to `/output/results.json` smoke test,
+- output schema validation,
+- static submission guard,
+- validation-after-answer pipeline check,
+- local fallback behavior check,
+- no hardcoded secrets/API URLs check,
+- confirmation that Fireworks calls use `FIREWORKS_BASE_URL`,
+- confirmation that scored Fireworks calls use only `ALLOWED_MODELS`,
+- confirmation that local-only paths still work without `FIREWORKS_API_KEY` when remote calls are not needed,
+- confirmation that Gemma model names are configurable and restricted to allowed models,
+- confirmation that Native.Builder is not required at runtime.
+
+Required rerun:
+
+```bash
+python3 -m unittest discover -s tests
+python3 scripts/check_submission_static.py
+INPUT_PATH=local_test/input/tasks.json OUTPUT_PATH=local_test/output/results_check.json python3 -m app.main
+python3 scripts/validate_submission_io.py local_test/output/results_check.json
+```
+
+Exit criteria:
+
+- all required checks pass,
+- final output objects contain only `task_id` and `answer`,
+- local-only tasks can complete without Fireworks credentials,
+- missing Fireworks env vars fail closed when remote calls are needed,
+- no Native.Builder dependency exists in the runtime path.
+
+## Phase 2: Mock/Golden Routing Quality
+
+Purpose: prove routing logic before live Fireworks evaluation.
+
+Include:
+
+- router scorecard with pass rate, correctness, estimated Fireworks input tokens, output tokens, total tokens, local route/inference usage if present, Gemma selection rate, Gemma skip rate, Gemma escalation rate, fallback rate, latency, and format failure rate,
+- task taxonomy for Fireworks model routing: `cheap_model_safe`, `mid_model_required`, `strong_model_required`, `code_model_required`, `reasoning_model_required`, `structured_output_sensitive`, `ambiguous_or_high_risk`, `gemma_safe`, `gemma_risky`, `gemma_bonus_candidate`,
+- confidence-based routing with selected route/model, confidence, reason, fallback behavior, and whether Gemma was attempted, skipped, or escalated from,
+- validation-after-answer for local outputs, Fireworks outputs, normalization, and escalation on invalid output,
+- golden regression tests,
+- router config sweep,
+- failure-case review loop with task id, expected model/category, actual model/category, failure type, root cause, fix, fixed/not fixed status, and Gemma-specific note when relevant.
 
 Required checks:
 
 ```bash
 python3 scripts/check_eval_coverage.py
-python3 eval/model_matrix.py --prompt-policies all
+python3 scripts/check_expected_routes.py --config strict_hybrid
+python3 scripts/check_expected_routes.py --config strict_hybrid --scenarios eval/golden_tier_2_regression.jsonl
+python3 scripts/check_expected_routes.py --config strict_hybrid --scenarios eval/golden_tier_3_adversarial.jsonl
 python3 eval/router_config_sweep.py --accuracy-threshold 0.85
-INPUT_PATH=local_test/input/tasks.json OUTPUT_PATH=local_test/output/results.json python3 -m app.main
-python3 scripts/validate_submission_io.py local_test/output/results.json
+python3 eval/model_matrix.py --prompt-policies all
 ```
 
-Quality bar:
+Exit criteria:
 
-- scenario metadata covers all 8 Track 1 categories,
-- model matrix and router sweep both write JSONL plus markdown reports,
-- docs clearly separate implemented, planned, and open-question behavior.
-
-Trace artifacts:
-
-- latest `eval_runs/model_matrix_*.md`,
-- latest `eval_runs/router_sweep_*.md`,
-- `docs/test-eval-coverage-plan.md`,
-- `docs/strategy-plan.md`.
-
-Definition of done:
-
-- all required checks pass,
-- local quality gate exists and passes,
-- branch is pushed.
-
-Non-goals:
-
-- no live Fireworks matrix required,
-- no real classifier required,
-- no Docker push required.
-
-## Phase 1: Production-Safe Runtime
-
-Objective: make the submitted container hard to break before making the router smarter.
-
-Deliverables:
-
-- `app/config.py`
-- `app/types.py`
-- `app/normalization.py`
-- `app/telemetry.py`
-- `app/deadline.py`
-- hardened `app/main.py`
-- hardened `app/fireworks_client.py`
-- Docker runtime guard script,
-- structured internal result from `app/agent.py`
-
-Implementation requirements:
-
-- validate `/input/tasks.json` is a JSON array,
-- tolerate malformed task items without crashing the batch,
-- always write valid `/output/results.json` for recoverable failures,
-- keep final output objects limited to `task_id` and `answer`,
-- support `ROUTER_MODE`,
-- support `LOCAL_CONFIDENCE_THRESHOLD`,
-- support `FIREWORKS_TIMEOUT_SECONDS`,
-- support `FIREWORKS_MAX_RETRIES`,
-- support `BATCH_DEADLINE_SECONDS`,
-- support `DEADLINE_SAFETY_MARGIN_SECONDS`,
-- support `REMOTE_WORKER_COUNT`,
-- support `LOCAL_PROOF_BUDGET_MS`,
-- support `LOCAL_CROSS_CHECK_ENABLED`,
-- support optional `ROUTER_LOG_PATH`,
-- never log secrets,
-- handle missing Fireworks env vars gracefully when remote fallback is needed,
-- handle Fireworks timeout, HTTP error, invalid JSON, missing `choices`, missing `usage`, and disallowed models.
-- start a monotonic batch timer early in `main.py`,
-- include startup/import/config/input-read time in deadline accounting where practical,
-- keep startup work below the 60-second startup sub-budget,
-- suppress remote retries when remaining time is too low,
-- always leave enough time to normalize answers and write `/output/results.json`,
-- keep per-call Fireworks timeout below the 30-second response ceiling.
-
-Required tests/checks:
-
-- malformed JSON input,
-- non-array JSON input,
-- missing `task_id`,
-- missing `prompt`,
-- non-string prompt,
-- missing Fireworks env vars,
-- Fireworks timeout mock,
-- Fireworks invalid JSON mock,
-- output normalization for empty/non-string answers,
-- telemetry JSONL writes when `ROUTER_LOG_PATH` is set,
-- telemetry excludes API keys/secrets,
-- telemetry includes task timing metrics for local, remote, fallback, and error paths,
-- telemetry does not add timing fields to official `/output/results.json`,
-- deadline manager remaining-time tests with a fake clock,
-- startup budget accounting test,
-- no-retry-near-deadline test,
-- agent-level near-deadline remote suppression before Fireworks payload construction,
-- valid-output-near-deadline test,
-- remote timeout remains below per-response ceiling,
-- local proof budget config parsing test,
-- static submission guard for forbidden Fireworks URL hardcoding, tracked secrets/env files, Dockerfile scope, and ignore rules,
-- Docker runtime guard command is available and documented,
-- `python3 scripts/run_local_quality_gate.py`,
-- `python3 scripts/run_phase1_acceptance.py`,
-- `python3 scripts/run_phase1_acceptance.py --include-docker` when Docker Desktop is available.
-
-Quality bar:
-
-- every recoverable failure produces valid final JSON,
-- no exception from one task prevents later tasks from completing,
-- no deadline path can prevent `/output/results.json` from being written,
-- Fireworks errors are sanitized,
-- telemetry is optional and never changes official output,
-- quality gate summary is produced for evidence.
-
-Trace artifacts:
-
-- quality gate output,
-- `eval_runs/phase1_acceptance_latest.json`,
-- malformed-input test output,
-- deadline-near-exhaustion test output,
-- sanitized telemetry example,
-- updated submission checklist.
-
-Definition of done:
-
-- all required tests/checks pass,
-- no recoverable single-task failure can prevent valid final JSON,
-- local quality gate passes,
-- Phase 1 acceptance report is produced,
-- Docker smoke/size guard command is ready to run and passes before Docker-dependent work.
-
-Stop rules:
-
-- stop Phase 2 work if final JSON can be malformed,
-- stop Phase 2 work if missing Fireworks env crashes the batch,
-- stop Phase 2 work if a timeout/retry path can consume the whole 10-minute budget,
-- stop Phase 2 work if telemetry can leak secrets.
-
-Non-goals:
-
-- no full risk engine yet,
-- no broad local proof system yet,
-- no live Fireworks optimization yet.
-
-## Phase 2: Real Local-First Router
-
-Objective: replace solver-first routing with classifier/risk/validator routing.
-
-Current status:
-
-- first implementation slice is complete,
-- `app/classifier.py` classifies the 8 Track 1 categories locally before any Fireworks call,
-- `app/classifier.py` flags sarcasm-style ambiguity, multi-step math, incomplete logic, and nontrivial code/reasoning markers,
-- `app/solvers/basic.py` returns structured local solver results internally and keeps stable CPU/GPU explanations local when proof layers pass,
-- `app/validators.py` gates local answers through the first proof ladder,
-- `app/validators.py` rejects weak local summaries, ambiguous NER, sarcasm-style sentiment, multi-step math, incomplete logic, and nontrivial code through trap guards,
-- `app/validators.py` cross-checks simple NER mentions, simple code-generation semantics, and corrected-code fixes before local acceptance,
-- `app/agent.py` now accepts local answers only when validator/proof layers pass,
-- `app/agent.py` now labels remote needs as `remote_concise`, `remote_accuracy`, `remote_format_strict`, or `remote_code`,
-- `app/agent.py` now selects prompt policy by remote mode: compact for concise, answer-only for code/format, original for accuracy,
-- `app/agent.py` passes remote-mode model preferences and `app/fireworks_client.py` enforces that selected models are still in `ALLOWED_MODELS`,
-- `app/normalization.py` extracts fenced or prose-wrapped Python for code-only remote answers before writing official output,
-- `app/normalization.py` also cleans constrained exact-numeric, label, and entity-list outputs so verbose remote answers do not violate answer-only formats,
-- `eval/router_config_sweep.py` now exercises the real router with mocked Fireworks responses,
-- `scripts/check_expected_routes.py` asserts full-fixture expected routes and remote-mode hints, then writes route/mode/prompt-policy evidence to `eval_runs/expected_routes_latest.{json,md}`,
-- latest mock sweep recommends `strict_hybrid` with 100% pass rate, 100% expected-route match, and fewer tokens than always-Fireworks,
-- `tests/test_phase2_router.py` covers classifier categories, risk components, local no-Fireworks routing, stable CPU/GPU local factual routing, remote fallback through the wrapper, remote mode selection, preferred model selection, remote code/numeric/label/entity cleanup, proof-budget rejection, classifier-before-remote ordering, ambiguous NER rejection, exact-summary rejection, sarcasm rejection, multi-step math rejection, incomplete logic rejection, nontrivial-code rejection, NER/code/corrected-code cross-check failures, real-router sweep rows, full-fixture expected-route and remote-mode assertions, ranking order, and verifier-aware scoring.
-
-Deliverables:
-
-- `app/classifier.py`
-- `app/validators.py`
-- structured local solver results,
-- intent and constraint extraction,
-- answer-shape detection,
-- local proof metadata,
-- trap guard layer,
-- cheap cross-check layer,
-- local proof elapsed-time tracking,
-- task timing and input/output size metrics in router decision logs,
-- expected route assertions in eval/test fixtures.
-
-Implementation requirements:
-
-- classifier runs before any Fireworks call,
-- classifier emits category, confidence, answer shape, constraints, and risk components,
-- local solvers return structured results, not raw strings,
-- validators check local answers before acceptance,
-- local route is allowed only when category confidence, constraint extraction, risk threshold, solver confidence, independent validator, format validator, trap guard, cheap cross-check, and local proof budget all pass,
-- trap guards reject known unsafe local patterns such as sarcasm, mixed sentiment, incomplete logic, multi-step math, current/live factual claims, ambiguous entities, and nontrivial code,
-- cheap cross-checks run only when they are deterministic and within the local proof budget,
-- risky or unsupported tasks route to Fireworks,
-- final answer still passes normalization.
-
-Required tests/checks:
-
-- classifier category coverage for all 8 categories,
-- risk component coverage,
-- local high-confidence tasks do not call Fireworks,
-- risky tasks call Fireworks wrapper,
-- expected route assertions pass for scenario fixtures,
-- validators reject weak local answers,
-- trap guards reject false-local adversarial fixtures,
-- cross-check failures force Fireworks routing,
-- local proof budget exhaustion forces Fireworks routing or safe fallback,
-- local accepted answers include proof/evidence metadata,
-- router decision logs include per-stage elapsed times,
-- `python3 scripts/check_expected_routes.py --config strict_hybrid` with 100% route and remote-mode hint matches,
-- local quality gate passes.
-
-Remaining expansion tests:
-
-- richer validator rejection tests for nontrivial code and broader summary/NER variants,
-- additional cheap cross-check failure fixtures for summaries when local summary acceptance is re-enabled.
-
-Quality bar:
-
-- local answers are accepted only with proof/validator support,
-- extra local proof checks improve acceptance precision without threatening the 10-minute runtime budget,
+- expected route and remote-mode checks pass on core/regression/adversarial fixtures,
+- route changes are explainable,
 - unsafe local acceptance is treated as a blocking bug,
-- expected-route mismatches are explainable and logged,
-- router sweep uses actual route decisions.
+- mock/golden reports contain enough metrics to compare token-saving and accuracy tradeoffs.
 
-Trace artifacts:
+## Phase 3: Live Fireworks Model Matrix
 
-- router decision JSONL,
-- expected-route assertion report,
-- updated router sweep report,
-- examples of local accept and Fireworks fallback.
+Purpose: identify the cheapest sufficient Fireworks model per task category.
 
-Definition of done:
+Include:
 
-- real router decisions are visible in logs,
-- router config sweep uses actual router routes instead of only simulated routes,
-- local acceptance is validator-gated,
-- no regression in output JSON shape.
-
-Stop rules:
-
-- stop Phase 3 work if local overconfidence appears in adversarial scenarios,
-- stop Phase 3 work if classifier can call Fireworks directly,
-- stop Phase 3 work if route decisions are not logged in eval/dev mode.
-
-Non-goals:
-
-- no need for every planned validator to be perfect,
-- no need for full live model matrix,
-- no official submission until Phase 1 remains stable.
-
-## Phase 3: Remote Modes and Configurable Router Modes
-
-Objective: make official submissions comparable and measurable.
-
-Deliverables:
-
-- `conservative`, `balanced`, and `aggressive` runtime modes,
-- `remote_concise`,
-- `remote_accuracy`,
-- `remote_format_strict`,
-- `remote_code`,
-- category/model/prompt/`max_tokens` config map,
-- one-retry policy for fixable format failures,
-- post-Fireworks output verification.
-
-Implementation requirements:
-
-- every remote call selects only from runtime `ALLOWED_MODELS`,
-- remote mode is selected from category, answer shape, constraints, and risk,
-- retry count is capped by `FIREWORKS_MAX_RETRIES`,
-- retry eligibility is also capped by remaining batch time,
-- remote-needed tasks may use a bounded worker pool so independent Fireworks calls can finish faster without changing token usage,
-- worker count must be configurable and conservative by default,
-- retry happens only for fixable verification failures,
-- retry reason is logged,
-- prompt policy is logged,
-- selected model is logged,
-- token usage is logged when available.
-
-Required tests/checks:
-
-- router mode comparison on identical scenarios,
-- remote mode selection tests,
-- format-strict retry test,
-- no retry on non-fixable semantic failure,
-- disallowed model test,
-- missing `usage` fallback test,
-- selected model is always in `ALLOWED_MODELS`,
-- local quality gate passes.
-
-Quality bar:
-
-- conservative mode should be accuracy-biased,
-- aggressive mode should never bypass validators,
-- balanced mode should be the default candidate unless evidence says otherwise,
-- retry policy is bounded and explainable,
-- token-saving changes must not lower pass rate in local eval.
-
-Trace artifacts:
-
-- router config sweep report,
-- remote mode comparison report,
-- retry/failure examples,
-- selected config note in `docs/official-submission-log.md`.
-
-Definition of done:
-
-- router config sweep compares real conservative/balanced/aggressive behavior,
-- reports show local route rate, pass rate, and token estimates by config,
-- remote mode logs are inspectable,
-- one retry policy is bounded and tested.
-
-Stop rules:
-
-- stop live spend if selected model can fall outside `ALLOWED_MODELS`,
-- stop official submission if retry can loop,
-- stop token optimization if local pass rate drops below threshold.
-
-Non-goals:
-
-- no uncontrolled live spend,
-- no official submission without Docker smoke.
-
-## Phase 4: Live Evaluation and Submission Optimization
-
-Objective: use Fireworks credits and official submissions as controlled feedback.
-
-Deliverables:
-
-- tiny live Fireworks smoke result,
-- selected live model/prompt slices,
-- Docker smoke proof,
-- public linux/amd64 image,
-- official submission attempt log,
-- final selected router config.
-
-Implementation requirements:
-
-- all live calls go through `FIREWORKS_BASE_URL`,
-- live runs use only `ALLOWED_MODELS`,
-- no API keys in logs,
-- official submissions change one major variable at a time,
-- official result is recorded before another attempt.
+- validate `FIREWORKS_API_KEY`,
+- validate `FIREWORKS_BASE_URL`,
+- run tiny live smoke test first,
+- run live matrix across all `ALLOWED_MODELS`: `minimax-m3`, `kimi-k2p7-code`, `gemma-4-31b-it`, `gemma-4-26b-a4b-it`, `gemma-4-31b-it-nvfp4`,
+- compare prompt policies: `original`, `compact`, `answer_only`,
+- measure accuracy, Fireworks input tokens, Fireworks output tokens, total Fireworks tokens, latency, format failures, and category performance for each model/prompt/category,
+- add Gemma-specific matrix for accuracy by category, token usage by category, cheapest-sufficient categories, failure categories, default-suitable cases, skip cases, and try-first-then-escalate cases,
+- assign cheapest sufficient model per category, including simple/cheap-safe, code, reasoning, summarization, structured output, fallback/general, Gemma-safe, and Gemma-risky tasks,
+- record live failure cases.
 
 Required checks:
 
 ```bash
-python3 scripts/run_local_quality_gate.py
-docker build -t juggernaut-router:local .
-docker run --rm -v "$PWD/local_test/input:/input:ro" -v "$PWD/local_test/output:/output" juggernaut-router:local
-python3 scripts/validate_submission_io.py local_test/output/results.json
+python3 scripts/check_live_eval_env.py --print-models
+python3 eval/model_matrix.py --live --limit 2 --models minimax-m3 --prompt-policies original
+python3 eval/model_matrix.py --live --prompt-policies all
 ```
 
-Quality bar:
+Exit criteria:
 
-- official submission candidate has local evidence,
-- Docker image is reproducible,
-- live runs are staged by budget plan,
-- every official attempt has a one-variable hypothesis.
+- token fields and latency fields are sane,
+- live calls go through `FIREWORKS_BASE_URL`,
+- all model choices are present in `ALLOWED_MODELS`,
+- matrix reports can support cheapest-sufficient model decisions.
 
-Trace artifacts:
+## Phase 4: Router Optimization and Local Inference Impact Tests
 
-- Docker smoke output,
-- selected live eval report,
-- image tag/digest,
-- `docs/official-submission-log.md`,
-- final selected router config.
+Purpose: optimize Fireworks token usage and explicitly test whether local inference helps or hurts output quality.
 
-Definition of done:
+Do not assume local inference helps. Test it.
 
-- Docker image is public and pullable,
-- image includes linux/amd64 manifest,
-- final output JSON validates,
-- selected router config has local evidence,
-- official submission log is updated.
+### Part A: Fireworks Cost Router Optimization
 
-Stop rules:
+Include:
 
-- stop official submissions if Docker pull/run fails,
-- stop official submissions if output JSON is malformed,
-- stop official submissions if calls bypass `FIREWORKS_BASE_URL`,
-- stop live expansion if token fields or response schema look wrong.
+- build cheapest-sufficient Fireworks model selection policy,
+- use Phase 3 live results to assign models per task category,
+- make Gemma the default candidate for medium/general tasks only if live data supports it,
+- add compact prompts where safe,
+- add `answer_only` prompts where safe,
+- add escalation to stronger Fireworks models when validation fails or confidence is low,
+- compare `always_cheapest_fireworks`, `always_strongest_fireworks`, `always_default_fireworks`, `gemma_first_router`, `cost_router`, `cost_router_with_compact_prompts`, `cost_router_with_validation_escalation`, and `gemma_first_router_with_validation_escalation`.
 
-Non-goals:
+### Part B: Local Inference Impact Tests
 
-- no broad live matrix unless credits/time justify it,
-- no GPU-required final runtime unless organizers confirm final GPU access.
+Test these configurations separately:
 
-## MVP Cutoff Before First Official Submission
+- `no_local_inference_final_router`,
+- `local_inference_for_development_only`,
+- `local_inference_as_route_suggester`,
+- `local_inference_as_format_checker`,
+- `local_inference_as_final_answer_generator`.
 
-Must have:
+For each configuration, measure:
 
-- Phase 1 production-safe runtime,
-- local smoke test,
-- output validator,
-- eval coverage checker,
-- router config sweep,
-- Docker run with mounted `/input` and `/output`,
-- Fireworks base URL compliance,
-- allowed model compliance,
-- official submission decision tree reviewed.
+- final output accuracy,
+- Fireworks input tokens,
+- Fireworks output tokens,
+- total Fireworks tokens,
+- wrong routing decisions caused by local inference,
+- format failures caused by local inference,
+- fallback/escalation rate,
+- Gemma selection/skipping/escalation changes caused by local inference,
+- latency,
+- startup time,
+- Docker compressed image size impact,
+- dependency/image bloat impact,
+- reliability failures/timeouts.
 
-Nice to have:
+Required conclusions:
 
-- Phase 2 local-first risk engine,
-- Phase 3 remote modes,
-- selected live model slices,
-- broader adversarial scenario set.
+- If local inference only helps development/testing, keep it out of the final runtime.
+- If local inference as route suggester lowers accuracy or causes wrong cheap-model choices, disable it.
+- If local inference as format checker improves validation without accuracy risk, keep only if lightweight and reliable.
+- If local inference as final answer generator reduces accuracy, do not use it.
+- Include local inference in final runtime only if it preserves or improves accuracy, reduces scored Fireworks tokens, does not create wrong routing decisions, does not increase format failures, and does not threaten Docker/runtime reliability.
+- Default must remain safe. If implemented, local inference must be behind `LOCAL_MODEL_ENABLED=false` until proven.
+- Do not add model weights, PyTorch, Transformers, GGUF files, ROCm/CUDA, or other heavy dependencies unless explicitly justified as a later experiment.
 
-Skip unless time remains:
+Exit criteria:
 
-- optional local model lane beyond deterministic solvers; see `docs/optional-local-model-lane.md`,
-- heavy local LLM dependency in final container,
-- GPU-required final runtime,
-- non-Track-1 product polish,
-- generic process docs that do not affect scoring.
+- cost-router variants are compared with the same scenario set,
+- local inference impact is measured or explicitly deferred,
+- final default remains safe and reversible.
+
+## Phase 5: Docker/Submission Hardening
+
+Purpose: prove final image is judge-safe.
+
+Include:
+
+- review `requirements.txt` intentionally; empty is acceptable only if runtime is standard-library only,
+- build `linux/amd64` Docker image,
+- run image with mounted `/input` and `/output`,
+- validate `/output/results.json`,
+- check compressed image size under 10GB,
+- verify `.dockerignore`,
+- confirm image excludes `.env`, `.env.*`, `.git`, `.venv`, `__pycache__`, `eval_runs`, `notebooks`, model caches, downloaded models unless intentionally justified, zip files, tar files, local output artifacts, and Native.Builder exports unless intentionally needed and lightweight,
+- confirm no secrets or API keys are copied,
+- confirm Native.Builder is not needed for the final container to run,
+- confirm Fireworks calls use `FIREWORKS_BASE_URL`,
+- confirm only `ALLOWED_MODELS` are used for scored Fireworks calls,
+- if final image is pushed, pull public image and retest.
+
+Required checks:
+
+```bash
+python3 scripts/run_phase1_acceptance.py --include-docker
+python3 scripts/submission_readiness_report.py --include-docker
+python3 scripts/final_submission_commands.py <public-image-tag>
+```
+
+Exit criteria:
+
+- public image is pullable,
+- image includes `linux/amd64` manifest,
+- image compressed size is under 10GB,
+- mounted IO test passes,
+- no forbidden artifacts or secrets are included.
+
+## Phase 6: Final Evidence Package
+
+Purpose: prepare the judge-facing proof.
+
+Include:
+
+- final benchmark table,
+- token savings versus Fireworks baselines,
+- live model selection evidence,
+- cheapest-sufficient routing explanation,
+- prompt compression evidence,
+- Gemma-first routing strategy: where Gemma is used, why Gemma is used, where Gemma is not used, Gemma accuracy/token evidence, Gemma fallback/escalation evidence, and relevance to Best Use of Gemma Models challenge,
+- Native.Builder usage note: used only for prototyping/demo if applicable and not required for final runtime unless explicitly allowed,
+- local inference impact conclusion: tested configurations, measured effect on output quality, token impact, routing risk, Docker impact, and final include/exclude decision,
+- final Docker proof,
+- official submission log.
+
+Exit criteria:
+
+- evidence package is internally consistent,
+- screenshots/video/slides do not reveal secrets,
+- final submission URL, GitHub URL, image tag, and benchmark notes are ready.
 
 ## Phase Review Template
 

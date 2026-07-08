@@ -31,6 +31,28 @@ This plan targets rank #1 for Track 1 only. It separates source-backed constrain
 - Local deterministic logic and local model experimentation are allowed under the Track 1 local-token rule. Whenever the router chooses Fireworks, the request must be sent through `FIREWORKS_BASE_URL` so the judging proxy can record token usage. The final agent treats `FIREWORKS_BASE_URL` as the only valid remote inference base URL and selects models only from `ALLOWED_MODELS`.
 - Do not use Native.Builder for now; revisit only if it accelerates prototyping without entering the final runtime path.
 
+## Gemma-First Routing Strategy
+
+Gemma is strategically relevant because Gemma models are in the allowed Track 1 model set and the hackathon includes a Best Use of Gemma Models opportunity. Gemma should be a serious routing candidate, not a forced choice.
+
+Default planning rule:
+
+- Treat Gemma as the default candidate for medium/general Fireworks tasks only when live Phase 3 data shows it is accurate enough and cheaper or comparable in scored Fireworks tokens.
+- Skip Gemma when category evidence shows it hurts accuracy, format reliability, latency, or token efficiency.
+- Escalate from Gemma to a stronger/specialized Fireworks model when validation fails, confidence is low, or the task category is Gemma-risky.
+
+Judge-facing evidence to collect:
+
+- when Gemma is selected,
+- when Gemma is skipped,
+- when Gemma is escalated from,
+- Gemma accuracy by task category,
+- Gemma token usage versus fallback models,
+- Gemma contribution to token savings,
+- Gemma-safe, Gemma-risky, and Gemma bonus-candidate categories.
+
+Native.Builder may be used for prototyping, prompt exploration, demos, or workflow experiments. It must not become a final runtime dependency unless official rules explicitly allow it for final judging. The final submission should remain a reproducible Dockerized Python routing agent.
+
 ## Model Selection
 
 - Runtime model list must come from `ALLOWED_MODELS`. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
@@ -41,6 +63,7 @@ This plan targets rank #1 for Track 1 only. It separates source-backed constrain
 - Model selection should remain configuration-driven so we can update category preferences after experiments without rewriting router logic.
 - For each category, track both the best-accuracy model and the cheapest passing model.
 - Prompt policy should also be selected from evidence: original input, compact prompt, or answer-only prompt.
+- Gemma candidates should be evaluated in the same matrix as all other allowed models and promoted only through cheapest-sufficient evidence.
 
 ## Category-by-Category Strategy
 
@@ -108,6 +131,8 @@ Prompt resizing is allowed only when metrics show it preserves accuracy.
 - Test timeout, retry, fallback, and answer-normalization behavior as first-class quality gates.
 - Test deadline behavior with fake clocks: remaining time, safety margin, retry suppression, bounded worker count, and valid output near timeout.
 - Test hard-task Fireworks accuracy mode.
+- Test Gemma-first, Gemma-skip, and Gemma-escalation behavior against the same categories and prompts used for other allowed models.
+- Test local inference configurations separately from deterministic local logic and Fireworks routing, measuring quality risk, routing risk, fallback behavior, Docker impact, dependency impact, and runtime reliability.
 - Run Docker with mounted `/input` and `/output` on `linux/amd64`.
 
 ## Submission Optimization Loop

@@ -226,6 +226,8 @@ Every eval row should include scenario metadata plus runtime decision data when 
 - Unit tests that task-level telemetry includes timing metrics for local, remote, fallback, and error paths.
 - Unit tests that telemetry overhead is optional and never changes official `/output/results.json`.
 - Optional local model tests before implementation: disabled mode preserves current behavior, timeout/failure falls back safely, local-model advice cannot bypass proof gates, and Docker image/startup/runtime budgets remain valid.
+- Local inference impact evals, if implemented: `no_local_inference_final_router`, `local_inference_for_development_only`, `local_inference_as_route_suggester`, `local_inference_as_format_checker`, and `local_inference_as_final_answer_generator`.
+- Gemma-specific evals: selected/skipped/escalated counts, Gemma accuracy by category, Gemma token usage versus fallback models, and Gemma cheapest-sufficient categories.
 - Mock Fireworks tests for timeouts, HTTP errors, invalid JSON, and missing usage.
 - Deadline tests for remaining time, safety margin, retry suppression, and valid output under near-timeout conditions.
 - Bounded concurrency tests for remote-needed tasks.

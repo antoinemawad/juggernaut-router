@@ -14,6 +14,9 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Risk register reviewed: `docs/risk-register.md`.
 - [ ] Category playbooks reviewed: `docs/category-playbooks.md`.
 - [ ] Accuracy gates reviewed: `docs/accuracy-gates.md`.
+- [ ] Clarified Track 1 scoring rule reviewed: minimize scored Fireworks tokens through `FIREWORKS_BASE_URL` after preserving accuracy.
+- [ ] Gemma-first routing strategy reviewed.
+- [ ] Optional local inference lane reviewed and either excluded from final runtime or justified by measured evidence.
 - [ ] Local testing and submission use the same code path; only `INPUT_PATH`, `OUTPUT_PATH`, and runtime environment variables change.
 - [ ] Final manual review complete.
 
@@ -38,6 +41,8 @@ Final pre-submit checklist for Track 1 only.
 - [ ] linux/amd64 image built. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - [ ] Image compressed size is under 10GB. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Local image size guard is below the conservative 8GB ceiling before final push.
+- [ ] Docker image does not include large local model weights unless explicitly justified by measured benefit and runtime/image safety.
+- [ ] Docker image does not include Native.Builder exports unless intentionally needed, lightweight, and final-rule compatible.
 - [ ] Final build/push/check commands generated: `python3 scripts/final_submission_commands.py <public-image-tag>`.
 - [ ] Image is publicly pullable. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 
@@ -64,6 +69,8 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Router mode tests cover conservative, balanced, and aggressive configurations on the same dataset.
 - [ ] Router decision logs include category, confidence, route, selected model, prompt policy, `max_tokens`, route reason, latency, and token usage when available.
 - [ ] Router decision logs include risk score, risk components, validator notes, remote mode, final answer length, and errors when present.
+- [ ] Router scorecard includes Fireworks input tokens, Fireworks output tokens, total Fireworks tokens, latency, fallback rate, format failure rate, and local inference usage when present.
+- [ ] Router scorecard includes Gemma selection rate, Gemma skip rate, and Gemma escalation rate.
 - [ ] Answer normalization test passes: no unintended markdown, surrounding whitespace stripped, exact requested formats preserved.
 - [ ] Timeout/fallback tests pass without crashing the batch or producing malformed JSON.
 - [ ] Deadline manager tests pass: remaining time, safety margin, retry suppression, and valid output near timeout.
@@ -80,6 +87,9 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Valid JSON output verified manually.
 - [ ] Representative output formats manually inspected: exact numeric, label, summary, entity list, code, and corrected code.
 - [ ] Latest model matrix and router sweep reports reviewed before Docker push/submission.
+- [ ] Live model matrix includes all allowed models when `FIREWORKS_BASE_URL` is available: `minimax-m3`, `kimi-k2p7-code`, `gemma-4-31b-it`, `gemma-4-26b-a4b-it`, `gemma-4-31b-it-nvfp4`.
+- [ ] Gemma-specific matrix reviewed: accuracy by category, token use by category, skip/escalation cases, and cheapest-sufficient categories.
+- [ ] Local inference impact tests are reviewed if any local model or local inference path can affect routing/final answers.
 - [ ] Weak or wrong outputs recorded in `docs/experiments.md` or `docs/official-submission-log.md`.
 - [ ] All 8 Track 1 categories have at least one local test example.
 - [ ] No regression after final image build.
@@ -96,6 +106,8 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Current allowed planning models are recognized: `minimax-m3`, `kimi-k2p7-code`, `gemma-4-31b-it`, `gemma-4-26b-a4b-it`, `gemma-4-31b-it-nvfp4`.
 - [ ] Local evaluation accuracy threshold is configurable.
 - [ ] Submitted image does not require GPU access to run correctly unless organizer guidance confirms GPU access in final evaluation.
+- [ ] `LOCAL_MODEL_ENABLED` is disabled by default if any local inference code exists.
+- [ ] Native.Builder is not required for final runtime.
 
 ## Prohibited Behavior Checks
 
@@ -106,6 +118,7 @@ Final pre-submit checklist for Track 1 only.
 - [ ] No personal Fireworks key in final runtime.
 - [ ] No calls to models outside `ALLOWED_MODELS`.
 - [ ] No non-English final responses. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
+- [ ] No heavy local model dependency, model cache, PyTorch, Transformers, GGUF file, ROCm/CUDA dependency, or model weight is bundled unless explicitly justified by measured benefit and final image/runtime safety.
 
 ## lablab Submission Package
 
@@ -133,6 +146,8 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Local-first routing explanation captured.
 - [ ] Model matrix report selected for slides.
 - [ ] Token comparison table selected for slides.
+- [ ] Gemma-first routing strategy evidence selected for slides.
+- [ ] Local inference impact conclusion selected for slides if local inference was tested.
 - [ ] Failure analysis selected for slides/demo if it strengthens the evidence story.
 - [ ] Docker run proof captured.
 - [ ] Valid output JSON proof captured.

@@ -22,6 +22,8 @@ Build an evidence table that answers:
 - Which categories can be safely handled locally before Fireworks?
 - Which prompt and `max_tokens` settings reduce tokens without hurting correctness?
 - Which prompt policy is best: original, compact, or answer-only?
+- Which categories are Gemma-safe, Gemma-risky, or Gemma bonus candidates?
+- Where does Gemma save scored Fireworks tokens versus fallback models?
 
 The output should be easy to show in the README, slides, and final submission explanation.
 
@@ -111,6 +113,8 @@ Every model/scenario row should be JSONL and include:
 - `latency_ms`
 - `passed`
 - `score`
+- `gemma_decision` when applicable: `selected`, `skipped`, `escalated_from`, or `not_applicable`
+- `gemma_fallback_model` when Gemma is escalated from
 - `answer`
 - `expected_answer`
 - `notes`
@@ -227,6 +231,33 @@ Use prompt-policy results to decide:
 - which categories must preserve original wording,
 - which categories can use compact prompts without losing score.
 
+## Gemma-Specific Matrix
+
+Gemma must be measured as a strategic candidate, not assumed to be best.
+
+For each Gemma model in `ALLOWED_MODELS`, collect:
+
+- accuracy by task category,
+- Fireworks input tokens by category,
+- Fireworks output tokens by category,
+- total Fireworks tokens by category,
+- latency by category,
+- format failure rate,
+- cheapest-sufficient categories,
+- failure categories,
+- cases where Gemma should be default,
+- cases where Gemma should be skipped,
+- cases where Gemma should be tried first and escalated on validation failure.
+
+The judge-facing summary should show:
+
+- when Gemma is selected,
+- when Gemma is skipped,
+- when Gemma is escalated from,
+- Gemma token usage versus fallback models,
+- Gemma contribution to token savings,
+- relevance to the Best Use of Gemma Models challenge.
+
 ## What To Compare
 
 - Pass rate by model.
@@ -241,6 +272,8 @@ Use prompt-policy results to decide:
 - Cheapest passing model per category.
 - Cases where the cheapest model fails but a larger model passes.
 - Cases where all models fail and prompt/category strategy needs work.
+- Gemma selected/skipped/escalated counts.
+- Gemma accuracy and token use versus non-Gemma fallback models.
 
 ## Decision Rule
 

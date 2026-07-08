@@ -2,6 +2,8 @@
 
 Purpose: preserve the local-LLM idea as a future experiment without making the current CPU-safe runtime depend on it.
 
+Clarified scoring rule: local inference is not counted as scored Fireworks token usage. The final score is based on Fireworks calls through `FIREWORKS_BASE_URL` using models from `ALLOWED_MODELS`, after meeting the accuracy threshold. Local inference can still damage the final score indirectly if it causes wrong answers, wrong routing decisions, validation failures, Docker bloat, startup delays, timeouts, or reliability issues.
+
 ## Decision
 
 Do not add a local generative model to the default final container yet.
@@ -15,6 +17,8 @@ deterministic local solver
 ```
 
 The current submitted runtime should remain CPU-safe, small, fast to start, and correct without GPU access.
+
+Local models are mainly useful for development/testing until measured evidence proves final-runtime benefit. Do not bundle local model weights, PyTorch, Transformers, GGUF files, ROCm/CUDA, or model caches in the final image unless an experiment proves they reduce scored Fireworks tokens without harming accuracy or runtime safety.
 
 ## Candidate Models
 
@@ -84,6 +88,8 @@ The default remains disabled.
 - Unit tests for timeout/failure falling back to Fireworks.
 - Unit tests that local-model decisions never bypass local proof gates.
 - Eval scenarios measuring local-model route recommendation accuracy.
+- Impact report for `no_local_inference_final_router`, `local_inference_for_development_only`, `local_inference_as_route_suggester`, `local_inference_as_format_checker`, and `local_inference_as_final_answer_generator`.
+- Metrics for wrong routing decisions, format failures, fallback/escalation rate, Gemma selection/skipping/escalation changes, latency, startup time, dependency bloat, and reliability failures.
 - Docker image size check with the model included.
 - Docker startup/runtime check on `linux/amd64`.
 - Comparison report: deterministic-only vs deterministic-plus-local-model vs Fireworks.
