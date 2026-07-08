@@ -469,6 +469,7 @@ Nice to have:
 
 Skip unless time remains:
 
+- optional local model lane beyond deterministic solvers; see `docs/optional-local-model-lane.md`,
 - heavy local LLM dependency in final container,
 - GPU-required final runtime,
 - non-Track-1 product polish,

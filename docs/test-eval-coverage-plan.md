@@ -225,6 +225,7 @@ Every eval row should include scenario metadata plus runtime decision data when 
 - Unit tests for optional telemetry with no secrets.
 - Unit tests that task-level telemetry includes timing metrics for local, remote, fallback, and error paths.
 - Unit tests that telemetry overhead is optional and never changes official `/output/results.json`.
+- Optional local model tests before implementation: disabled mode preserves current behavior, timeout/failure falls back safely, local-model advice cannot bypass proof gates, and Docker image/startup/runtime budgets remain valid.
 - Mock Fireworks tests for timeouts, HTTP errors, invalid JSON, and missing usage.
 - Deadline tests for remaining time, safety margin, retry suppression, and valid output under near-timeout conditions.
 - Bounded concurrency tests for remote-needed tasks.

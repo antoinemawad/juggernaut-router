@@ -16,6 +16,7 @@ Purpose: keep the biggest Track 1 failure modes visible and tied to mitigation.
 | Secrets or `.env` included | Security/compliance failure | Low/Medium | `.gitignore`, `.dockerignore`, final review | `git status`, Docker context review |
 | Official submissions wasted randomly | Lost optimization opportunity | Medium | One-variable submission decision tree | `docs/official-submission-log.md` |
 | Planning outpaces implementation | Runtime underpowered | High | Follow implementation phases and MVP cutoff | `docs/implementation-phases.md` |
+| Optional local model increases image/startup/runtime risk | Timeout or pull failure despite zero local tokens | Medium | Keep disabled by default; require CPU-safe, image-size, startup, runtime, and accuracy gates before promotion | `docs/optional-local-model-lane.md` |
 
 ## Update Rule
 

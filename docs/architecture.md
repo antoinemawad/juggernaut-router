@@ -314,6 +314,7 @@ This turns the limit into a competitive advantage: local tasks finish immediatel
 - Final container should remain CPU-safe by default.
 - No heavy local LLM runtime dependency should be added unless explicitly justified by experiments and compatible with size/startup/runtime limits.
 - Local deterministic solvers are preferred for zero-token savings.
+- Optional local model experimentation is tracked separately in `docs/optional-local-model-lane.md` and must remain disabled by default until it passes image, startup, runtime, and accuracy gates.
 - Final evaluator GPU access for local LLM inference inside the submitted Docker container is not confirmed. Therefore, the final image should remain CPU-safe and should not require a GPU to run correctly.
 - Optional AMD/vLLM validation belongs in a separate documented path, not in the default final runtime, unless organizers confirm it is appropriate.
 
