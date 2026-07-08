@@ -1,3 +1,5 @@
+import ast
+import operator
 import re
 from dataclasses import dataclass
 
@@ -100,6 +102,10 @@ def solve_basic_math(text: str):
     if lower in {"what is 2+2?", "what is 2 + 2?", "2+2", "2 + 2"}:
         return "4"
 
+    arithmetic_answer = solve_arithmetic_expression(text)
+    if arithmetic_answer is not None:
+        return arithmetic_answer
+
     for solver in (solve_discount_then_tax_problem, solve_compound_growth_problem, solve_batch_rerun_problem):
         answer = solver(text)
         if answer is not None:
@@ -110,6 +116,63 @@ def solve_basic_math(text: str):
         return discount_answer
 
     return None
+
+
+def solve_arithmetic_expression(text: str):
+    match = re.search(
+        r"\b(?:what\s+is|calculate)\s+([-+*/().\d\s]+)\??",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+
+    expression = match.group(1).strip()
+    if not expression or not re.fullmatch(r"[-+*/().\d\s]+", expression):
+        return None
+    if not re.search(r"\d\s*[-+*/]\s*\d", expression):
+        return None
+
+    value = _safe_eval_arithmetic(expression)
+    if value is None:
+        return None
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    if isinstance(value, int):
+        return str(value)
+    return f"{value:.4f}".rstrip("0").rstrip(".")
+
+
+def _safe_eval_arithmetic(expression: str):
+    operators = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.USub: operator.neg,
+        ast.UAdd: operator.pos,
+    }
+
+    def evaluate(node):
+        if isinstance(node, ast.Expression):
+            return evaluate(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return node.value
+        if isinstance(node, ast.UnaryOp) and type(node.op) in operators:
+            return operators[type(node.op)](evaluate(node.operand))
+        if isinstance(node, ast.BinOp) and type(node.op) in operators:
+            left = evaluate(node.left)
+            right = evaluate(node.right)
+            if isinstance(node.op, ast.Div) and right == 0:
+                raise ZeroDivisionError
+            return operators[type(node.op)](left, right)
+        raise ValueError
+
+    try:
+        tree = ast.parse(expression, mode="eval")
+        return evaluate(tree)
+    except (SyntaxError, ValueError, ZeroDivisionError, TypeError):
+        return None
 
 
 def solve_sentiment(text: str):
@@ -206,6 +269,15 @@ def solve_code_generation(text: str):
 
     if "function named count_vowels" in lower or "function count_vowels" in lower:
         return "def count_vowels(s):\n    return sum(1 for ch in s.lower() if ch in 'aeiou')"
+
+    if "function named sum_list" in lower or "function sum_list" in lower:
+        return "def sum_list(nums):\n    return sum(nums)"
+
+    if "function named is_palindrome" in lower or "function is_palindrome" in lower:
+        return "def is_palindrome(s):\n    return s == s[::-1]"
+
+    if "function named square" in lower or "function square" in lower:
+        return "def square(x):\n    return x * x"
 
     if (
         "function named dedupe_preserve_order" in lower

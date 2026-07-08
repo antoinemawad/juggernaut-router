@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass, field
 
 
@@ -101,10 +102,13 @@ def _looks_like_math(lower: str) -> bool:
         "costs $",
         "what is 2+2",
         "what is 2 + 2",
+        "calculate ",
         "round to the nearest",
         "batches per hour",
     )
-    return any(marker in lower for marker in math_markers)
+    if any(marker in lower for marker in math_markers):
+        return True
+    return bool(re.search(r"\bwhat\s+is\s+[-+*/().\d\s]+\?", lower))
 
 
 def _looks_like_logic(lower: str) -> bool:

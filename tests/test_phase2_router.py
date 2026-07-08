@@ -536,6 +536,9 @@ class Phase2RouterTests(unittest.TestCase):
             "dedupe_preserve_order": "Write a Python function named dedupe_preserve_order(items) that removes duplicates while preserving order. Return only code.",
             "merge_sorted": "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
             "count_vowels": "Write a Python function named count_vowels(s) that returns the number of vowels in the string. Return only code.",
+            "sum_list": "Write a Python function named sum_list(nums) that returns the sum of the numbers. Return only code.",
+            "is_palindrome": "Write a Python function named is_palindrome(s) that returns True when the string is a palindrome. Return only code.",
+            "square": "Write a Python function square(x) that returns x multiplied by itself. Return only code.",
             "total": "Debug this Python function. Return only corrected code:\n\ndef total(nums):\n    s = 0\n    for n in nums:\n        s = n\n    return s",
             "is_adult": "Return only corrected code:\n\ndef is_adult(age):\n    return age > 18\n\nThe function should return True for age 18 and above.",
             "count_positive": "Return only corrected code:\n\ndef count_positive(nums):\n    count = 0\n    for n in nums:\n        if n > 0:\n            count = 1\n    return count",
@@ -572,6 +575,18 @@ class Phase2RouterTests(unittest.TestCase):
                 "Write a Python function named count_vowels(s) that returns the number of vowels in the string. Return only code.",
                 "def count_vowels(s):\n    return sum(1 for ch in s.lower() if ch in 'aeiou')",
             ),
+            "sum_list": (
+                "Write a Python function named sum_list(nums) that returns the sum of the numbers. Return only code.",
+                "def sum_list(nums):\n    return sum(nums)",
+            ),
+            "is_palindrome": (
+                "Write a Python function named is_palindrome(s) that returns True when the string is a palindrome. Return only code.",
+                "def is_palindrome(s):\n    return s == s[::-1]",
+            ),
+            "square": (
+                "Write a Python function square(x) that returns x multiplied by itself. Return only code.",
+                "def square(x):\n    return x * x",
+            ),
         }
 
         for name, (prompt, expected) in cases.items():
@@ -581,6 +596,22 @@ class Phase2RouterTests(unittest.TestCase):
             mocked_remote.assert_not_called()
             self.assertEqual(result.route, "local")
             self.assertEqual(result.answer, expected)
+
+    def test_arithmetic_expression_uses_certified_local_proof(self):
+        cases = {
+            "multiply": ("What is 17 * 23? Return only the number.", "391"),
+            "parentheses": ("Calculate (12 + 8) / 4. Return only the number.", "5"),
+        }
+
+        for name, (prompt, expected) in cases.items():
+            with self.subTest(name=name), patch("app.agent.ask_fireworks_structured") as mocked_remote:
+                result = answer_task(name, prompt)
+
+            mocked_remote.assert_not_called()
+            self.assertEqual(result.route, "local")
+            self.assertEqual(result.answer, expected)
+            self.assertIn("proof:exact_arithmetic", result.metadata["local_evidence"])
+            self.assertFalse(result.metadata["local_proof_layers_failed"])
 
     def test_multistep_discount_math_uses_certified_local_proof(self):
         with patch("app.agent.ask_fireworks_structured") as mocked_remote:
@@ -706,6 +737,43 @@ class Phase2RouterTests(unittest.TestCase):
         classification = classify_prompt(prompt)
         solver_result = LocalSolverResult(
             "def is_even(n):\n    return n % 2 == 1",
+            0.99,
+            "test_code",
+            ("evidence",),
+        )
+        validation = validate_local_answer(
+            prompt=prompt,
+            classification=classification,
+            solver_result=solver_result,
+            config=config,
+            proof_elapsed_ms=1,
+        )
+        self.assertFalse(validation.accepted)
+        self.assertIn("cross_check", validation.failed_layers)
+
+    def test_code_cross_check_rejects_semantically_wrong_sum_list(self):
+        config = RuntimeConfig(
+            input_path=RuntimeConfig.from_env().input_path,
+            output_path=RuntimeConfig.from_env().output_path,
+            router_mode="aggressive",
+            local_confidence_threshold=0.8,
+            fireworks_timeout_seconds=25,
+            fireworks_max_retries=0,
+            batch_deadline_seconds=600,
+            deadline_safety_margin_seconds=60,
+            remote_worker_count=1,
+            local_proof_budget_ms=100,
+            local_cross_check_enabled=True,
+            router_log_path=None,
+            fireworks_api_key=None,
+            fireworks_base_url=None,
+            allowed_models=(),
+            fireworks_max_tokens=256,
+        )
+        prompt = "Write a Python function named sum_list(nums) that returns the sum of the numbers. Return only code."
+        classification = classify_prompt(prompt)
+        solver_result = LocalSolverResult(
+            "def sum_list(nums):\n    return len(nums)",
             0.99,
             "test_code",
             ("evidence",),

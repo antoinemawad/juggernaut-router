@@ -1,4 +1,5 @@
 import ast
+import operator
 import re
 from dataclasses import dataclass
 
@@ -271,6 +272,9 @@ def _code_is_nontrivial(lower: str) -> bool:
         "reverse_string",
         "dedupe_preserve_order",
         "count_vowels",
+        "sum_list",
+        "is_palindrome",
+        "function square",
         "deduplicate",
         "preserve order",
     )
@@ -302,6 +306,8 @@ def _cheap_cross_check_passes(
         return bool(re.fullmatch(r"\d+", answer))
     if classification.category == "mathematical_reasoning" and "batches per hour" in lower:
         return bool(re.fullmatch(r"\d+(?:\.\d+)?", answer))
+    if classification.category == "mathematical_reasoning" and _extract_arithmetic_expression(prompt) is not None:
+        return _arithmetic_cross_check_passes(prompt, answer)
     if classification.category == "sentiment_classification":
         return answer.lower() in {"positive", "negative", "neutral"}
     if classification.category == "logical_deductive_reasoning" and "shortest" in lower:
@@ -345,6 +351,12 @@ def _code_cross_check_passes(lower_prompt: str, answer: str) -> bool:
         return _function_tests_pass(answer, "reverse_string", [(("abc",), "cba"), (("",), ""), (("Race",), "ecaR")])
     if "count_vowels" in lower_prompt:
         return _function_tests_pass(answer, "count_vowels", [(("Hello",), 2), (("xyz",), 0), (("AEIOU",), 5)])
+    if "sum_list" in lower_prompt:
+        return _function_tests_pass(answer, "sum_list", [(([1, 2, 3],), 6), (([],), 0), (((-1, 5),), 4)])
+    if "is_palindrome" in lower_prompt:
+        return _function_tests_pass(answer, "is_palindrome", [(("level",), True), (("router",), False), (("",), True)])
+    if "function square" in lower_prompt:
+        return _function_tests_pass(answer, "square", [((3,), 9), (((-4),), 16), ((0,), 0)])
     if "dedupe_preserve_order" in lower_prompt or ("deduplicate" in lower_prompt and "preserve order" in lower_prompt):
         return _function_tests_pass(
             answer,
@@ -362,6 +374,65 @@ def _code_cross_check_passes(lower_prompt: str, answer: str) -> bool:
     if "safe_divide" in lower_prompt:
         return _function_tests_pass(answer, "safe_divide", [((6, 2), 3), ((1, 0), None)])
     return True
+
+
+def _extract_arithmetic_expression(prompt: str) -> str | None:
+    match = re.search(
+        r"\b(?:what\s+is|calculate)\s+([-+*/().\d\s]+)\??",
+        prompt,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    expression = match.group(1).strip()
+    if not expression or not re.fullmatch(r"[-+*/().\d\s]+", expression):
+        return None
+    return expression
+
+
+def _arithmetic_cross_check_passes(prompt: str, answer: str) -> bool:
+    expression = _extract_arithmetic_expression(prompt)
+    if expression is None:
+        return False
+    expected = _safe_eval_arithmetic(expression)
+    if expected is None:
+        return False
+    try:
+        observed = float(answer.strip().replace("$", ""))
+    except ValueError:
+        return False
+    return abs(float(expected) - observed) < 0.0001
+
+
+def _safe_eval_arithmetic(expression: str):
+    operators = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.USub: operator.neg,
+        ast.UAdd: operator.pos,
+    }
+
+    def evaluate(node):
+        if isinstance(node, ast.Expression):
+            return evaluate(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return node.value
+        if isinstance(node, ast.UnaryOp) and type(node.op) in operators:
+            return operators[type(node.op)](evaluate(node.operand))
+        if isinstance(node, ast.BinOp) and type(node.op) in operators:
+            left = evaluate(node.left)
+            right = evaluate(node.right)
+            if isinstance(node.op, ast.Div) and right == 0:
+                raise ZeroDivisionError
+            return operators[type(node.op)](left, right)
+        raise ValueError
+
+    try:
+        return evaluate(ast.parse(expression, mode="eval"))
+    except (SyntaxError, ValueError, ZeroDivisionError, TypeError):
+        return None
 
 
 def _corrected_code_cross_check_passes(lower_prompt: str, answer: str) -> bool:
