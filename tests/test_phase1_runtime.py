@@ -17,6 +17,7 @@ from eval.model_matrix import parse_dev_model_map, provider_model_for
 from scripts.check_live_eval_env import validate_live_eval_env
 from scripts.final_submission_commands import validate_image_ref
 from scripts import check_submission_static
+from scripts import submission_readiness_report
 
 
 class FakeClock:
@@ -163,6 +164,44 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(config.models_remote_code, ("kimi-k2p7-code",))
         self.assertEqual(config.models_remote_format_strict, ("gemma-4-26b-a4b-it", "kimi-k2p7-code"))
         self.assertEqual(config.models_remote_concise, ("minimax-m3", "gemma-4-26b-a4b-it", "gemma-4-31b-it"))
+
+    def test_readiness_report_summarizes_latest_eval_evidence(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            eval_runs = Path(tmpdir)
+            router_path = eval_runs / "router_sweep_20260708_010101.jsonl"
+            router_path.write_text(
+                json.dumps({
+                    "config": "strict_hybrid",
+                    "passed": True,
+                    "total_tokens": 10,
+                }) + "\n",
+                encoding="utf-8",
+            )
+            router_path.with_suffix(".md").write_text("Recommended config: `strict_hybrid`\n", encoding="utf-8")
+
+            matrix_path = eval_runs / "model_matrix_20260708_010101.jsonl"
+            matrix_path.write_text(
+                json.dumps({
+                    "model": "minimax-m3",
+                    "prompt_policy": "compact",
+                    "passed": False,
+                    "total_tokens": 12,
+                    "error": "x",
+                }) + "\n",
+                encoding="utf-8",
+            )
+            matrix_path.with_suffix(".md").write_text("Mode: mock\n", encoding="utf-8")
+
+            with patch.object(submission_readiness_report, "EVAL_RUNS", eval_runs):
+                router = submission_readiness_report.latest_router_sweep_summary()
+                matrix = submission_readiness_report.latest_model_matrix_summary()
+
+        self.assertEqual(router["recommended_config"], "strict_hybrid")
+        self.assertEqual(router["rows"], 1)
+        self.assertEqual(router["total_tokens"], 10)
+        self.assertEqual(matrix["mode"], "mock")
+        self.assertEqual(matrix["errors"], 1)
+        self.assertEqual(matrix["models"], ["minimax-m3"])
 
     def test_deadline_suppresses_retry_when_budget_is_low(self):
         clock = FakeClock()
