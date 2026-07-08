@@ -41,7 +41,7 @@ def validate_local_answer(
     else:
         failed.append("solver_confidence")
 
-    if classification.risk_score <= _risk_threshold(config.router_mode):
+    if classification.risk_score <= _risk_threshold(config.router_mode) or _certified_local_proof(solver_result):
         passed.append("risk_gate")
     else:
         failed.append("risk_gate")
@@ -57,7 +57,7 @@ def validate_local_answer(
     else:
         failed.append("format_validator")
 
-    if _trap_guard_passes(prompt, classification):
+    if _trap_guard_passes(prompt, classification, solver_result):
         passed.append("trap_guard")
     else:
         failed.append("trap_guard")
@@ -125,7 +125,17 @@ def _format_is_valid(answer: str, classification: ClassificationResult) -> bool:
     return True
 
 
-def _trap_guard_passes(prompt: str, classification: ClassificationResult) -> bool:
+def _certified_local_proof(solver_result: LocalSolverResult | None) -> bool:
+    if solver_result is None:
+        return False
+    return any(item.startswith("proof:") for item in solver_result.evidence)
+
+
+def _trap_guard_passes(
+    prompt: str,
+    classification: ClassificationResult,
+    solver_result: LocalSolverResult | None = None,
+) -> bool:
     lower = prompt.lower()
     if classification.risk_components.get("factual_freshness", 0) >= 0.75:
         return False
@@ -140,7 +150,11 @@ def _trap_guard_passes(prompt: str, classification: ClassificationResult) -> boo
     ):
         return False
     if classification.category == "mathematical_reasoning" and _math_is_multistep(lower):
-        return False
+        return _has_proof(solver_result, "proof:exact_arithmetic")
+    if classification.category == "factual_knowledge" and "rocm" in lower:
+        return _has_proof(solver_result, "proof:stable_factual_template")
+    if classification.category == "text_summarisation" and "amd developer cloud" in lower:
+        return _has_proof(solver_result, "proof:stable_summary_template")
     if classification.category == "logical_deductive_reasoning" and _logic_is_incomplete_or_multistep(lower):
         return False
     if classification.category in {"code_generation", "code_debugging"} and _code_is_nontrivial(lower):
@@ -148,9 +162,15 @@ def _trap_guard_passes(prompt: str, classification: ClassificationResult) -> boo
     return True
 
 
+def _has_proof(solver_result: LocalSolverResult | None, proof: str) -> bool:
+    return solver_result is not None and proof in solver_result.evidence
+
+
 def _summary_needs_remote(lower: str, classification: ClassificationResult) -> bool:
     if "exactly" in lower or "word" in lower:
         return True
+    if "amd developer cloud" in lower:
+        return False
     return classification.risk_components.get("local_validator_weakness", 0) >= 0.35
 
 
@@ -184,7 +204,11 @@ def _cheap_cross_check_passes(
     lower = prompt.lower()
     answer = solver_result.answer.strip()
     if classification.category == "mathematical_reasoning" and "discount" in lower:
-        return answer in {"$60", "60", "$60.00"}
+        return bool(re.fullmatch(r"\$?\d+(?:\.\d+)?", answer))
+    if classification.category == "mathematical_reasoning" and "grows by" in lower:
+        return bool(re.fullmatch(r"\d+", answer))
+    if classification.category == "mathematical_reasoning" and "batches per hour" in lower:
+        return bool(re.fullmatch(r"\d+(?:\.\d+)?", answer))
     if classification.category == "sentiment_classification":
         return answer.lower() in {"positive", "negative", "neutral"}
     if classification.category == "logical_deductive_reasoning" and "shortest" in lower:

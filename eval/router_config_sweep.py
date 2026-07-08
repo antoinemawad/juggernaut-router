@@ -331,6 +331,7 @@ def run_scenario(config, scenario):
         "classification_confidence": result.metadata.get("classification_confidence"),
         "risk_score": result.metadata.get("risk_score"),
         "actual_risk_components": result.metadata.get("risk_components", {}),
+        "local_evidence": result.metadata.get("local_evidence", []),
         "local_proof_layers_passed": result.metadata.get("local_proof_layers_passed", []),
         "local_proof_layers_failed": result.metadata.get("local_proof_layers_failed", []),
         "validator_notes": result.metadata.get("validator_notes", []),

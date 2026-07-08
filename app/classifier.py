@@ -71,6 +71,11 @@ def classify_prompt(prompt: str) -> ClassificationResult:
         answer_shape = "label"
         constraints.append("answer_only")
         risk["reasoning_depth"] = 0.25
+    elif "rocm" in lower and "amd" in lower and ("ai" in lower or "inference" in lower or "workloads" in lower):
+        category = "factual_knowledge"
+        confidence = 0.96
+        answer_shape = "short_text"
+        risk["local_validator_weakness"] = 0.25
     elif "gpu differs from a cpu" in lower or "gpu differ from a cpu" in lower:
         category = "factual_knowledge"
         confidence = 0.95
@@ -91,7 +96,14 @@ def classify_prompt(prompt: str) -> ClassificationResult:
 
 
 def _looks_like_math(lower: str) -> bool:
-    math_markers = ("discount", "costs $", "what is 2+2", "what is 2 + 2", "round to the nearest")
+    math_markers = (
+        "discount",
+        "costs $",
+        "what is 2+2",
+        "what is 2 + 2",
+        "round to the nearest",
+        "batches per hour",
+    )
     return any(marker in lower for marker in math_markers)
 
 

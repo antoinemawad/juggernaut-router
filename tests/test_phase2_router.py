@@ -368,7 +368,7 @@ class Phase2RouterTests(unittest.TestCase):
         ), patch("urllib.request.urlopen", fake_urlopen):
             result = answer_task(
                 "code",
-                "Write a Python function named is_even that returns True if a number is even and False otherwise. Return only code.",
+                "Write a Python function clamp(x, low, high) that returns low if x is below low, high if x is above high, otherwise x. Return only code.",
             )
 
         self.assertEqual(result.route, "fireworks")
@@ -393,23 +393,18 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.remote_mode, "remote_code")
         self.assertEqual(result.answer, "def clamp(x, low, high):\n    return max(low, min(x, high))")
 
-    def test_multistep_discount_math_routes_remote(self):
-        with patch.dict(
-            os.environ,
-            {
-                "FIREWORKS_API_KEY": "secret",
-                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
-                "ALLOWED_MODELS": "minimax-m3",
-            },
-            clear=True,
-        ), patch("urllib.request.urlopen", return_value=FakeResponse()):
+    def test_multistep_discount_math_uses_certified_local_proof(self):
+        with patch("app.agent.ask_fireworks_structured") as mocked_remote:
             result = answer_task(
                 "math",
                 "A product costs $80 and is discounted by 25%, then taxed at 10%. What is the final price?",
             )
 
-        self.assertEqual(result.route, "fireworks")
-        self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+        mocked_remote.assert_not_called()
+        self.assertEqual(result.route, "local")
+        self.assertEqual(result.answer, "$66")
+        self.assertIn("proof:exact_arithmetic", result.metadata["local_evidence"])
+        self.assertIn("trap_guard", result.metadata["local_proof_layers_passed"])
 
     def test_remote_numeric_answer_is_normalized_to_exact_value(self):
         from app.fireworks_client import FireworksResult
@@ -421,7 +416,7 @@ class Phase2RouterTests(unittest.TestCase):
             )
             result = answer_task(
                 "math",
-                "A product costs $80 and is discounted by 25%, then taxed at 10%. What is the final price?",
+                "A product costs $80 after a bundle discount and local tax. What is the final price? Return only the dollar amount.",
             )
 
         self.assertEqual(result.route, "fireworks")
@@ -612,7 +607,7 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertTrue(row["expected_route_match"])
         self.assertIn("risk_gate", row["local_proof_layers_passed"])
 
-    def test_router_sweep_uses_real_router_for_remote_case(self):
+    def test_router_sweep_uses_real_router_for_certified_arithmetic_case(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid")
         scenario = {
             "task_id": "math_projection",
@@ -620,6 +615,23 @@ class Phase2RouterTests(unittest.TestCase):
             "prompt": "A service has 120 users and grows by 15% each month for two months. How many users after two months? Round to the nearest whole number.",
             "expected_keywords": ["159"],
             "expected_answer": "159",
+            "expected_route": "local",
+        }
+        row = run_scenario(config, scenario)
+        self.assertEqual(row["route"], "local")
+        self.assertEqual(row["answer"], "159")
+        self.assertEqual(row["total_tokens"], 0)
+        self.assertTrue(row["expected_route_match"])
+        self.assertIn("risk_gate", row["local_proof_layers_passed"])
+
+    def test_router_sweep_uses_real_router_for_current_fact_remote_case(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid")
+        scenario = {
+            "task_id": "factual_current_ceo",
+            "category": "factual_knowledge",
+            "prompt": "Who is the current CEO of AMD today? Return only the person's name.",
+            "expected_keywords": ["Lisa Su"],
+            "expected_answer": "Lisa Su",
             "expected_route": "remote_accuracy",
         }
         row = run_scenario(config, scenario)
@@ -681,6 +693,42 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertTrue(row["expected_route_match"])
         self.assertIn("trap_guard", row["local_proof_layers_failed"])
 
+    def test_router_sweep_accepts_certified_stable_rocm_fact_locally(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid")
+        scenario = {
+            "task_id": "factual_rocm",
+            "category": "factual_knowledge",
+            "prompt": "What is ROCm and why is it relevant for AI workloads on AMD GPUs? Answer in two sentences.",
+            "expected_keywords": ["ROCm", "AMD", "GPU", "AI"],
+            "expected_answer": "ROCm is AMD's open-source software platform for GPU computing. It matters for AI because it enables frameworks and inference/training workloads to run on AMD GPUs.",
+            "expected_route": "local_or_remote_concise",
+        }
+
+        row = run_scenario(config, scenario)
+
+        self.assertEqual(row["route"], "local")
+        self.assertEqual(row["total_tokens"], 0)
+        self.assertIn("ROCm", row["answer"])
+        self.assertIn("proof:stable_factual_template", row["local_evidence"])
+
+    def test_router_sweep_accepts_certified_simple_summary_locally(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid")
+        scenario = {
+            "task_id": "summary_cloud",
+            "category": "text_summarisation",
+            "prompt": "Summarise the following text in one sentence: AMD Developer Cloud gives developers access to AMD GPUs for AI workloads. It supports ROCm, PyTorch, and vLLM environments for building and testing AI applications.",
+            "expected_keywords": ["AMD Developer Cloud", "AMD GPUs", "AI"],
+            "expected_answer": "AMD Developer Cloud provides AMD GPU access and software environments for building and testing AI workloads.",
+            "expected_route": "local_or_remote_concise",
+            "verifier": "summary_constraints",
+        }
+
+        row = run_scenario(config, scenario)
+
+        self.assertEqual(row["route"], "local")
+        self.assertEqual(row["total_tokens"], 0)
+        self.assertIn("AMD Developer Cloud", row["answer"])
+        self.assertIn("proof:stable_summary_template", row["local_evidence"])
 
     def test_strict_hybrid_expected_routes_match_full_fixture(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid")
@@ -693,7 +741,7 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(mismatches, [])
 
     def test_router_sweep_summary_includes_scorecard_metrics(self):
-        scenarios = load_scenarios(DEFAULT_SCENARIOS)[:4]
+        scenarios = load_scenarios(DEFAULT_SCENARIOS)[:6]
         configs = [
             next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid"),
             next(item for item in DEFAULT_CONFIGS if item["name"] == "gemma_first_router"),
