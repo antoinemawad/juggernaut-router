@@ -206,6 +206,26 @@ and average tokens third. Use the category recommendations as evidence, not as a
 promote a model only when it is stable across repeated runs and still respects the official
 `ALLOWED_MODELS` / `FIREWORKS_BASE_URL` constraints.
 
+To summarize the two most recent matrix runs in a shell:
+
+```bash
+python3 scripts/summarize_model_matrix_runs.py $(ls -t eval_runs/model_matrix_*.jsonl | head -2) --out eval_runs/kimi_two_run_summary.md
+```
+
+Do not paste placeholder filenames such as `model_matrix_YYYYMMDD_HHMMSS.jsonl`; use the real
+filename printed by `eval/model_matrix.py`.
+
+To preserve a lightweight index of all local/notebook evidence for slides and final review:
+
+```bash
+python3 scripts/build_evidence_manifest.py
+cat eval_runs/evidence_manifest.md
+```
+
+Raw `eval_runs/` artifacts are intentionally not committed to git. Keep them in the AMD notebook
+or local machine, and promote only curated decisions, screenshots, tables, and summary text into
+docs/slides.
+
 ## Prompt Policy Testing
 
 Uncertain prompt-shaping decisions must be tested with metrics instead of guessed.

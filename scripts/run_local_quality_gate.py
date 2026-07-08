@@ -65,6 +65,7 @@ def main():
         "eval/router_config_sweep.py",
         "scripts/check_eval_coverage.py",
         "scripts/check_expected_routes.py",
+        "scripts/build_evidence_manifest.py",
         "scripts/check_live_eval_env.py",
         "scripts/check_submission_static.py",
         "scripts/check_docker_runtime.py",

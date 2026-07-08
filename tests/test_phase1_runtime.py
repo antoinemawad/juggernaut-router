@@ -17,6 +17,7 @@ from eval.model_matrix import parse_dev_model_map, provider_model_for
 from scripts.check_live_eval_env import validate_live_eval_env
 from scripts.final_submission_commands import validate_image_ref
 from scripts import check_submission_static
+from scripts import build_evidence_manifest
 from scripts import compare_eval_reports
 from scripts import summarize_model_matrix_runs
 from scripts import submission_readiness_report
@@ -268,6 +269,33 @@ class Phase1RuntimeTests(unittest.TestCase):
 
         self.assertEqual(recommendations["code_generation"][0], ("kimi-k2p7-code", "compact"))
         self.assertEqual(recommendations["code_generation"][1]["runs"], 2)
+
+    def test_evidence_manifest_summarizes_eval_run_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            jsonl_path = root / "model_matrix_20260708_111058.jsonl"
+            jsonl_path.write_text(
+                json.dumps({
+                    "run_id": "model_matrix_20260708_111058",
+                    "timestamp": "2026-07-08T11:10:58+00:00",
+                    "passed": True,
+                }) + "\n",
+                encoding="utf-8",
+            )
+            jsonl_path.with_suffix(".md").write_text("Mode: live Fireworks\n", encoding="utf-8")
+            (root / "local_quality_gate_latest.json").write_text(
+                json.dumps({"status": "passed", "timestamp": "2026-07-08T11:00:00+00:00"}) + "\n",
+                encoding="utf-8",
+            )
+
+            manifest = build_evidence_manifest.build_manifest(root)
+
+        self.assertEqual(manifest["counts"]["jsonl"], 1)
+        self.assertEqual(manifest["counts"]["json"], 1)
+        self.assertEqual(manifest["counts"]["markdown"], 1)
+        self.assertEqual(manifest["jsonl_reports"][0]["type"], "model_matrix")
+        self.assertEqual(manifest["jsonl_reports"][0]["rows"], 1)
+        self.assertEqual(manifest["jsonl_reports"][0]["mode"], "live Fireworks")
 
     def test_deadline_suppresses_retry_when_budget_is_low(self):
         clock = FakeClock()
