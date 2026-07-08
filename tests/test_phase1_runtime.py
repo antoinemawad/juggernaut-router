@@ -18,6 +18,7 @@ from scripts.check_live_eval_env import validate_live_eval_env
 from scripts.final_submission_commands import validate_image_ref
 from scripts import check_submission_static
 from scripts import compare_eval_reports
+from scripts import summarize_model_matrix_runs
 from scripts import submission_readiness_report
 
 
@@ -227,6 +228,46 @@ class Phase1RuntimeTests(unittest.TestCase):
             "candidate_high_tokens.jsonl",
             "candidate_lower_accuracy.jsonl",
         ])
+
+    def test_model_matrix_multi_run_summary_recommends_by_category(self):
+        rows = [
+            {
+                "run_id": "r1",
+                "category": "code_generation",
+                "model": "kimi-k2p7-code",
+                "prompt_policy": "compact",
+                "passed": True,
+                "score": 1.0,
+                "total_tokens": 100,
+                "latency_ms": 50,
+            },
+            {
+                "run_id": "r2",
+                "category": "code_generation",
+                "model": "kimi-k2p7-code",
+                "prompt_policy": "compact",
+                "passed": True,
+                "score": 1.0,
+                "total_tokens": 90,
+                "latency_ms": 45,
+            },
+            {
+                "run_id": "r1",
+                "category": "code_generation",
+                "model": "gemma-4-31b-it",
+                "prompt_policy": "answer_only",
+                "passed": True,
+                "score": 1.0,
+                "total_tokens": 120,
+                "latency_ms": 40,
+            },
+        ]
+        _by_model_policy, by_category_model_policy, _by_category = summarize_model_matrix_runs.summarize(rows)
+
+        recommendations = summarize_model_matrix_runs.recommended_by_category(by_category_model_policy)
+
+        self.assertEqual(recommendations["code_generation"][0], ("kimi-k2p7-code", "compact"))
+        self.assertEqual(recommendations["code_generation"][1]["runs"], 2)
 
     def test_deadline_suppresses_retry_when_budget_is_low(self):
         clock = FakeClock()

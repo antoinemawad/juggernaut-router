@@ -194,6 +194,18 @@ After the smoke test succeeds:
 python3 eval/model_matrix.py --live --prompt-policies all
 ```
 
+After collecting multiple live or development-only runs, summarize stability across runs before
+changing router defaults:
+
+```bash
+python3 scripts/summarize_model_matrix_runs.py eval_runs/model_matrix_*.jsonl --out eval_runs/model_matrix_multi_run_summary.md
+```
+
+The multi-run summary ranks model/prompt-policy pairs by pass rate first, average score second,
+and average tokens third. Use the category recommendations as evidence, not as automatic defaults:
+promote a model only when it is stable across repeated runs and still respects the official
+`ALLOWED_MODELS` / `FIREWORKS_BASE_URL` constraints.
+
 ## Prompt Policy Testing
 
 Uncertain prompt-shaping decisions must be tested with metrics instead of guessed.

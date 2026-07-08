@@ -71,6 +71,7 @@ def main():
         "scripts/compare_eval_reports.py",
         "scripts/final_submission_commands.py",
         "scripts/run_phase1_acceptance.py",
+        "scripts/summarize_model_matrix_runs.py",
         "scripts/submission_readiness_report.py",
         "scripts/validate_submission_io.py",
         "tests/test_phase1_runtime.py",
