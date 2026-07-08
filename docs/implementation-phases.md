@@ -116,6 +116,7 @@ python3 scripts/check_expected_routes.py --config strict_hybrid
 python3 scripts/check_expected_routes.py --config strict_hybrid --scenarios eval/golden_tier_2_regression.jsonl
 python3 scripts/check_expected_routes.py --config strict_hybrid --scenarios eval/golden_tier_3_adversarial.jsonl
 python3 eval/router_config_sweep.py --accuracy-threshold 0.85
+python3 scripts/recommend_runtime_env.py --from-latest-sweep
 python3 eval/model_matrix.py --prompt-policies all
 ```
 
@@ -123,6 +124,7 @@ Exit criteria:
 
 - expected route and remote-mode checks pass on core/regression/adversarial fixtures,
 - route changes are explainable,
+- the selected sweep config has been converted into real runtime env vars; `ROUTER_MODE` must be `conservative`, `balanced`, or `aggressive`, not a sweep config name,
 - unsafe local acceptance is treated as a blocking bug,
 - mock/golden reports contain enough metrics to compare token-saving and accuracy tradeoffs.
 

@@ -19,6 +19,7 @@ from scripts.final_submission_commands import validate_image_ref
 from scripts import check_submission_static
 from scripts import build_evidence_manifest
 from scripts import compare_eval_reports
+from scripts import recommend_runtime_env
 from scripts import summarize_model_matrix_runs
 from scripts import submission_readiness_report
 
@@ -332,6 +333,31 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(manifest["jsonl_reports"][0]["type"], "model_matrix")
         self.assertEqual(manifest["jsonl_reports"][0]["rows"], 1)
         self.assertEqual(manifest["jsonl_reports"][0]["mode"], "live Fireworks")
+
+    def test_runtime_env_exports_map_sweep_config_to_runtime_knobs(self):
+        config = recommend_runtime_env.config_by_name("strict_hybrid")
+
+        rendered = recommend_runtime_env.render_shell("strict_hybrid", config)
+
+        self.assertIn("Router sweep config: strict_hybrid", rendered)
+        self.assertIn("export ROUTER_MODE='conservative'", rendered)
+        self.assertIn("export LOCAL_CONFIDENCE_THRESHOLD='0.95'", rendered)
+        self.assertIn("export FIREWORKS_MAX_TOKENS='192'", rendered)
+        self.assertIn("unset ROUTER_PROMPT_POLICY_BY_CATEGORY", rendered)
+        self.assertIn("export ROUTER_MODELS_REMOTE_ACCURACY='minimax-m3'", rendered)
+        self.assertNotIn("export ROUTER_MODE='strict_hybrid'", rendered)
+
+    def test_runtime_env_exports_category_prompt_policy_experiment(self):
+        config = recommend_runtime_env.config_by_name("strict_hybrid_kimi_prompt_evidence")
+
+        rendered = recommend_runtime_env.render_shell("strict_hybrid_kimi_prompt_evidence", config)
+
+        self.assertIn("export ROUTER_MODE='conservative'", rendered)
+        self.assertIn(
+            "export ROUTER_PROMPT_POLICY_BY_CATEGORY='code_generation=compact,mathematical_reasoning=answer_only'",
+            rendered,
+        )
+        self.assertIn("export ROUTER_MODELS_REMOTE_CODE='kimi-k2p7-code'", rendered)
 
     def test_deadline_suppresses_retry_when_budget_is_low(self):
         clock = FakeClock()

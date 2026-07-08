@@ -70,9 +70,10 @@ Before spending official submission attempts, compare candidate router configura
 
 ```bash
 python3 eval/router_config_sweep.py --accuracy-threshold 0.85
+python3 scripts/recommend_runtime_env.py --from-latest-sweep
 ```
 
-This produces `eval_runs/router_sweep_*.jsonl` and `eval_runs/router_sweep_*.md`, ranking configurations by accuracy first and token usage second.
+This produces `eval_runs/router_sweep_*.jsonl` and `eval_runs/router_sweep_*.md`, ranking configurations by accuracy first and token usage second. The env helper converts the winning sweep config into real runtime exports such as `ROUTER_MODE=conservative`; do not set `ROUTER_MODE` to a sweep config name like `strict_hybrid`.
 
 ## Production Readiness Checks
 
