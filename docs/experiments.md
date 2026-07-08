@@ -362,7 +362,7 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 - Fireworks calls required: Reduced in mock sweep.
 - Expected token impact: Latest `strict_hybrid` sweep estimated 382 total Fireworks tokens across 24 scenarios, with 62.5% local rate.
 - Accuracy observations: Sweep remained at 95.8% pass rate and 0.962 average score with 100% expected-route match.
-- Failure cases: Unsupported code prompts such as `merge_sorted` still route to Fireworks; current facts, sarcasm, ambiguous NER, and exact word-count summaries remain remote.
+- Failure cases: Unsupported code prompts outside the certified template set still route to Fireworks; current facts, sarcasm, ambiguous NER, and exact word-count summaries remain remote.
 - Decision: Keep certified local proofs enabled. Do not broaden local acceptance without executable proof or similarly strong validators.
 
 - Evaluation uses unseen variants; do not tune to exact public examples. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.

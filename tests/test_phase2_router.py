@@ -407,23 +407,23 @@ class Phase2RouterTests(unittest.TestCase):
         with patch("app.agent.ask_fireworks_structured") as mocked_remote:
             from app.fireworks_client import FireworksResult
 
-            mocked_remote.return_value = FireworksResult(answer="def clamp(x, low, high):\n    return max(low, min(x, high))", model="minimax-m3")
+            mocked_remote.return_value = FireworksResult(answer="def parse_ints(text):\n    return []", model="minimax-m3")
             result = answer_task(
                 "code",
-                "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+                "Write a Python function parse_ints(text) that returns all integers in the string. Return only code.",
                 config=config,
             )
 
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.remote_mode, "remote_code")
-        self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+        self.assertIn("solver_confidence", result.metadata["local_proof_layers_failed"])
 
     def test_agent_prefers_code_model_when_allowed(self):
         captured = {}
 
         def fake_urlopen(request, timeout):
             captured["payload"] = json.loads(request.data.decode("utf-8"))
-            return FakeResponse("def merge_sorted(a, b):\n    return sorted(a + b)")
+            return FakeResponse("def parse_ints(text):\n    return []")
 
         with patch.dict(
             os.environ,
@@ -436,7 +436,7 @@ class Phase2RouterTests(unittest.TestCase):
         ), patch("urllib.request.urlopen", fake_urlopen):
             result = answer_task(
                 "code",
-                "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+                "Write a Python function parse_ints(text) that returns all integers in the string. Return only code.",
             )
 
         self.assertEqual(result.route, "fireworks")
@@ -449,17 +449,17 @@ class Phase2RouterTests(unittest.TestCase):
 
         with patch("app.agent.ask_fireworks_structured") as mocked_remote:
             mocked_remote.return_value = FireworksResult(
-                answer="Here is the code:\n\n```python\ndef clamp(x, low, high):\n    return max(low, min(x, high))\n```\n",
+                answer="Here is the code:\n\n```python\ndef parse_ints(text):\n    return []\n```\n",
                 model="kimi-k2p7-code",
             )
             result = answer_task(
                 "code",
-                "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+                "Write a Python function parse_ints(text) that returns all integers in the string. Return only code.",
             )
 
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.remote_mode, "remote_code")
-        self.assertEqual(result.answer, "def clamp(x, low, high):\n    return max(low, min(x, high))")
+        self.assertEqual(result.answer, "def parse_ints(text):\n    return []")
 
     def test_invalid_remote_code_triggers_validation_escalation(self):
         from app.fireworks_client import FireworksResult
@@ -476,17 +476,17 @@ class Phase2RouterTests(unittest.TestCase):
             clear=True,
         ), patch("app.agent.ask_fireworks_structured") as mocked_remote:
             mocked_remote.side_effect = [
-                FireworksResult(answer="def merge_sorted(a, b):\n    return a +", model="minimax-m3", completion_tokens=3, total_tokens=20),
-                FireworksResult(answer="def merge_sorted(a, b):\n    return sorted(a + b)", model="kimi-k2p7-code", completion_tokens=6, total_tokens=40),
+                FireworksResult(answer="def parse_ints(text):\n    return a +", model="minimax-m3", completion_tokens=3, total_tokens=20),
+                FireworksResult(answer="def parse_ints(text):\n    return []", model="kimi-k2p7-code", completion_tokens=6, total_tokens=40),
             ]
             result = answer_task(
                 "code",
-                "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+                "Write a Python function parse_ints(text) that returns all integers in the string. Return only code.",
             )
 
         self.assertEqual(mocked_remote.call_count, 2)
         self.assertEqual(result.route, "fireworks")
-        self.assertEqual(result.answer, "def merge_sorted(a, b):\n    return sorted(a + b)")
+        self.assertEqual(result.answer, "def parse_ints(text):\n    return []")
         self.assertEqual(result.selected_model, "kimi-k2p7-code")
         self.assertEqual(result.total_tokens, 60)
         self.assertEqual(result.retry_count, 1)
@@ -510,13 +510,13 @@ class Phase2RouterTests(unittest.TestCase):
             clear=True,
         ), patch("app.agent.ask_fireworks_structured") as mocked_remote:
             mocked_remote.return_value = FireworksResult(
-                answer="def merge_sorted(a, b):\n    return a +",
+                answer="def parse_ints(text):\n    return a +",
                 model="minimax-m3",
                 total_tokens=20,
             )
             result = answer_task(
                 "code",
-                "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+                "Write a Python function parse_ints(text) that returns all integers in the string. Return only code.",
             )
 
         mocked_remote.assert_called_once()
@@ -531,6 +531,11 @@ class Phase2RouterTests(unittest.TestCase):
             "factorial": "Write a Python function factorial(n) that multiplies numbers from 1 through n using a loop. Return only code.",
             "normalize_name": "Write a Python function normalize_name(name) that strips surrounding whitespace and converts the result to title case. Return only code.",
             "safe_divide": "Write Python code only: define safe_divide(a, b) returning None when b is zero, otherwise a / b. Do not import anything.",
+            "max_of_three": "Write a Python function named max_of_three(a, b, c) that returns the largest value. Return only code.",
+            "reverse_string": "Write a Python function named reverse_string(s) that returns the string reversed. Return only code.",
+            "dedupe_preserve_order": "Write a Python function named dedupe_preserve_order(items) that removes duplicates while preserving order. Return only code.",
+            "merge_sorted": "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+            "count_vowels": "Write a Python function named count_vowels(s) that returns the number of vowels in the string. Return only code.",
             "total": "Debug this Python function. Return only corrected code:\n\ndef total(nums):\n    s = 0\n    for n in nums:\n        s = n\n    return s",
             "is_adult": "Return only corrected code:\n\ndef is_adult(age):\n    return age > 18\n\nThe function should return True for age 18 and above.",
             "count_positive": "Return only corrected code:\n\ndef count_positive(nums):\n    count = 0\n    for n in nums:\n        if n > 0:\n            count = 1\n    return count",
@@ -544,6 +549,38 @@ class Phase2RouterTests(unittest.TestCase):
             self.assertEqual(result.route, "local")
             self.assertIn("proof:exact_code_template", result.metadata["local_evidence"])
             self.assertFalse(result.metadata["local_proof_layers_failed"])
+
+    def test_new_certified_code_templates_return_expected_code(self):
+        cases = {
+            "max_of_three": (
+                "Write a Python function named max_of_three(a, b, c) that returns the largest value. Return only code.",
+                "def max_of_three(a, b, c):\n    return max(a, b, c)",
+            ),
+            "reverse_string": (
+                "Write a Python function named reverse_string(s) that returns the string reversed. Return only code.",
+                "def reverse_string(s):\n    return s[::-1]",
+            ),
+            "dedupe_preserve_order": (
+                "Write a Python function named dedupe_preserve_order(items) that removes duplicates while preserving order. Return only code.",
+                "def dedupe_preserve_order(items):\n    result = []\n    for item in items:\n        if item not in result:\n            result.append(item)\n    return result",
+            ),
+            "merge_sorted": (
+                "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+                "def merge_sorted(a, b):\n    return sorted(a + b)",
+            ),
+            "count_vowels": (
+                "Write a Python function named count_vowels(s) that returns the number of vowels in the string. Return only code.",
+                "def count_vowels(s):\n    return sum(1 for ch in s.lower() if ch in 'aeiou')",
+            ),
+        }
+
+        for name, (prompt, expected) in cases.items():
+            with self.subTest(name=name), patch("app.agent.ask_fireworks_structured") as mocked_remote:
+                result = answer_task(name, prompt)
+
+            mocked_remote.assert_not_called()
+            self.assertEqual(result.route, "local")
+            self.assertEqual(result.answer, expected)
 
     def test_multistep_discount_math_uses_certified_local_proof(self):
         with patch("app.agent.ask_fireworks_structured") as mocked_remote:
@@ -930,13 +967,13 @@ class Phase2RouterTests(unittest.TestCase):
     def test_router_sweep_validation_escalation_records_extra_remote_cost(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "gemma_first_router_with_validation_escalation")
         scenario = {
-            "task_id": "codegen_merge_sorted",
+            "task_id": "codegen_parse_ints",
             "category": "code_generation",
             "difficulty": "medium",
             "scenario_class": "adversarial",
-            "prompt": "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
-            "expected_keywords": ["def merge_sorted", "sorted", "return"],
-            "expected_answer": "def merge_sorted(a, b):\n    return sorted(a + b)",
+            "prompt": "Write a Python function parse_ints(text) that returns all integers in the string. Return only code.",
+            "expected_keywords": ["def parse_ints", "return"],
+            "expected_answer": "def parse_ints(text):\n    return []",
             "expected_route": "remote_code",
             "constraints": ["code_only"],
             "verifier": "python_syntax",
@@ -954,13 +991,13 @@ class Phase2RouterTests(unittest.TestCase):
     def test_router_sweep_supports_category_prompt_policy_overrides(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid_kimi_prompt_evidence")
         scenario = {
-            "task_id": "codegen_merge_sorted",
+            "task_id": "codegen_parse_ints",
             "category": "code_generation",
             "difficulty": "medium",
             "scenario_class": "adversarial",
-            "prompt": "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
-            "expected_keywords": ["def merge_sorted", "sorted", "return"],
-            "expected_answer": "def merge_sorted(a, b):\n    return sorted(a + b)",
+            "prompt": "Write a Python function parse_ints(text) that returns all integers in the string. Return only code.",
+            "expected_keywords": ["def parse_ints", "return"],
+            "expected_answer": "def parse_ints(text):\n    return []",
             "expected_route": "remote_code",
             "constraints": ["code_only"],
             "verifier": "python_syntax",

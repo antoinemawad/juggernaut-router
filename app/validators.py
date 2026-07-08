@@ -267,6 +267,12 @@ def _code_is_nontrivial(lower: str) -> bool:
         "is_adult",
         "count_positive",
         "merge_sorted",
+        "max_of_three",
+        "reverse_string",
+        "dedupe_preserve_order",
+        "count_vowels",
+        "deduplicate",
+        "preserve order",
     )
     return any(marker in lower for marker in nontrivial_markers)
 
@@ -333,6 +339,20 @@ def _ner_cross_check_passes(prompt: str, answer: str) -> bool:
 def _code_cross_check_passes(lower_prompt: str, answer: str) -> bool:
     if "function named is_even" in lower_prompt:
         return _function_tests_pass(answer, "is_even", [((2,), True), ((3,), False), ((0,), True)])
+    if "max_of_three" in lower_prompt:
+        return _function_tests_pass(answer, "max_of_three", [((1, 2, 3), 3), ((9, 2, 3), 9), (((-1, -5, -3)), -1)])
+    if "reverse_string" in lower_prompt:
+        return _function_tests_pass(answer, "reverse_string", [(("abc",), "cba"), (("",), ""), (("Race",), "ecaR")])
+    if "count_vowels" in lower_prompt:
+        return _function_tests_pass(answer, "count_vowels", [(("Hello",), 2), (("xyz",), 0), (("AEIOU",), 5)])
+    if "dedupe_preserve_order" in lower_prompt or ("deduplicate" in lower_prompt and "preserve order" in lower_prompt):
+        return _function_tests_pass(
+            answer,
+            "dedupe_preserve_order",
+            [(([1, 2, 1, 3, 2],), [1, 2, 3]), ((["a", "b", "a"],), ["a", "b"]), (([],), [])],
+        )
+    if "merge_sorted" in lower_prompt:
+        return _function_tests_pass(answer, "merge_sorted", [(([1, 3], [2, 4]), [1, 2, 3, 4]), (([], [1]), [1]), (([3], [1, 2]), [1, 2, 3])])
     if "function clamp" in lower_prompt:
         return _function_tests_pass(answer, "clamp", [((-1, 0, 10), 0), ((11, 0, 10), 10), ((5, 0, 10), 5)])
     if "function factorial" in lower_prompt:
@@ -361,7 +381,7 @@ def _function_tests_pass(code: str, function_name: str, cases: list[tuple[tuple,
     if not _python_syntax_valid(code):
         return False
     namespace: dict[str, object] = {}
-    safe_builtins = {"max": max, "min": min, "range": range}
+    safe_builtins = {"max": max, "min": min, "range": range, "sum": sum, "sorted": sorted}
     try:
         exec(code, {"__builtins__": safe_builtins}, namespace)
         func = namespace.get(function_name)

@@ -198,6 +198,32 @@ def solve_code_generation(text: str):
     if "function named is_even" in lower:
         return "def is_even(n):\n    return n % 2 == 0"
 
+    if "function named max_of_three" in lower or "function max_of_three" in lower:
+        return "def max_of_three(a, b, c):\n    return max(a, b, c)"
+
+    if "function named reverse_string" in lower or "function reverse_string" in lower:
+        return "def reverse_string(s):\n    return s[::-1]"
+
+    if "function named count_vowels" in lower or "function count_vowels" in lower:
+        return "def count_vowels(s):\n    return sum(1 for ch in s.lower() if ch in 'aeiou')"
+
+    if (
+        "function named dedupe_preserve_order" in lower
+        or "function dedupe_preserve_order" in lower
+        or ("deduplicate" in lower and "preserve order" in lower)
+    ):
+        return (
+            "def dedupe_preserve_order(items):\n"
+            "    result = []\n"
+            "    for item in items:\n"
+            "        if item not in result:\n"
+            "            result.append(item)\n"
+            "    return result"
+        )
+
+    if "function named merge_sorted" in lower or "function merge_sorted" in lower:
+        return "def merge_sorted(a, b):\n    return sorted(a + b)"
+
     if "function clamp" in lower:
         return "def clamp(x, low, high):\n    return max(low, min(x, high))"
 
