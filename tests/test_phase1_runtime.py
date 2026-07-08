@@ -142,6 +142,7 @@ class Phase1RuntimeTests(unittest.TestCase):
                 "ROUTER_PROMPT_POLICY_REMOTE_CODE": "final_only",
                 "ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT": "compact",
                 "ROUTER_PROMPT_POLICY_REMOTE_CONCISE": "invalid-policy",
+                "ROUTER_PROMPT_POLICY_BY_CATEGORY": "code_generation=compact,mathematical_reasoning=answer_only,bad=invalid",
             },
             clear=True,
         ):
@@ -150,6 +151,10 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(config.prompt_policy_remote_code, "final_only")
         self.assertEqual(config.prompt_policy_remote_format_strict, "compact")
         self.assertEqual(config.prompt_policy_remote_concise, "compact")
+        self.assertEqual(config.prompt_policy_by_category, {
+            "code_generation": "compact",
+            "mathematical_reasoning": "answer_only",
+        })
 
     def test_config_parses_remote_model_preference_knobs(self):
         with patch.dict(

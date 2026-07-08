@@ -65,6 +65,23 @@ def _get_prompt_policy(name: str, default: str) -> str:
     return value if value in PROMPT_POLICIES else default
 
 
+def _get_prompt_policy_map(name: str) -> dict[str, str]:
+    raw = os.environ.get(name, "")
+    mapping = {}
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if "=" not in item:
+            continue
+        category, policy = item.split("=", 1)
+        category = category.strip()
+        policy = policy.strip().lower()
+        if category and policy in PROMPT_POLICIES:
+            mapping[category] = policy
+    return mapping
+
+
 def _get_model_preference(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
     models = parse_allowed_models(os.environ.get(name))
     return tuple(models) if models else default
@@ -105,6 +122,7 @@ class RuntimeConfig:
     prompt_policy_remote_code: str = "answer_only"
     prompt_policy_remote_format_strict: str = "answer_only"
     prompt_policy_remote_concise: str = "compact"
+    prompt_policy_by_category: dict[str, str] | None = None
     models_remote_accuracy: tuple[str, ...] = DEFAULT_REMOTE_ACCURACY_MODELS
     models_remote_code: tuple[str, ...] = DEFAULT_REMOTE_CODE_MODELS
     models_remote_format_strict: tuple[str, ...] = DEFAULT_REMOTE_FORMAT_STRICT_MODELS
@@ -141,6 +159,7 @@ class RuntimeConfig:
                 "answer_only",
             ),
             prompt_policy_remote_concise=_get_prompt_policy("ROUTER_PROMPT_POLICY_REMOTE_CONCISE", "compact"),
+            prompt_policy_by_category=_get_prompt_policy_map("ROUTER_PROMPT_POLICY_BY_CATEGORY"),
             models_remote_accuracy=_get_model_preference(
                 "ROUTER_MODELS_REMOTE_ACCURACY",
                 DEFAULT_REMOTE_ACCURACY_MODELS,

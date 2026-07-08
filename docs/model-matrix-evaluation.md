@@ -343,9 +343,12 @@ export ROUTER_PROMPT_POLICY_REMOTE_ACCURACY=compact
 export ROUTER_PROMPT_POLICY_REMOTE_CODE=answer_only
 export ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT=answer_only
 export ROUTER_PROMPT_POLICY_REMOTE_CONCISE=compact
+export ROUTER_PROMPT_POLICY_BY_CATEGORY=code_generation=compact,mathematical_reasoning=answer_only
 ```
 
 Allowed values are `original`, `compact`, `answer_only`, and `final_only`.
+`ROUTER_PROMPT_POLICY_BY_CATEGORY` accepts comma-separated `category=policy` pairs and takes
+precedence over remote-mode defaults.
 
 Remote model preference defaults can also be overridden:
 

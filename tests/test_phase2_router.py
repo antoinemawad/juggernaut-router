@@ -179,6 +179,34 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertTrue(captured["payload"]["messages"][1]["content"].startswith("Classify the sentiment"))
         self.assertNotIn("Do not restate the task", captured["payload"]["messages"][1]["content"])
 
+    def test_category_prompt_policy_override_beats_remote_mode_default(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse()
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "kimi-k2p7-code",
+                "ROUTER_PROMPT_POLICY_REMOTE_CODE": "final_only",
+                "ROUTER_PROMPT_POLICY_BY_CATEGORY": "code_generation=compact",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", fake_urlopen):
+            result = answer_task(
+                "codegen",
+                "Write Python code only: define clamp(x, low, high). Return only code.",
+            )
+
+        self.assertEqual(result.remote_mode, "remote_code")
+        self.assertEqual(result.prompt_policy, "compact")
+        self.assertIn("Answer accurately and concisely", captured["payload"]["messages"][1]["content"])
+        self.assertNotIn("Final answer only:", captured["payload"]["messages"][1]["content"])
+
     def test_remote_accuracy_model_preference_can_be_overridden(self):
         captured = {}
 

@@ -30,8 +30,9 @@ Optional prompt-policy tuning env vars:
 - `ROUTER_PROMPT_POLICY_REMOTE_CODE`
 - `ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT`
 - `ROUTER_PROMPT_POLICY_REMOTE_CONCISE`
+- `ROUTER_PROMPT_POLICY_BY_CATEGORY`
 
-Allowed values are `original`, `compact`, `answer_only`, and `final_only`. Defaults are evidence-biased but configurable so notebook/live runs can compare models without code changes.
+Allowed values are `original`, `compact`, `answer_only`, and `final_only`. `ROUTER_PROMPT_POLICY_BY_CATEGORY` accepts comma-separated `category=policy` pairs such as `code_generation=compact,mathematical_reasoning=answer_only`. Defaults are evidence-biased but configurable so notebook/live runs can compare models without code changes.
 
 Optional remote model preference env vars:
 
