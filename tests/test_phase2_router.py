@@ -561,7 +561,7 @@ class Phase2RouterTests(unittest.TestCase):
     def test_remote_numeric_answer_is_normalized_to_exact_value(self):
         from app.fireworks_client import FireworksResult
 
-        with patch("app.agent.ask_fireworks_structured") as mocked_remote:
+        with patch.dict(os.environ, {}, clear=True), patch("app.agent.ask_fireworks_structured") as mocked_remote:
             mocked_remote.return_value = FireworksResult(
                 answer="The final price is $66.00 after applying discount and tax.",
                 model="minimax-m3",
@@ -579,7 +579,7 @@ class Phase2RouterTests(unittest.TestCase):
     def test_remote_sentiment_answer_is_normalized_to_label(self):
         from app.fireworks_client import FireworksResult
 
-        with patch("app.agent.ask_fireworks_structured") as mocked_remote:
+        with patch.dict(os.environ, {}, clear=True), patch("app.agent.ask_fireworks_structured") as mocked_remote:
             mocked_remote.return_value = FireworksResult(
                 answer="The sentiment is negative because the wording is sarcastic.",
                 model="minimax-m3",
