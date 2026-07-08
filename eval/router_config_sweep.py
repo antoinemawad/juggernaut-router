@@ -62,6 +62,19 @@ DEFAULT_CONFIGS = [
         "local_confidence_threshold": 0.95,
     },
     {
+        "name": "strict_hybrid_kimi_prompt_evidence",
+        "local_enabled": True,
+        "router_mode": "conservative",
+        "fallback_model": "kimi-k2p7-code",
+        "prompt_policy": "original",
+        "prompt_policy_by_category": {
+            "code_generation": "compact",
+            "mathematical_reasoning": "answer_only",
+        },
+        "max_tokens": 192,
+        "local_confidence_threshold": 0.95,
+    },
+    {
         "name": "gemma_first_router",
         "local_enabled": True,
         "router_mode": "conservative",
@@ -157,8 +170,12 @@ def is_format_failure(scenario, passed):
 
 
 def estimate_remote_tokens(config, scenario, answer):
-    prompt = prompt_for_policy(scenario, config["prompt_policy"])
+    prompt = prompt_for_policy(scenario, prompt_policy_for_scenario(config, scenario))
     return min(config["max_tokens"], estimate_tokens(prompt) + estimate_tokens(answer))
+
+
+def prompt_policy_for_scenario(config, scenario):
+    return config.get("prompt_policy_by_category", {}).get(scenario["category"], config["prompt_policy"])
 
 
 def build_mock_remote_outcome(config, scenario):
@@ -210,6 +227,11 @@ def runtime_config(config):
         fireworks_base_url="https://judge-proxy.example",
         allowed_models=tuple(allowed_models),
         fireworks_max_tokens=config["max_tokens"],
+        prompt_policy_remote_accuracy=config["prompt_policy"],
+        prompt_policy_remote_code=config["prompt_policy"],
+        prompt_policy_remote_format_strict=config["prompt_policy"],
+        prompt_policy_remote_concise=config["prompt_policy"],
+        prompt_policy_by_category=config.get("prompt_policy_by_category"),
     )
 
 
@@ -226,7 +248,7 @@ def route_matches_expected(route, expected_route):
 
 
 def run_scenario(config, scenario):
-    prompt = prompt_for_policy(scenario, config["prompt_policy"])
+    prompt = scenario["prompt"]
     remote_model, remote_answer, escalated_after_validation = build_mock_remote_outcome(config, scenario)
     remote_completion_tokens, remote_total_tokens = estimate_remote_usage(
         config,
@@ -265,7 +287,8 @@ def run_scenario(config, scenario):
         prompt_tokens = 0
         completion_tokens = 0
     else:
-        prompt_tokens = estimate_tokens(prompt) * (2 if escalated_after_validation else 1)
+        effective_prompt = prompt_for_policy(scenario, result.prompt_policy)
+        prompt_tokens = estimate_tokens(effective_prompt) * (2 if escalated_after_validation else 1)
         completion_tokens = remote_completion_tokens
         total_tokens = remote_total_tokens
 
@@ -298,7 +321,7 @@ def run_scenario(config, scenario):
         "validation_escalation_enabled": bool(config.get("validation_escalation")),
         "escalation_model": config.get("escalation_model"),
         "escalated_after_validation": route == "fireworks" and escalated_after_validation,
-        "prompt_policy": config["prompt_policy"],
+        "prompt_policy": result.prompt_policy,
         "max_tokens": config["max_tokens"],
         "router_mode": config["router_mode"],
         "local_confidence_threshold": config["local_confidence_threshold"],

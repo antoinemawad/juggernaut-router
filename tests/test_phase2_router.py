@@ -718,6 +718,7 @@ class Phase2RouterTests(unittest.TestCase):
                 "always_cheapest_fireworks",
                 "always_strongest_fireworks",
                 "always_default_fireworks",
+                "strict_hybrid_kimi_prompt_evidence",
                 "gemma_first_router",
                 "cost_router",
                 "cost_router_with_compact_prompts",
@@ -738,6 +739,17 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertTrue(row["escalated_after_validation"])
         self.assertEqual(row["escalation_model"], "kimi-k2p7-code")
         self.assertEqual(row["prompt_tokens"], estimate_tokens(prompt_for_policy(scenario, config["prompt_policy"])) * 2)
+
+    def test_router_sweep_supports_category_prompt_policy_overrides(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid_kimi_prompt_evidence")
+        scenario = next(item for item in load_scenarios(DEFAULT_SCENARIOS) if item["task_id"] == "codegen_factorial")
+
+        row = run_scenario(config, scenario)
+
+        self.assertEqual(row["route"], "fireworks")
+        self.assertEqual(row["model"], "kimi-k2p7-code")
+        self.assertEqual(row["prompt_policy"], "compact")
+        self.assertEqual(row["prompt_tokens"], estimate_tokens(prompt_for_policy(scenario, "compact")))
 
     def test_expected_route_script_rows_match_full_fixture(self):
         rows = check_routes(config_by_name("strict_hybrid"), load_scenarios(DEFAULT_SCENARIOS))
