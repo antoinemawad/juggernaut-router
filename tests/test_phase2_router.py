@@ -9,7 +9,7 @@ from app.config import RuntimeConfig
 from app.deadline import DeadlineManager
 from app.solvers.basic import LocalSolverResult
 from app.validators import validate_local_answer
-from eval.model_matrix import DEFAULT_SCENARIOS, limit_scenarios, load_scenarios, score_answer
+from eval.model_matrix import DEFAULT_SCENARIOS, estimate_tokens, limit_scenarios, load_scenarios, prompt_for_policy, score_answer
 from eval.router_config_sweep import DEFAULT_CONFIGS, route_matches_expected, run_scenario, summarize
 from scripts.check_expected_routes import check_routes, config_by_name
 
@@ -682,6 +682,34 @@ class Phase2RouterTests(unittest.TestCase):
             self.assertIn("fallback", bucket)
         self.assertGreaterEqual(gemma["gemma_selected"], 1)
         self.assertGreaterEqual(strict["gemma_skipped"], 1)
+
+    def test_router_sweep_includes_planned_phase4_config_variants(self):
+        names = {config["name"] for config in DEFAULT_CONFIGS}
+        self.assertTrue(
+            {
+                "always_cheapest_fireworks",
+                "always_strongest_fireworks",
+                "always_default_fireworks",
+                "gemma_first_router",
+                "cost_router",
+                "cost_router_with_compact_prompts",
+                "cost_router_with_validation_escalation",
+                "gemma_first_router_with_validation_escalation",
+            }.issubset(names)
+        )
+
+    def test_router_sweep_validation_escalation_records_extra_remote_cost(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "gemma_first_router_with_validation_escalation")
+        scenario = next(item for item in load_scenarios(DEFAULT_SCENARIOS) if item["task_id"] == "codegen_factorial")
+
+        row = run_scenario(config, scenario)
+
+        self.assertTrue(row["passed"])
+        self.assertEqual(row["model"], "kimi-k2p7-code")
+        self.assertTrue(row["validation_escalation_enabled"])
+        self.assertTrue(row["escalated_after_validation"])
+        self.assertEqual(row["escalation_model"], "kimi-k2p7-code")
+        self.assertEqual(row["prompt_tokens"], estimate_tokens(prompt_for_policy(scenario, config["prompt_policy"])) * 2)
 
     def test_expected_route_script_rows_match_full_fixture(self):
         rows = check_routes(config_by_name("strict_hybrid"), load_scenarios(DEFAULT_SCENARIOS))

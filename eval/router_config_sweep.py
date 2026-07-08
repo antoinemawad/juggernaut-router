@@ -26,10 +26,28 @@ from eval.model_matrix import (
 
 DEFAULT_CONFIGS = [
     {
-        "name": "always_fireworks_baseline",
+        "name": "always_default_fireworks",
         "local_enabled": False,
         "router_mode": "conservative",
         "fallback_model": "minimax-m3",
+        "prompt_policy": "original",
+        "max_tokens": 256,
+        "local_confidence_threshold": 1.01,
+    },
+    {
+        "name": "always_cheapest_fireworks",
+        "local_enabled": False,
+        "router_mode": "conservative",
+        "fallback_model": "gemma-4-26b-a4b-it",
+        "prompt_policy": "answer_only",
+        "max_tokens": 128,
+        "local_confidence_threshold": 1.01,
+    },
+    {
+        "name": "always_strongest_fireworks",
+        "local_enabled": False,
+        "router_mode": "conservative",
+        "fallback_model": "kimi-k2p7-code",
         "prompt_policy": "original",
         "max_tokens": 256,
         "local_confidence_threshold": 1.01,
@@ -51,6 +69,46 @@ DEFAULT_CONFIGS = [
         "prompt_policy": "compact",
         "max_tokens": 192,
         "local_confidence_threshold": 0.95,
+    },
+    {
+        "name": "cost_router",
+        "local_enabled": True,
+        "router_mode": "balanced",
+        "fallback_model": "minimax-m3",
+        "prompt_policy": "original",
+        "max_tokens": 192,
+        "local_confidence_threshold": 0.92,
+    },
+    {
+        "name": "cost_router_with_compact_prompts",
+        "local_enabled": True,
+        "router_mode": "balanced",
+        "fallback_model": "minimax-m3",
+        "prompt_policy": "compact",
+        "max_tokens": 160,
+        "local_confidence_threshold": 0.92,
+    },
+    {
+        "name": "cost_router_with_validation_escalation",
+        "local_enabled": True,
+        "router_mode": "balanced",
+        "fallback_model": "gemma-4-31b-it-nvfp4",
+        "escalation_model": "kimi-k2p7-code",
+        "prompt_policy": "compact",
+        "max_tokens": 160,
+        "local_confidence_threshold": 0.92,
+        "validation_escalation": True,
+    },
+    {
+        "name": "gemma_first_router_with_validation_escalation",
+        "local_enabled": True,
+        "router_mode": "conservative",
+        "fallback_model": "gemma-4-31b-it-nvfp4",
+        "escalation_model": "kimi-k2p7-code",
+        "prompt_policy": "compact",
+        "max_tokens": 192,
+        "local_confidence_threshold": 0.95,
+        "validation_escalation": True,
     },
     {
         "name": "balanced_hybrid",
@@ -103,8 +161,38 @@ def estimate_remote_tokens(config, scenario, answer):
     return min(config["max_tokens"], estimate_tokens(prompt) + estimate_tokens(answer))
 
 
+def build_mock_remote_outcome(config, scenario):
+    model = config["fallback_model"]
+    answer = mock_answer(model, scenario)
+    passed, _score, _notes = score_answer(answer, scenario)
+    escalation_model = config.get("escalation_model")
+    escalated = False
+
+    if config.get("validation_escalation") and escalation_model and not passed:
+        escalated = True
+        model = escalation_model
+        answer = mock_answer(model, scenario)
+
+    return model, answer, escalated
+
+
+def estimate_remote_usage(config, scenario, answer, escalated_after_validation=False):
+    completion_tokens = estimate_tokens(answer)
+    total_tokens = estimate_remote_tokens(config, scenario, answer)
+    if not escalated_after_validation:
+        return completion_tokens, total_tokens
+
+    first_answer = mock_answer(config["fallback_model"], scenario)
+    first_completion_tokens = estimate_tokens(first_answer)
+    first_total_tokens = estimate_remote_tokens(config, scenario, first_answer)
+    return completion_tokens + first_completion_tokens, total_tokens + first_total_tokens
+
+
 def runtime_config(config):
     threshold = config["local_confidence_threshold"] if config["local_enabled"] else 1.01
+    allowed_models = [config["fallback_model"]]
+    if config.get("escalation_model") and config["escalation_model"] not in allowed_models:
+        allowed_models.append(config["escalation_model"])
     return RuntimeConfig(
         input_path=Path("/input/tasks.json"),
         output_path=Path("/output/results.json"),
@@ -120,7 +208,7 @@ def runtime_config(config):
         router_log_path=None,
         fireworks_api_key="mock-key",
         fireworks_base_url="https://judge-proxy.example",
-        allowed_models=(config["fallback_model"],),
+        allowed_models=tuple(allowed_models),
         fireworks_max_tokens=config["max_tokens"],
     )
 
@@ -139,14 +227,18 @@ def route_matches_expected(route, expected_route):
 
 def run_scenario(config, scenario):
     prompt = prompt_for_policy(scenario, config["prompt_policy"])
-    remote_answer = mock_answer(config["fallback_model"], scenario)
-    remote_completion_tokens = estimate_tokens(remote_answer)
-    remote_total_tokens = estimate_remote_tokens(config, scenario, remote_answer)
+    remote_model, remote_answer, escalated_after_validation = build_mock_remote_outcome(config, scenario)
+    remote_completion_tokens, remote_total_tokens = estimate_remote_usage(
+        config,
+        scenario,
+        remote_answer,
+        escalated_after_validation,
+    )
 
     def mock_fireworks(remote_prompt, config=None, deadline=None, preferred_models=None, system_prompt=None):
         return FireworksResult(
             answer=remote_answer,
-            model=config.first_allowed_model() if config is not None else None,
+            model=remote_model,
             completion_tokens=remote_completion_tokens,
             total_tokens=remote_total_tokens,
             elapsed_ms=1,
@@ -173,7 +265,7 @@ def run_scenario(config, scenario):
         prompt_tokens = 0
         completion_tokens = 0
     else:
-        prompt_tokens = estimate_tokens(prompt)
+        prompt_tokens = estimate_tokens(prompt) * (2 if escalated_after_validation else 1)
         completion_tokens = remote_completion_tokens
         total_tokens = remote_total_tokens
 
@@ -203,6 +295,9 @@ def run_scenario(config, scenario):
         "model": model,
         "gemma_decision": gemma_decision,
         "gemma_candidate_model": config["fallback_model"] if is_gemma_model(config["fallback_model"]) else None,
+        "validation_escalation_enabled": bool(config.get("validation_escalation")),
+        "escalation_model": config.get("escalation_model"),
+        "escalated_after_validation": route == "fireworks" and escalated_after_validation,
         "prompt_policy": config["prompt_policy"],
         "max_tokens": config["max_tokens"],
         "router_mode": config["router_mode"],
@@ -251,6 +346,7 @@ def summarize(rows, accuracy_threshold):
         "gemma_selected": 0,
         "gemma_skipped": 0,
         "gemma_escalated_from": 0,
+        "validation_escalated": 0,
         "latency": 0,
     })
     by_config_category = defaultdict(lambda: {
@@ -267,6 +363,7 @@ def summarize(rows, accuracy_threshold):
         "gemma_selected": 0,
         "gemma_skipped": 0,
         "gemma_escalated_from": 0,
+        "validation_escalated": 0,
         "latency": 0,
     })
 
@@ -285,6 +382,7 @@ def summarize(rows, accuracy_threshold):
             bucket["gemma_selected"] += int(row.get("gemma_decision") == "selected")
             bucket["gemma_skipped"] += int(row.get("gemma_decision") == "skipped")
             bucket["gemma_escalated_from"] += int(row.get("gemma_decision") == "escalated_from")
+            bucket["validation_escalated"] += int(row.get("escalated_after_validation", False))
             bucket["latency"] += row.get("task_elapsed_ms", 0)
 
     ranked = sorted(
@@ -314,8 +412,8 @@ def write_report(path, rows, accuracy_threshold):
         "",
         "## Summary by Config",
         "",
-        "| Config | Cases | Pass Rate | Avg Score | Input Tokens | Output Tokens | Total Tokens | Avg Tokens | Local Rate | Fallback Rate | Format Fail Rate | Gemma Selected | Gemma Skipped | Gemma Escalated | Avg Latency ms | Route Match | Eligible |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| Config | Cases | Pass Rate | Avg Score | Input Tokens | Output Tokens | Total Tokens | Avg Tokens | Local Rate | Fallback Rate | Format Fail Rate | Validation Escalations | Gemma Selected | Gemma Skipped | Gemma Escalated | Avg Latency ms | Route Match | Eligible |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
     eligible_names = {name for name, _data in eligible}
     for name, data in ranked:
@@ -326,6 +424,7 @@ def write_report(path, rows, accuracy_threshold):
             f"{data['completion_tokens']} | {data['tokens']} | "
             f"{data['tokens'] / cases:.1f} | {data['local'] / cases:.1%} | "
             f"{data['fallback'] / cases:.1%} | {data['format_failure'] / cases:.1%} | "
+            f"{data['validation_escalated']} | "
             f"{data['gemma_selected']} | {data['gemma_skipped']} | {data['gemma_escalated_from']} | "
             f"{data['latency'] / cases:.1f} | {data['route_match'] / cases:.1%} | "
             f"{'yes' if name in eligible_names else 'no'} |"
@@ -335,8 +434,8 @@ def write_report(path, rows, accuracy_threshold):
         "",
         "## Summary by Config and Category",
         "",
-        "| Config | Category | Cases | Pass Rate | Avg Score | Input Tokens | Output Tokens | Total Tokens | Local Rate | Format Fail Rate | Gemma Selected | Gemma Skipped | Expected Route Match |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Config | Category | Cases | Pass Rate | Avg Score | Input Tokens | Output Tokens | Total Tokens | Local Rate | Format Fail Rate | Validation Escalations | Gemma Selected | Gemma Skipped | Expected Route Match |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ])
     for (name, category), data in sorted(by_config_category.items()):
         cases = data["cases"]
@@ -344,7 +443,7 @@ def write_report(path, rows, accuracy_threshold):
             f"| {name} | {category} | {cases} | {data['passed'] / cases:.1%} | "
             f"{data['score'] / cases:.3f} | {data['prompt_tokens']} | {data['completion_tokens']} | "
             f"{data['tokens']} | {data['local'] / cases:.1%} | {data['format_failure'] / cases:.1%} | "
-            f"{data['gemma_selected']} | {data['gemma_skipped']} | "
+            f"{data['validation_escalated']} | {data['gemma_selected']} | {data['gemma_skipped']} | "
             f"{data['route_match'] / cases:.1%} |"
         )
 
