@@ -85,6 +85,19 @@ def check_ignore_files() -> list[str]:
     for required in ("models/", "checkpoints/", "*.safetensors", "*.bin", "*.pt", "*.pth"):
         if required not in dockerignore:
             errors.append(f".dockerignore missing model artifact guard {required}")
+    for required in (
+        ".git",
+        "__pycache__/",
+        "**/__pycache__/",
+        "*.pyc",
+        "*.pyo",
+        "Guides/",
+        "docs/",
+        "eval_runs/",
+        "local_test/",
+    ):
+        if required not in dockerignore:
+            errors.append(f".dockerignore missing runtime artifact guard {required}")
     return errors
 
 

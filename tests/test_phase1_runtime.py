@@ -270,6 +270,47 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(matrix["errors"], 1)
         self.assertEqual(matrix["models"], ["minimax-m3"])
 
+    def test_readiness_report_blocks_bad_recommendation_evidence(self):
+        acceptance = {"status": "passed"}
+        quality = {"status": "passed"}
+        recommendation = {"status": "needs_more_evidence"}
+
+        status = submission_readiness_report.readiness_status(
+            acceptance,
+            quality,
+            docker=None,
+            recommendation=recommendation,
+        )
+
+        self.assertEqual(status, "blocked_recommendation_evidence_not_passed")
+
+    def test_readiness_report_summarizes_recommendation_evidence(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recommendation_path = Path(tmpdir) / "recommendation.json"
+            recommendation_path.write_text(
+                json.dumps({
+                    "evidence_status": "needs_more_evidence",
+                    "rows": 72,
+                    "runs": 1,
+                    "evidence": {
+                        "missing_categories": ["code_generation"],
+                        "ineligible_categories": ["sentiment_classification"],
+                    },
+                    "exports": {
+                        "ROUTER_MODE": "conservative",
+                    },
+                }) + "\n",
+                encoding="utf-8",
+            )
+
+            summary = submission_readiness_report.recommendation_summary(recommendation_path)
+
+        self.assertEqual(summary["status"], "needs_more_evidence")
+        self.assertEqual(summary["rows"], 72)
+        self.assertEqual(summary["missing_categories"], ["code_generation"])
+        self.assertEqual(summary["ineligible_categories"], ["sentiment_classification"])
+        self.assertEqual(summary["export_count"], 1)
+
     def test_compare_eval_reports_ranks_multiple_candidates(self):
         records = [
             {

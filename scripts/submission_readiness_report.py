@@ -126,11 +126,38 @@ def docker_summary(image: str) -> dict:
     }
 
 
-def readiness_status(acceptance: dict, quality: dict, docker: dict | None) -> str:
+def recommendation_summary(path: Path | None) -> dict | None:
+    if path is None:
+        return None
+    if not path.exists():
+        return {
+            "status": "missing",
+            "path": display_path(path),
+        }
+    payload = read_json(path)
+    evidence = payload.get("evidence", {})
+    exports = payload.get("exports", {})
+    return {
+        "status": payload.get("evidence_status", "unknown"),
+        "path": display_path(path),
+        "rows": payload.get("rows"),
+        "runs": payload.get("runs"),
+        "missing_categories": evidence.get("missing_categories", []),
+        "ineligible_categories": evidence.get("ineligible_categories", []),
+        "export_count": len(exports) if isinstance(exports, dict) else 0,
+    }
+
+
+def readiness_status(acceptance: dict, quality: dict, docker: dict | None, recommendation: dict | None = None) -> str:
     if acceptance.get("status") != "passed":
         return "blocked_acceptance_not_passed"
     if quality.get("status") != "passed":
         return "blocked_quality_gate_not_passed"
+    if recommendation is not None:
+        if recommendation.get("status") == "missing":
+            return "blocked_recommendation_missing"
+        if recommendation.get("status") != "passed":
+            return "blocked_recommendation_evidence_not_passed"
     if docker is not None:
         if not docker.get("available"):
             return "blocked_docker_image_missing"
@@ -145,6 +172,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Print latest Track 1 submission readiness summary.")
     parser.add_argument("--image", default="juggernaut-router:local", help="Docker image to inspect.")
     parser.add_argument("--include-docker", action="store_true", help="Inspect local Docker image metadata.")
+    parser.add_argument(
+        "--recommendation",
+        type=Path,
+        default=None,
+        help="Optional runtime recommendation JSON that must have evidence_status=passed.",
+    )
     return parser.parse_args()
 
 
@@ -153,9 +186,10 @@ def main() -> int:
     acceptance = read_json(ACCEPTANCE_REPORT)
     quality = read_json(QUALITY_REPORT)
     docker = docker_summary(args.image) if args.include_docker else None
+    recommendation = recommendation_summary(args.recommendation)
     router_sweep = latest_router_sweep_summary()
     model_matrix = latest_model_matrix_summary()
-    status = readiness_status(acceptance, quality, docker)
+    status = readiness_status(acceptance, quality, docker, recommendation)
 
     summary = {
         "status": status,
@@ -165,6 +199,7 @@ def main() -> int:
         "quality_timestamp": quality.get("timestamp"),
         "latest_router_sweep": router_sweep,
         "latest_model_matrix": model_matrix,
+        "runtime_recommendation": recommendation,
         "docker": docker,
         "next_required_step": (
             "Run live model matrix in AMD notebook through FIREWORKS_BASE_URL"
