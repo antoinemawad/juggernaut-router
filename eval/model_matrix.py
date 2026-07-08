@@ -9,6 +9,7 @@ import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +30,7 @@ ALLOWED_TRACK1_MODELS = [
 DEFAULT_SCENARIOS = Path(__file__).with_name("model_matrix_scenarios.jsonl")
 DEFAULT_OUT_DIR = Path(__file__).resolve().parents[1] / "eval_runs"
 PROMPT_POLICIES = ("original", "compact", "answer_only")
+NORMAL_FIREWORKS_HOST = "api." + "fireworks.ai"
 
 
 def load_scenarios(path):
@@ -51,6 +53,37 @@ def env_models():
     raw = os.environ.get("ALLOWED_MODELS", "")
     models = [model.strip() for model in raw.split(",") if model.strip()]
     return models or ALLOWED_TRACK1_MODELS
+
+
+def normal_fireworks_dev_enabled(allow_normal_fireworks_dev=False):
+    if not allow_normal_fireworks_dev:
+        return False
+    base_url = os.environ.get("FIREWORKS_BASE_URL", "").strip()
+    return urlparse(base_url).netloc == NORMAL_FIREWORKS_HOST
+
+
+def parse_dev_model_map(raw):
+    mapping = {}
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if "=" not in item:
+            raise ValueError("FIREWORKS_DEV_MODEL_MAP entries must use alias=provider_model")
+        alias, provider_model = item.split("=", 1)
+        alias = alias.strip()
+        provider_model = provider_model.strip()
+        if not alias or not provider_model:
+            raise ValueError("FIREWORKS_DEV_MODEL_MAP entries must not be empty")
+        mapping[alias] = provider_model
+    return mapping
+
+
+def provider_model_for(alias, allow_normal_fireworks_dev=False):
+    if not normal_fireworks_dev_enabled(allow_normal_fireworks_dev):
+        return alias
+    mapping = parse_dev_model_map(os.environ.get("FIREWORKS_DEV_MODEL_MAP", ""))
+    return mapping.get(alias, alias)
 
 
 def estimate_tokens(text):
@@ -120,12 +153,13 @@ def mock_answer(model, scenario):
     return expected
 
 
-def call_fireworks(model, scenario, prompt, max_tokens):
+def call_fireworks(model, scenario, prompt, max_tokens, allow_normal_fireworks_dev=False):
     api_key = os.environ["FIREWORKS_API_KEY"]
     base_url = os.environ["FIREWORKS_BASE_URL"].rstrip("/")
     url = base_url + "/chat/completions"
+    provider_model = provider_model_for(model, allow_normal_fireworks_dev)
     payload = {
-        "model": model,
+        "model": provider_model,
         "messages": [
             {
                 "role": "system",
@@ -156,17 +190,40 @@ def call_fireworks(model, scenario, prompt, max_tokens):
         "prompt_tokens": usage.get("prompt_tokens", estimate_tokens(prompt)),
         "completion_tokens": usage.get("completion_tokens", estimate_tokens(answer)),
         "total_tokens": usage.get("total_tokens"),
-    }
+    }, provider_model
 
 
-def run_case(model, scenario, live, max_tokens, prompt_policy):
+def format_http_error(exc):
+    body = ""
+    try:
+        body = exc.read().decode("utf-8", errors="replace").strip()
+    except Exception:
+        body = ""
+    if len(body) > 500:
+        body = body[:500] + "..."
+    suffix = f" body={body}" if body else ""
+    return f"HTTPError: HTTP Error {exc.code}: {exc.reason}{suffix}"
+
+
+def run_case(model, scenario, live, max_tokens, prompt_policy, allow_normal_fireworks_dev=False):
     start = time.perf_counter()
     error = None
     prompt = prompt_for_policy(scenario, prompt_policy)
+    provider_model = provider_model_for(model, allow_normal_fireworks_dev)
     if live:
         try:
-            answer, usage = call_fireworks(model, scenario, prompt, max_tokens)
-        except (KeyError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
+            answer, usage, provider_model = call_fireworks(
+                model,
+                scenario,
+                prompt,
+                max_tokens,
+                allow_normal_fireworks_dev=allow_normal_fireworks_dev,
+            )
+        except urllib.error.HTTPError as exc:
+            answer = ""
+            usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+            error = format_http_error(exc)
+        except (KeyError, urllib.error.URLError, TimeoutError, ValueError) as exc:
             answer = ""
             usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
             error = f"{type(exc).__name__}: {exc}"
@@ -201,6 +258,7 @@ def run_case(model, scenario, live, max_tokens, prompt_policy):
         "retry_policy": scenario.get("retry_policy"),
         "failure_taxonomy": scenario.get("failure_taxonomy", []),
         "model": model,
+        "provider_model": provider_model,
         "prompt_policy": prompt_policy,
         "prompt_chars": len(prompt),
         "prompt_tokens": usage["prompt_tokens"],
@@ -374,7 +432,14 @@ def main():
         for model in models:
             for scenario in scenarios:
                 for prompt_policy in prompt_policies:
-                    row = run_case(model, scenario, args.live, args.max_tokens, prompt_policy)
+                    row = run_case(
+                        model,
+                        scenario,
+                        args.live,
+                        args.max_tokens,
+                        prompt_policy,
+                        allow_normal_fireworks_dev=args.allow_normal_fireworks_dev,
+                    )
                     row["run_id"] = run_id
                     row["timestamp"] = datetime.now(timezone.utc).isoformat()
                     rows.append(row)

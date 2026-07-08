@@ -13,6 +13,7 @@ from app.main import main
 from app.normalization import normalize_answer
 from app.telemetry import TelemetryLogger
 from app.types import SAFE_FALLBACK_ANSWER
+from eval.model_matrix import parse_dev_model_map, provider_model_for
 from scripts.check_live_eval_env import validate_live_eval_env
 from scripts.final_submission_commands import validate_image_ref
 from scripts import check_submission_static
@@ -73,6 +74,27 @@ class Phase1RuntimeTests(unittest.TestCase):
             allow_normal_fireworks_dev=True,
         )
         self.assertEqual(errors, [])
+
+    def test_dev_model_map_parses_alias_to_provider_model(self):
+        self.assertEqual(
+            parse_dev_model_map("minimax-m3=accounts/fireworks/models/dev-model,kimi-k2p7-code=kimi-provider"),
+            {
+                "minimax-m3": "accounts/fireworks/models/dev-model",
+                "kimi-k2p7-code": "kimi-provider",
+            },
+        )
+
+    def test_provider_model_mapping_only_applies_to_normal_fireworks_dev(self):
+        env = {
+            "FIREWORKS_BASE_URL": "https://api." + "fireworks.ai/inference/v1",
+            "FIREWORKS_DEV_MODEL_MAP": "minimax-m3=accounts/fireworks/models/dev-model",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            self.assertEqual(
+                provider_model_for("minimax-m3", allow_normal_fireworks_dev=True),
+                "accounts/fireworks/models/dev-model",
+            )
+            self.assertEqual(provider_model_for("minimax-m3", allow_normal_fireworks_dev=False), "minimax-m3")
 
     def test_live_eval_env_validator_rejects_unexpected_model(self):
         errors = validate_live_eval_env({

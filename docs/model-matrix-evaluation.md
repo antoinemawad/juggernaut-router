@@ -169,6 +169,18 @@ python3 scripts/check_live_eval_env.py --print-models --allow-normal-fireworks-d
 python3 eval/model_matrix.py --live --allow-normal-fireworks-dev --limit 2 --models minimax-m3 --prompt-policies original
 ```
 
+If normal Fireworks returns `HTTP Error 404`, the hackathon aliases may not be valid provider
+model IDs on the public endpoint. Keep `ALLOWED_MODELS` as the Track 1 aliases, and add a
+development-only alias map for the provider request payload:
+
+```bash
+export FIREWORKS_DEV_MODEL_MAP='minimax-m3=accounts/fireworks/models/<provider-model>,kimi-k2p7-code=accounts/fireworks/models/<provider-model>'
+python3 eval/model_matrix.py --live --allow-normal-fireworks-dev --limit 2 --models minimax-m3 --prompt-policies original
+```
+
+Reports keep the Track 1 alias in `model` and record the actual provider payload model in
+`provider_model`. Do not set `FIREWORKS_DEV_MODEL_MAP` for official judging-proxy validation.
+
 Remove the dev override and restore the injected `FIREWORKS_BASE_URL` before any official
 submission or judging-proxy validation.
 
