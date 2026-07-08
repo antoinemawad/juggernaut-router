@@ -175,6 +175,62 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(config.models_remote_format_strict, ("gemma-4-26b-a4b-it", "kimi-k2p7-code"))
         self.assertEqual(config.models_remote_concise, ("minimax-m3", "gemma-4-26b-a4b-it", "gemma-4-31b-it"))
 
+    def test_config_loads_runtime_recommendation_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recommendation = Path(tmpdir) / "recommendation.json"
+            recommendation.write_text(
+                json.dumps({
+                    "exports": {
+                        "ROUTER_MODE": "balanced",
+                        "LOCAL_CONFIDENCE_THRESHOLD": "0.91",
+                        "FIREWORKS_MAX_TOKENS": "192",
+                        "ROUTER_PROMPT_POLICY_BY_CATEGORY": "mathematical_reasoning=answer_only",
+                        "ROUTER_MODELS_BY_CATEGORY": "mathematical_reasoning=kimi-k2p7-code,minimax-m3",
+                        "FIREWORKS_API_KEY": "must-not-load",
+                    }
+                }) + "\n",
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {"ROUTER_RECOMMENDATION_PATH": str(recommendation)}, clear=True):
+                config = RuntimeConfig.from_env()
+
+        self.assertEqual(config.router_mode, "balanced")
+        self.assertEqual(config.local_confidence_threshold, 0.91)
+        self.assertEqual(config.fireworks_max_tokens, 192)
+        self.assertEqual(config.prompt_policy_by_category, {"mathematical_reasoning": "answer_only"})
+        self.assertEqual(config.models_by_category, {
+            "mathematical_reasoning": ("kimi-k2p7-code", "minimax-m3"),
+        })
+        self.assertIsNone(config.fireworks_api_key)
+
+    def test_explicit_env_overrides_runtime_recommendation(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recommendation = Path(tmpdir) / "recommendation.json"
+            recommendation.write_text(
+                json.dumps({
+                    "exports": {
+                        "ROUTER_MODE": "balanced",
+                        "FIREWORKS_MAX_TOKENS": "192",
+                    }
+                }) + "\n",
+                encoding="utf-8",
+            )
+
+            with patch.dict(
+                os.environ,
+                {
+                    "ROUTER_RECOMMENDATION_PATH": str(recommendation),
+                    "ROUTER_MODE": "aggressive",
+                    "FIREWORKS_MAX_TOKENS": "128",
+                },
+                clear=True,
+            ):
+                config = RuntimeConfig.from_env()
+
+        self.assertEqual(config.router_mode, "aggressive")
+        self.assertEqual(config.fireworks_max_tokens, 128)
+
     def test_readiness_report_summarizes_latest_eval_evidence(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             eval_runs = Path(tmpdir)
@@ -369,16 +425,13 @@ class Phase1RuntimeTests(unittest.TestCase):
                 "FIREWORKS_MAX_TOKENS": "999",
                 "KEEP_ME": "yes",
             },
-            {
-                "ROUTER_MODE": "conservative",
-                "ROUTER_PROMPT_POLICY_BY_CATEGORY": None,
-                "FIREWORKS_MAX_TOKENS": "192",
-            },
+            Path("eval_runs/live_runtime_recommendation.json"),
         )
 
         self.assertEqual(env["KEEP_ME"], "yes")
-        self.assertEqual(env["ROUTER_MODE"], "conservative")
-        self.assertEqual(env["FIREWORKS_MAX_TOKENS"], "192")
+        self.assertEqual(env["ROUTER_RECOMMENDATION_PATH"], "eval_runs/live_runtime_recommendation.json")
+        self.assertNotIn("ROUTER_MODE", env)
+        self.assertNotIn("FIREWORKS_MAX_TOKENS", env)
         self.assertNotIn("ROUTER_PROMPT_POLICY_BY_CATEGORY", env)
         self.assertNotIn("LOCAL_CONFIDENCE_THRESHOLD", env)
 
@@ -414,7 +467,8 @@ class Phase1RuntimeTests(unittest.TestCase):
             self.assertEqual(report["status"], "passed")
             self.assertTrue(out_json.exists())
             self.assertTrue(out_md.exists())
-            self.assertEqual(seen_envs[0]["ROUTER_MODE"], "conservative")
+        self.assertEqual(seen_envs[0]["ROUTER_RECOMMENDATION_PATH"], str(recommendation))
+        self.assertNotIn("ROUTER_MODE", seen_envs[0])
 
     def test_runtime_recommendation_validation_stops_on_failure(self):
         with tempfile.TemporaryDirectory() as tmpdir:

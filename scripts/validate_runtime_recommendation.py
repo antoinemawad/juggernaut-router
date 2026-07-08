@@ -25,17 +25,13 @@ def load_recommendation(path: Path) -> dict:
     return payload
 
 
-def isolated_env(base_env: dict[str, str], exports: dict[str, str | None]) -> dict[str, str]:
+def isolated_env(base_env: dict[str, str], recommendation_path: Path) -> dict[str, str]:
     env = {
         key: value
         for key, value in base_env.items()
         if not key.startswith(ROUTER_ENV_PREFIXES) and key not in ROUTER_ENV_NAMES
     }
-    for key, value in exports.items():
-        if value is None:
-            env.pop(key, None)
-        else:
-            env[key] = str(value)
+    env["ROUTER_RECOMMENDATION_PATH"] = str(recommendation_path)
     return env
 
 
@@ -82,7 +78,7 @@ def validate_recommendation(
     runner=run_command,
 ) -> dict:
     payload = load_recommendation(recommendation_path)
-    env = isolated_env(os.environ.copy(), payload["exports"])
+    env = isolated_env(os.environ.copy(), recommendation_path)
     py = sys.executable
     commands = default_commands(py)
     if include_quality_gate:

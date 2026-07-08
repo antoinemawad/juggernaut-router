@@ -1,3 +1,4 @@
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,10 +18,31 @@ DEFAULT_REMOTE_CODE_MODELS = ("kimi-k2p7-code", "minimax-m3", "gemma-4-31b-it")
 DEFAULT_REMOTE_FORMAT_STRICT_MODELS = ("minimax-m3", "kimi-k2p7-code", "gemma-4-31b-it")
 DEFAULT_REMOTE_CONCISE_MODELS = ("minimax-m3", "gemma-4-26b-a4b-it", "gemma-4-31b-it")
 DEFAULT_REMOTE_ESCALATION_MODELS = ("kimi-k2p7-code", "minimax-m3", "gemma-4-31b-it")
+RECOMMENDATION_EXPORT_NAMES = {
+    "FIREWORKS_MAX_TOKENS",
+    "LOCAL_CONFIDENCE_THRESHOLD",
+    "REMOTE_VALIDATION_ESCALATION_ENABLED",
+    "ROUTER_MODE",
+    "ROUTER_MODELS_BY_CATEGORY",
+    "ROUTER_MODELS_REMOTE_ACCURACY",
+    "ROUTER_MODELS_REMOTE_CODE",
+    "ROUTER_MODELS_REMOTE_CONCISE",
+    "ROUTER_MODELS_REMOTE_ESCALATION",
+    "ROUTER_MODELS_REMOTE_FORMAT_STRICT",
+    "ROUTER_PROMPT_POLICY_BY_CATEGORY",
+    "ROUTER_PROMPT_POLICY_REMOTE_ACCURACY",
+    "ROUTER_PROMPT_POLICY_REMOTE_CODE",
+    "ROUTER_PROMPT_POLICY_REMOTE_CONCISE",
+    "ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT",
+}
 
 
 def _get_int(name: str, default: int, minimum: int | None = None, maximum: int | None = None) -> int:
-    raw = os.environ.get(name)
+    return _get_int_from(os.environ, name, default, minimum, maximum)
+
+
+def _get_int_from(env: dict[str, str], name: str, default: int, minimum: int | None = None, maximum: int | None = None) -> int:
+    raw = env.get(name)
     if raw is None or not raw.strip():
         value = default
     else:
@@ -36,7 +58,11 @@ def _get_int(name: str, default: int, minimum: int | None = None, maximum: int |
 
 
 def _get_float(name: str, default: float, minimum: float | None = None, maximum: float | None = None) -> float:
-    raw = os.environ.get(name)
+    return _get_float_from(os.environ, name, default, minimum, maximum)
+
+
+def _get_float_from(env: dict[str, str], name: str, default: float, minimum: float | None = None, maximum: float | None = None) -> float:
+    raw = env.get(name)
     if raw is None or not raw.strip():
         value = default
     else:
@@ -52,14 +78,22 @@ def _get_float(name: str, default: float, minimum: float | None = None, maximum:
 
 
 def _get_bool(name: str, default: bool) -> bool:
-    raw = os.environ.get(name)
+    return _get_bool_from(os.environ, name, default)
+
+
+def _get_bool_from(env: dict[str, str], name: str, default: bool) -> bool:
+    raw = env.get(name)
     if raw is None or not raw.strip():
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _get_prompt_policy(name: str, default: str) -> str:
-    raw = os.environ.get(name)
+    return _get_prompt_policy_from(os.environ, name, default)
+
+
+def _get_prompt_policy_from(env: dict[str, str], name: str, default: str) -> str:
+    raw = env.get(name)
     if raw is None or not raw.strip():
         return default
     value = raw.strip().lower()
@@ -67,7 +101,11 @@ def _get_prompt_policy(name: str, default: str) -> str:
 
 
 def _get_prompt_policy_map(name: str) -> dict[str, str]:
-    raw = os.environ.get(name, "")
+    return _get_prompt_policy_map_from(os.environ, name)
+
+
+def _get_prompt_policy_map_from(env: dict[str, str], name: str) -> dict[str, str]:
+    raw = env.get(name, "")
     mapping = {}
     for item in raw.split(","):
         item = item.strip()
@@ -84,12 +122,20 @@ def _get_prompt_policy_map(name: str) -> dict[str, str]:
 
 
 def _get_model_preference(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
-    models = parse_allowed_models(os.environ.get(name))
+    return _get_model_preference_from(os.environ, name, default)
+
+
+def _get_model_preference_from(env: dict[str, str], name: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    models = parse_allowed_models(env.get(name))
     return tuple(models) if models else default
 
 
 def _get_model_preference_map(name: str) -> dict[str, tuple[str, ...]]:
-    raw = os.environ.get(name, "")
+    return _get_model_preference_map_from(os.environ, name)
+
+
+def _get_model_preference_map_from(env: dict[str, str], name: str) -> dict[str, tuple[str, ...]]:
+    raw = env.get(name, "")
     mapping = {}
     for item in raw.split(";"):
         item = item.strip()
@@ -114,6 +160,33 @@ def parse_allowed_models(raw: str | None) -> list[str]:
             models.append(model)
             seen.add(model)
     return models
+
+
+def _load_recommendation_exports(path: str | None) -> dict[str, str]:
+    if not path or not path.strip():
+        return {}
+    try:
+        with Path(path).expanduser().open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    exports = payload.get("exports")
+    if not isinstance(exports, dict):
+        return {}
+    clean = {}
+    for key, value in exports.items():
+        if key in RECOMMENDATION_EXPORT_NAMES and isinstance(value, str) and value.strip():
+            clean[key] = value
+    return clean
+
+
+def _effective_env() -> dict[str, str]:
+    env = dict(os.environ)
+    recommendation_exports = _load_recommendation_exports(env.get("ROUTER_RECOMMENDATION_PATH"))
+    for key, value in recommendation_exports.items():
+        if not env.get(key, "").strip():
+            env[key] = value
+    return env
 
 
 @dataclass(frozen=True)
@@ -149,55 +222,61 @@ class RuntimeConfig:
 
     @classmethod
     def from_env(cls) -> "RuntimeConfig":
-        router_log_path = os.environ.get("ROUTER_LOG_PATH")
-        mode = os.environ.get("ROUTER_MODE", "conservative").strip().lower()
+        env = _effective_env()
+        router_log_path = env.get("ROUTER_LOG_PATH")
+        mode = env.get("ROUTER_MODE", "conservative").strip().lower()
         if mode not in {"conservative", "balanced", "aggressive"}:
             mode = "conservative"
 
         return cls(
-            input_path=Path(os.environ.get("INPUT_PATH", "/input/tasks.json")),
-            output_path=Path(os.environ.get("OUTPUT_PATH", "/output/results.json")),
+            input_path=Path(env.get("INPUT_PATH", "/input/tasks.json")),
+            output_path=Path(env.get("OUTPUT_PATH", "/output/results.json")),
             router_mode=mode,
-            local_confidence_threshold=_get_float("LOCAL_CONFIDENCE_THRESHOLD", 0.95, 0.0, 1.0),
-            fireworks_timeout_seconds=_get_int("FIREWORKS_TIMEOUT_SECONDS", 25, 1, 29),
-            fireworks_max_retries=_get_int("FIREWORKS_MAX_RETRIES", 0, 0, 3),
-            batch_deadline_seconds=_get_int("BATCH_DEADLINE_SECONDS", 600, 30, 600),
-            deadline_safety_margin_seconds=_get_int("DEADLINE_SAFETY_MARGIN_SECONDS", 60, 5, 300),
-            remote_worker_count=_get_int("REMOTE_WORKER_COUNT", 2, 1, 8),
-            local_proof_budget_ms=_get_int("LOCAL_PROOF_BUDGET_MS", 100, 1, 5000),
-            local_cross_check_enabled=_get_bool("LOCAL_CROSS_CHECK_ENABLED", True),
+            local_confidence_threshold=_get_float_from(env, "LOCAL_CONFIDENCE_THRESHOLD", 0.95, 0.0, 1.0),
+            fireworks_timeout_seconds=_get_int_from(env, "FIREWORKS_TIMEOUT_SECONDS", 25, 1, 29),
+            fireworks_max_retries=_get_int_from(env, "FIREWORKS_MAX_RETRIES", 0, 0, 3),
+            batch_deadline_seconds=_get_int_from(env, "BATCH_DEADLINE_SECONDS", 600, 30, 600),
+            deadline_safety_margin_seconds=_get_int_from(env, "DEADLINE_SAFETY_MARGIN_SECONDS", 60, 5, 300),
+            remote_worker_count=_get_int_from(env, "REMOTE_WORKER_COUNT", 2, 1, 8),
+            local_proof_budget_ms=_get_int_from(env, "LOCAL_PROOF_BUDGET_MS", 100, 1, 5000),
+            local_cross_check_enabled=_get_bool_from(env, "LOCAL_CROSS_CHECK_ENABLED", True),
             router_log_path=Path(router_log_path) if router_log_path else None,
-            fireworks_api_key=os.environ.get("FIREWORKS_API_KEY"),
-            fireworks_base_url=os.environ.get("FIREWORKS_BASE_URL"),
-            allowed_models=tuple(parse_allowed_models(os.environ.get("ALLOWED_MODELS"))),
-            fireworks_max_tokens=_get_int("FIREWORKS_MAX_TOKENS", 256, 1, 4096),
-            prompt_policy_remote_accuracy=_get_prompt_policy("ROUTER_PROMPT_POLICY_REMOTE_ACCURACY", "compact"),
-            prompt_policy_remote_code=_get_prompt_policy("ROUTER_PROMPT_POLICY_REMOTE_CODE", "answer_only"),
-            prompt_policy_remote_format_strict=_get_prompt_policy(
+            fireworks_api_key=env.get("FIREWORKS_API_KEY"),
+            fireworks_base_url=env.get("FIREWORKS_BASE_URL"),
+            allowed_models=tuple(parse_allowed_models(env.get("ALLOWED_MODELS"))),
+            fireworks_max_tokens=_get_int_from(env, "FIREWORKS_MAX_TOKENS", 256, 1, 4096),
+            prompt_policy_remote_accuracy=_get_prompt_policy_from(env, "ROUTER_PROMPT_POLICY_REMOTE_ACCURACY", "compact"),
+            prompt_policy_remote_code=_get_prompt_policy_from(env, "ROUTER_PROMPT_POLICY_REMOTE_CODE", "answer_only"),
+            prompt_policy_remote_format_strict=_get_prompt_policy_from(
+                env,
                 "ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT",
                 "answer_only",
             ),
-            prompt_policy_remote_concise=_get_prompt_policy("ROUTER_PROMPT_POLICY_REMOTE_CONCISE", "compact"),
-            prompt_policy_by_category=_get_prompt_policy_map("ROUTER_PROMPT_POLICY_BY_CATEGORY"),
-            remote_validation_escalation_enabled=_get_bool("REMOTE_VALIDATION_ESCALATION_ENABLED", True),
-            models_remote_accuracy=_get_model_preference(
+            prompt_policy_remote_concise=_get_prompt_policy_from(env, "ROUTER_PROMPT_POLICY_REMOTE_CONCISE", "compact"),
+            prompt_policy_by_category=_get_prompt_policy_map_from(env, "ROUTER_PROMPT_POLICY_BY_CATEGORY"),
+            remote_validation_escalation_enabled=_get_bool_from(env, "REMOTE_VALIDATION_ESCALATION_ENABLED", True),
+            models_remote_accuracy=_get_model_preference_from(
+                env,
                 "ROUTER_MODELS_REMOTE_ACCURACY",
                 DEFAULT_REMOTE_ACCURACY_MODELS,
             ),
-            models_remote_code=_get_model_preference("ROUTER_MODELS_REMOTE_CODE", DEFAULT_REMOTE_CODE_MODELS),
-            models_remote_format_strict=_get_model_preference(
+            models_remote_code=_get_model_preference_from(env, "ROUTER_MODELS_REMOTE_CODE", DEFAULT_REMOTE_CODE_MODELS),
+            models_remote_format_strict=_get_model_preference_from(
+                env,
                 "ROUTER_MODELS_REMOTE_FORMAT_STRICT",
                 DEFAULT_REMOTE_FORMAT_STRICT_MODELS,
             ),
-            models_remote_concise=_get_model_preference(
+            models_remote_concise=_get_model_preference_from(
+                env,
                 "ROUTER_MODELS_REMOTE_CONCISE",
                 DEFAULT_REMOTE_CONCISE_MODELS,
             ),
-            models_remote_escalation=_get_model_preference(
+            models_remote_escalation=_get_model_preference_from(
+                env,
                 "ROUTER_MODELS_REMOTE_ESCALATION",
                 DEFAULT_REMOTE_ESCALATION_MODELS,
             ),
-            models_by_category=_get_model_preference_map("ROUTER_MODELS_BY_CATEGORY"),
+            models_by_category=_get_model_preference_map_from(env, "ROUTER_MODELS_BY_CATEGORY"),
         )
 
     def first_allowed_model(self) -> str | None:
