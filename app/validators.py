@@ -81,6 +81,45 @@ def validate_local_answer(
     )
 
 
+def validate_remote_answer(
+    prompt: str,
+    answer: str,
+    classification: ClassificationResult,
+) -> ValidationResult:
+    passed: list[str] = []
+    failed: list[str] = []
+    notes: list[str] = []
+    stripped = answer.strip() if isinstance(answer, str) else ""
+
+    if stripped:
+        passed.append("non_empty")
+    else:
+        failed.append("non_empty")
+
+    if not _has_reasoning_leakage(stripped):
+        passed.append("reasoning_leakage")
+    else:
+        failed.append("reasoning_leakage")
+        notes.append("remote_answer_contains_reasoning_leakage")
+
+    if _remote_shape_is_valid(prompt, stripped, classification):
+        passed.append("answer_shape")
+    else:
+        failed.append("answer_shape")
+
+    if _format_is_valid(stripped, classification):
+        passed.append("format_validator")
+    else:
+        failed.append("format_validator")
+
+    return ValidationResult(
+        accepted=not failed,
+        passed_layers=tuple(passed),
+        failed_layers=tuple(failed),
+        notes=tuple(notes),
+    )
+
+
 def _risk_threshold(router_mode: str) -> float:
     if router_mode == "aggressive":
         return 0.55
@@ -111,6 +150,40 @@ def _answer_matches_category(prompt: str, answer: str, classification: Classific
     if category == "factual_knowledge":
         return len(answer.split()) >= 8
     return False
+
+
+def _remote_shape_is_valid(prompt: str, answer: str, classification: ClassificationResult) -> bool:
+    if not answer:
+        return False
+    category = classification.category
+    constraints = set(classification.constraints)
+    if category == "mathematical_reasoning" or "exact_numeric" in constraints:
+        return bool(re.search(r"\d", answer))
+    if category == "sentiment_classification":
+        return answer.strip().lower().split()[0].rstrip(":,.") in {"positive", "negative", "neutral"}
+    if category == "named_entity_recognition" or "entity_labels" in constraints:
+        return ":" in answer and _ner_cross_check_passes(prompt, answer)
+    if category == "code_generation":
+        return "def " in answer and _python_syntax_valid(answer)
+    if category == "code_debugging":
+        return "def " in answer and _python_syntax_valid(_extract_code(answer))
+    if category == "logical_deductive_reasoning" or "answer_only" in constraints:
+        return len(answer.split()) <= 12
+    return True
+
+
+def _has_reasoning_leakage(answer: str) -> bool:
+    lowered = answer.lower()
+    leakage_markers = (
+        "the user wants",
+        "i need to",
+        "let me",
+        "we need to",
+        "i should",
+        "first, i",
+        "analysis:",
+    )
+    return any(marker in lowered for marker in leakage_markers)
 
 
 def _format_is_valid(answer: str, classification: ClassificationResult) -> bool:

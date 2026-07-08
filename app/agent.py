@@ -5,7 +5,7 @@ from app.fireworks_client import ask_fireworks_structured
 from app.normalization import normalize_answer
 from app.solvers.basic import try_basic_solver_structured
 from app.types import SAFE_FALLBACK_ANSWER, AgentResult, TimingMetrics
-from app.validators import validate_local_answer
+from app.validators import validate_local_answer, validate_remote_answer
 
 
 def answer_prompt(prompt: str) -> str:
@@ -123,12 +123,35 @@ def answer_task(
     normalize_timer = StageTimer()
     answer = _normalize_for_classification(remote.answer, prompt, classification)
     timings.normalization_elapsed_ms = normalize_timer.elapsed_ms()
+    remote_validation = validate_remote_answer(prompt, answer, classification)
+    escalation = None
+    escalation_validation = None
+    if _should_escalate_remote_answer(remote, remote_validation, config, deadline):
+        escalation_prompt_policy = _escalation_prompt_policy(prompt_policy)
+        escalation_prompt = _apply_prompt_policy(prompt, escalation_prompt_policy)
+        escalation = ask_fireworks_structured(
+            escalation_prompt,
+            config=config,
+            deadline=deadline,
+            preferred_models=_escalation_models(remote.model, config),
+            system_prompt=_system_prompt_for_remote_mode(remote_mode),
+        )
+        timings.remote_elapsed_ms += escalation.elapsed_ms
+        if escalation.error is None:
+            escalation_answer = _normalize_for_classification(escalation.answer, prompt, classification)
+            escalation_validation = validate_remote_answer(prompt, escalation_answer, classification)
+            if escalation_validation.accepted:
+                answer = escalation_answer
+                remote = _merged_remote_result(remote, escalation)
+                prompt_policy = escalation_prompt_policy
+                remote_prompt_token_estimate = estimate_tokens(escalation_prompt)
+                remote_validation = escalation_validation
     _finish_timings(timings, task_timer, deadline)
 
     return AgentResult(
         answer=answer,
         route="fireworks" if remote.error is None else "fallback",
-        route_reason=_remote_route_reason(local_result, validation, remote.error),
+        route_reason=_remote_route_reason(local_result, validation, remote.error, remote_validation),
         category=classification.category,
         router_mode=config.router_mode,
         selected_model=remote.model,
@@ -155,6 +178,16 @@ def answer_task(
             "local_proof_layers_passed": list(validation.passed_layers),
             "local_proof_layers_failed": list(validation.failed_layers),
             "validator_notes": list(validation.notes),
+            "remote_validation_passed": list(remote_validation.passed_layers),
+            "remote_validation_failed": list(remote_validation.failed_layers),
+            "remote_validation_notes": list(remote_validation.notes),
+            "remote_validation_escalation_enabled": config.remote_validation_escalation_enabled,
+            "remote_escalated_after_validation": escalation is not None,
+            "remote_escalation_model": escalation.model if escalation is not None else None,
+            "remote_escalation_error": escalation.error if escalation is not None else None,
+            "remote_escalation_validation_failed": (
+                list(escalation_validation.failed_layers) if escalation_validation is not None else []
+            ),
         },
     )
 
@@ -199,9 +232,11 @@ def _finish_timings(timings: TimingMetrics, task_timer: StageTimer, deadline: De
         timings.remaining_budget_ms = deadline.remaining_budget_ms()
 
 
-def _remote_route_reason(local_result, validation, remote_error: str | None) -> str:
+def _remote_route_reason(local_result, validation, remote_error: str | None, remote_validation=None) -> str:
     if remote_error is not None:
         return remote_error
+    if remote_validation is not None and remote_validation.failed_layers:
+        return "remote_validation_failed:" + ",".join(remote_validation.failed_layers)
     if local_result is None:
         return "no_local_solver"
     if validation.failed_layers:
@@ -236,6 +271,43 @@ def _preferred_models_for_remote_mode(remote_mode: str, config: RuntimeConfig) -
     if remote_mode == "remote_format_strict":
         return config.models_remote_format_strict
     return config.models_remote_concise
+
+
+def _should_escalate_remote_answer(remote, remote_validation, config: RuntimeConfig, deadline: DeadlineManager | None) -> bool:
+    if not config.remote_validation_escalation_enabled:
+        return False
+    if remote.error is not None or remote_validation.accepted:
+        return False
+    if not _escalation_models(remote.model, config):
+        return False
+    if deadline is not None and not deadline.should_retry(config.fireworks_timeout_seconds):
+        return False
+    return True
+
+
+def _escalation_models(current_model: str | None, config: RuntimeConfig) -> tuple[str, ...]:
+    return tuple(model for model in config.models_remote_escalation if model != current_model)
+
+
+def _escalation_prompt_policy(prompt_policy: str) -> str:
+    if prompt_policy in {"compact", "original"}:
+        return "answer_only"
+    return prompt_policy
+
+
+def _merged_remote_result(first, second):
+    first_completion = first.completion_tokens if first.completion_tokens is not None else 0
+    second_completion = second.completion_tokens if second.completion_tokens is not None else 0
+    first_total = first.total_tokens if first.total_tokens is not None else 0
+    second_total = second.total_tokens if second.total_tokens is not None else 0
+    first.completion_tokens = first_completion + second_completion if first.completion_tokens is not None or second.completion_tokens is not None else None
+    first.total_tokens = first_total + second_total if first.total_tokens is not None or second.total_tokens is not None else None
+    first.retry_count += second.retry_count + 1
+    first.model = second.model
+    first.answer = second.answer
+    first.elapsed_ms += second.elapsed_ms
+    first.error = second.error
+    return first
 
 
 def _prompt_policy_for_remote_mode(remote_mode: str, config: RuntimeConfig, category: str | None = None) -> str:

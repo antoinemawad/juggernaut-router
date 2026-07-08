@@ -16,6 +16,7 @@ DEFAULT_REMOTE_ACCURACY_MODELS = ("minimax-m3", "gemma-4-31b-it", "kimi-k2p7-cod
 DEFAULT_REMOTE_CODE_MODELS = ("kimi-k2p7-code", "minimax-m3", "gemma-4-31b-it")
 DEFAULT_REMOTE_FORMAT_STRICT_MODELS = ("minimax-m3", "kimi-k2p7-code", "gemma-4-31b-it")
 DEFAULT_REMOTE_CONCISE_MODELS = ("minimax-m3", "gemma-4-26b-a4b-it", "gemma-4-31b-it")
+DEFAULT_REMOTE_ESCALATION_MODELS = ("kimi-k2p7-code", "minimax-m3", "gemma-4-31b-it")
 
 
 def _get_int(name: str, default: int, minimum: int | None = None, maximum: int | None = None) -> int:
@@ -123,10 +124,12 @@ class RuntimeConfig:
     prompt_policy_remote_format_strict: str = "answer_only"
     prompt_policy_remote_concise: str = "compact"
     prompt_policy_by_category: dict[str, str] | None = None
+    remote_validation_escalation_enabled: bool = True
     models_remote_accuracy: tuple[str, ...] = DEFAULT_REMOTE_ACCURACY_MODELS
     models_remote_code: tuple[str, ...] = DEFAULT_REMOTE_CODE_MODELS
     models_remote_format_strict: tuple[str, ...] = DEFAULT_REMOTE_FORMAT_STRICT_MODELS
     models_remote_concise: tuple[str, ...] = DEFAULT_REMOTE_CONCISE_MODELS
+    models_remote_escalation: tuple[str, ...] = DEFAULT_REMOTE_ESCALATION_MODELS
 
     @classmethod
     def from_env(cls) -> "RuntimeConfig":
@@ -160,6 +163,7 @@ class RuntimeConfig:
             ),
             prompt_policy_remote_concise=_get_prompt_policy("ROUTER_PROMPT_POLICY_REMOTE_CONCISE", "compact"),
             prompt_policy_by_category=_get_prompt_policy_map("ROUTER_PROMPT_POLICY_BY_CATEGORY"),
+            remote_validation_escalation_enabled=_get_bool("REMOTE_VALIDATION_ESCALATION_ENABLED", True),
             models_remote_accuracy=_get_model_preference(
                 "ROUTER_MODELS_REMOTE_ACCURACY",
                 DEFAULT_REMOTE_ACCURACY_MODELS,
@@ -172,6 +176,10 @@ class RuntimeConfig:
             models_remote_concise=_get_model_preference(
                 "ROUTER_MODELS_REMOTE_CONCISE",
                 DEFAULT_REMOTE_CONCISE_MODELS,
+            ),
+            models_remote_escalation=_get_model_preference(
+                "ROUTER_MODELS_REMOTE_ESCALATION",
+                DEFAULT_REMOTE_ESCALATION_MODELS,
             ),
         )
 

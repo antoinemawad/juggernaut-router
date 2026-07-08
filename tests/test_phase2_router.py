@@ -23,6 +23,9 @@ class FakeClock:
 
 
 class FakeResponse:
+    def __init__(self, content: str = "Remote answer") -> None:
+        self.content = content
+
     def __enter__(self):
         return self
 
@@ -31,7 +34,7 @@ class FakeResponse:
 
     def read(self) -> bytes:
         return json.dumps({
-            "choices": [{"message": {"content": "Remote answer"}}],
+            "choices": [{"message": {"content": self.content}}],
             "usage": {"completion_tokens": 2, "total_tokens": 10},
         }).encode("utf-8")
 
@@ -157,7 +160,7 @@ class Phase2RouterTests(unittest.TestCase):
 
         def fake_urlopen(request, timeout):
             captured["payload"] = json.loads(request.data.decode("utf-8"))
-            return FakeResponse()
+            return FakeResponse("negative")
 
         with patch.dict(
             os.environ,
@@ -166,6 +169,7 @@ class Phase2RouterTests(unittest.TestCase):
                 "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
                 "ALLOWED_MODELS": "minimax-m3",
                 "ROUTER_PROMPT_POLICY_REMOTE_ACCURACY": "original",
+                "REMOTE_VALIDATION_ESCALATION_ENABLED": "false",
             },
             clear=True,
         ), patch("urllib.request.urlopen", fake_urlopen):
@@ -184,7 +188,7 @@ class Phase2RouterTests(unittest.TestCase):
 
         def fake_urlopen(request, timeout):
             captured["payload"] = json.loads(request.data.decode("utf-8"))
-            return FakeResponse()
+            return FakeResponse("def clamp(x, low, high):\n    return max(low, min(x, high))")
 
         with patch.dict(
             os.environ,
@@ -212,7 +216,7 @@ class Phase2RouterTests(unittest.TestCase):
 
         def fake_urlopen(request, timeout):
             captured["payload"] = json.loads(request.data.decode("utf-8"))
-            return FakeResponse()
+            return FakeResponse("negative")
 
         with patch.dict(
             os.environ,
@@ -221,6 +225,7 @@ class Phase2RouterTests(unittest.TestCase):
                 "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
                 "ALLOWED_MODELS": "minimax-m3,gemma-4-31b-it,kimi-k2p7-code",
                 "ROUTER_MODELS_REMOTE_ACCURACY": "gemma-4-31b-it,minimax-m3,kimi-k2p7-code",
+                "REMOTE_VALIDATION_ESCALATION_ENABLED": "false",
             },
             clear=True,
         ), patch("urllib.request.urlopen", fake_urlopen):
@@ -355,7 +360,7 @@ class Phase2RouterTests(unittest.TestCase):
 
         def fake_urlopen(request, timeout):
             captured["payload"] = json.loads(request.data.decode("utf-8"))
-            return FakeResponse()
+            return FakeResponse("def merge_sorted(a, b):\n    return sorted(a + b)")
 
         with patch.dict(
             os.environ,
@@ -392,6 +397,70 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.remote_mode, "remote_code")
         self.assertEqual(result.answer, "def clamp(x, low, high):\n    return max(low, min(x, high))")
+
+    def test_invalid_remote_code_triggers_validation_escalation(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3,kimi-k2p7-code",
+                "ROUTER_MODELS_REMOTE_CODE": "minimax-m3,kimi-k2p7-code",
+                "ROUTER_MODELS_REMOTE_ESCALATION": "kimi-k2p7-code,minimax-m3",
+            },
+            clear=True,
+        ), patch("app.agent.ask_fireworks_structured") as mocked_remote:
+            mocked_remote.side_effect = [
+                FireworksResult(answer="def merge_sorted(a, b):\n    return a +", model="minimax-m3", completion_tokens=3, total_tokens=20),
+                FireworksResult(answer="def merge_sorted(a, b):\n    return sorted(a + b)", model="kimi-k2p7-code", completion_tokens=6, total_tokens=40),
+            ]
+            result = answer_task(
+                "code",
+                "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+            )
+
+        self.assertEqual(mocked_remote.call_count, 2)
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.answer, "def merge_sorted(a, b):\n    return sorted(a + b)")
+        self.assertEqual(result.selected_model, "kimi-k2p7-code")
+        self.assertEqual(result.total_tokens, 60)
+        self.assertEqual(result.retry_count, 1)
+        self.assertTrue(result.metadata["remote_escalated_after_validation"])
+        self.assertEqual(result.metadata["remote_escalation_model"], "kimi-k2p7-code")
+        self.assertFalse(result.metadata["remote_validation_failed"])
+        self.assertEqual(mocked_remote.call_args_list[1].kwargs["preferred_models"], ("kimi-k2p7-code",))
+
+    def test_remote_validation_escalation_can_be_disabled(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3,kimi-k2p7-code",
+                "ROUTER_MODELS_REMOTE_CODE": "minimax-m3,kimi-k2p7-code",
+                "REMOTE_VALIDATION_ESCALATION_ENABLED": "false",
+            },
+            clear=True,
+        ), patch("app.agent.ask_fireworks_structured") as mocked_remote:
+            mocked_remote.return_value = FireworksResult(
+                answer="def merge_sorted(a, b):\n    return a +",
+                model="minimax-m3",
+                total_tokens=20,
+            )
+            result = answer_task(
+                "code",
+                "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+            )
+
+        mocked_remote.assert_called_once()
+        self.assertFalse(result.metadata["remote_validation_escalation_enabled"])
+        self.assertFalse(result.metadata["remote_escalated_after_validation"])
+        self.assertIn("answer_shape", result.metadata["remote_validation_failed"])
+        self.assertTrue(result.route_reason.startswith("remote_validation_failed:"))
 
     def test_certified_code_templates_use_local_proof(self):
         prompts = {
