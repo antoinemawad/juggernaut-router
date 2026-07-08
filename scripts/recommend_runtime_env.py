@@ -48,10 +48,21 @@ def model_preference_value(config: dict) -> str:
     return ",".join(models)
 
 
+def category_model_preference_value(mapping: dict[str, list[str]] | None) -> str:
+    if not mapping:
+        return ""
+    values = []
+    for category, models in sorted(mapping.items()):
+        if models:
+            values.append(f"{category}={','.join(models)}")
+    return ";".join(values)
+
+
 def exports_for_config(config: dict) -> list[tuple[str, str | None]]:
     prompt_policy = config["prompt_policy"]
     model_preference = model_preference_value(config)
     category_policy = prompt_policy_map_value(config.get("prompt_policy_by_category"))
+    category_models = category_model_preference_value(config.get("models_by_category"))
 
     exports: list[tuple[str, str | None]] = [
         ("ROUTER_MODE", config["router_mode"]),
@@ -66,6 +77,7 @@ def exports_for_config(config: dict) -> list[tuple[str, str | None]]:
         ("ROUTER_MODELS_REMOTE_CODE", model_preference),
         ("ROUTER_MODELS_REMOTE_FORMAT_STRICT", model_preference),
         ("ROUTER_MODELS_REMOTE_CONCISE", model_preference),
+        ("ROUTER_MODELS_BY_CATEGORY", category_models or None),
     ]
     return exports
 

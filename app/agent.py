@@ -116,7 +116,7 @@ def answer_task(
         remote_prompt,
         config=config,
         deadline=deadline,
-        preferred_models=_preferred_models_for_remote_mode(remote_mode, config),
+        preferred_models=_preferred_models_for_remote_mode(remote_mode, config, classification.category),
         system_prompt=_system_prompt_for_remote_mode(remote_mode),
     )
     timings.remote_elapsed_ms = remote.elapsed_ms
@@ -263,7 +263,13 @@ def _select_remote_mode(classification, local_result=None) -> str:
     return "remote_concise"
 
 
-def _preferred_models_for_remote_mode(remote_mode: str, config: RuntimeConfig) -> tuple[str, ...]:
+def _preferred_models_for_remote_mode(
+    remote_mode: str,
+    config: RuntimeConfig,
+    category: str | None = None,
+) -> tuple[str, ...]:
+    if category and config.models_by_category and category in config.models_by_category:
+        return config.models_by_category[category]
     if remote_mode == "remote_code":
         return config.models_remote_code
     if remote_mode == "remote_accuracy":

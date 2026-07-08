@@ -88,6 +88,21 @@ def _get_model_preference(name: str, default: tuple[str, ...]) -> tuple[str, ...
     return tuple(models) if models else default
 
 
+def _get_model_preference_map(name: str) -> dict[str, tuple[str, ...]]:
+    raw = os.environ.get(name, "")
+    mapping = {}
+    for item in raw.split(";"):
+        item = item.strip()
+        if not item or "=" not in item:
+            continue
+        category, models_raw = item.split("=", 1)
+        category = category.strip()
+        models = tuple(parse_allowed_models(models_raw))
+        if category and models:
+            mapping[category] = models
+    return mapping
+
+
 def parse_allowed_models(raw: str | None) -> list[str]:
     if not raw:
         return []
@@ -130,6 +145,7 @@ class RuntimeConfig:
     models_remote_format_strict: tuple[str, ...] = DEFAULT_REMOTE_FORMAT_STRICT_MODELS
     models_remote_concise: tuple[str, ...] = DEFAULT_REMOTE_CONCISE_MODELS
     models_remote_escalation: tuple[str, ...] = DEFAULT_REMOTE_ESCALATION_MODELS
+    models_by_category: dict[str, tuple[str, ...]] | None = None
 
     @classmethod
     def from_env(cls) -> "RuntimeConfig":
@@ -181,6 +197,7 @@ class RuntimeConfig:
                 "ROUTER_MODELS_REMOTE_ESCALATION",
                 DEFAULT_REMOTE_ESCALATION_MODELS,
             ),
+            models_by_category=_get_model_preference_map("ROUTER_MODELS_BY_CATEGORY"),
         )
 
     def first_allowed_model(self) -> str | None:

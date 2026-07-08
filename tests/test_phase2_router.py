@@ -12,6 +12,7 @@ from app.validators import validate_local_answer
 from eval.model_matrix import DEFAULT_SCENARIOS, estimate_tokens, limit_scenarios, load_scenarios, prompt_for_policy, score_answer
 from eval.router_config_sweep import DEFAULT_CONFIGS, route_matches_expected, run_scenario, summarize
 from scripts.check_expected_routes import check_routes, config_by_name
+from scripts.recommend_runtime_env import exports_for_config
 
 
 class FakeClock:
@@ -237,6 +238,59 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.remote_mode, "remote_accuracy")
         self.assertEqual(result.selected_model, "gemma-4-31b-it")
         self.assertEqual(captured["payload"]["model"], "gemma-4-31b-it")
+
+    def test_category_model_preference_beats_remote_mode_default(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse("negative")
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3,kimi-k2p7-code",
+                "ROUTER_MODELS_REMOTE_ACCURACY": "minimax-m3",
+                "ROUTER_MODELS_BY_CATEGORY": "sentiment_classification=kimi-k2p7-code,minimax-m3",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", fake_urlopen):
+            result = answer_task(
+                "sentiment",
+                "Classify the sentiment as positive, negative, or neutral: The setup was easy, but unreliable.",
+            )
+
+        self.assertEqual(result.remote_mode, "remote_accuracy")
+        self.assertEqual(result.selected_model, "kimi-k2p7-code")
+        self.assertEqual(captured["payload"]["model"], "kimi-k2p7-code")
+
+    def test_category_model_preference_still_respects_allowed_models(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse("negative")
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+                "ROUTER_MODELS_REMOTE_ACCURACY": "minimax-m3",
+                "ROUTER_MODELS_BY_CATEGORY": "sentiment_classification=kimi-k2p7-code,minimax-m3",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", fake_urlopen):
+            result = answer_task(
+                "sentiment",
+                "Classify the sentiment as positive, negative, or neutral: The setup was easy, but unreliable.",
+            )
+
+        self.assertEqual(result.selected_model, "minimax-m3")
+        self.assertEqual(captured["payload"]["model"], "minimax-m3")
 
     def test_ambiguous_ner_routes_remote_instead_of_unsafe_local(self):
         with patch.dict(
@@ -909,6 +963,34 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(row["model"], "kimi-k2p7-code")
         self.assertEqual(row["prompt_policy"], "compact")
         self.assertEqual(row["prompt_tokens"], estimate_tokens(prompt_for_policy(scenario, "compact")))
+
+    def test_router_sweep_supports_category_model_preferences(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid_kimi_prompt_evidence")
+        scenario = {
+            "task_id": "sentiment_mixed",
+            "category": "sentiment_classification",
+            "difficulty": "medium",
+            "scenario_class": "adversarial",
+            "prompt": "Classify the sentiment as positive, negative, or neutral: The setup was easy, but the results were unreliable.",
+            "expected_keywords": ["neutral"],
+            "expected_answer": "neutral",
+            "expected_route": "remote_accuracy",
+            "verifier": "label_set",
+        }
+
+        row = run_scenario(config, scenario)
+
+        self.assertEqual(row["route"], "fireworks")
+        self.assertEqual(row["model"], "kimi-k2p7-code")
+        self.assertEqual(row["model_preferences"], ["kimi-k2p7-code", "minimax-m3"])
+
+    def test_runtime_env_recommender_exports_category_model_preferences(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid_kimi_prompt_evidence")
+        exports = dict(exports_for_config(config))
+
+        self.assertIn("ROUTER_MODELS_BY_CATEGORY", exports)
+        self.assertIn("code_generation=kimi-k2p7-code,minimax-m3", exports["ROUTER_MODELS_BY_CATEGORY"])
+        self.assertIn("mathematical_reasoning=kimi-k2p7-code,minimax-m3", exports["ROUTER_MODELS_BY_CATEGORY"])
 
     def test_expected_route_script_rows_match_full_fixture(self):
         rows = check_routes(config_by_name("strict_hybrid"), load_scenarios(DEFAULT_SCENARIOS))

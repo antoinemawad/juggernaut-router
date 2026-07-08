@@ -66,6 +66,16 @@ DEFAULT_CONFIGS = [
         "local_enabled": True,
         "router_mode": "conservative",
         "fallback_model": "kimi-k2p7-code",
+        "models_by_category": {
+            "code_debugging": ["kimi-k2p7-code", "minimax-m3"],
+            "code_generation": ["kimi-k2p7-code", "minimax-m3"],
+            "factual_knowledge": ["kimi-k2p7-code", "minimax-m3"],
+            "logical_deductive_reasoning": ["kimi-k2p7-code", "minimax-m3"],
+            "mathematical_reasoning": ["kimi-k2p7-code", "minimax-m3"],
+            "named_entity_recognition": ["kimi-k2p7-code", "minimax-m3"],
+            "sentiment_classification": ["kimi-k2p7-code", "minimax-m3"],
+            "text_summarisation": ["kimi-k2p7-code", "minimax-m3"],
+        },
         "prompt_policy": "original",
         "prompt_policy_by_category": {
             "code_generation": "compact",
@@ -178,8 +188,23 @@ def prompt_policy_for_scenario(config, scenario):
     return config.get("prompt_policy_by_category", {}).get(scenario["category"], config["prompt_policy"])
 
 
+def model_preference_for_scenario(config, scenario):
+    models = config.get("models_by_category", {}).get(scenario["category"])
+    if models:
+        return list(models)
+    preferences = [config["fallback_model"]]
+    escalation_model = config.get("escalation_model")
+    if escalation_model and escalation_model not in preferences:
+        preferences.append(escalation_model)
+    return preferences
+
+
+def fallback_model_for_scenario(config, scenario):
+    return model_preference_for_scenario(config, scenario)[0]
+
+
 def build_mock_remote_outcome(config, scenario):
-    model = config["fallback_model"]
+    model = fallback_model_for_scenario(config, scenario)
     answer = mock_answer(model, scenario)
     passed, _score, _notes = score_answer(answer, scenario)
     escalation_model = config.get("escalation_model")
@@ -199,7 +224,7 @@ def estimate_remote_usage(config, scenario, answer, escalated_after_validation=F
     if not escalated_after_validation:
         return completion_tokens, total_tokens
 
-    first_answer = mock_answer(config["fallback_model"], scenario)
+    first_answer = mock_answer(fallback_model_for_scenario(config, scenario), scenario)
     first_completion_tokens = estimate_tokens(first_answer)
     first_total_tokens = estimate_remote_tokens(config, scenario, first_answer)
     return completion_tokens + first_completion_tokens, total_tokens + first_total_tokens
@@ -210,6 +235,10 @@ def runtime_config(config):
     allowed_models = [config["fallback_model"]]
     if config.get("escalation_model") and config["escalation_model"] not in allowed_models:
         allowed_models.append(config["escalation_model"])
+    for models in config.get("models_by_category", {}).values():
+        for model in models:
+            if model not in allowed_models:
+                allowed_models.append(model)
     return RuntimeConfig(
         input_path=Path("/input/tasks.json"),
         output_path=Path("/output/results.json"),
@@ -232,6 +261,10 @@ def runtime_config(config):
         prompt_policy_remote_format_strict=config["prompt_policy"],
         prompt_policy_remote_concise=config["prompt_policy"],
         prompt_policy_by_category=config.get("prompt_policy_by_category"),
+        models_by_category={
+            category: tuple(models)
+            for category, models in config.get("models_by_category", {}).items()
+        },
     )
 
 
@@ -294,7 +327,8 @@ def run_scenario(config, scenario):
 
     passed, score, notes = score_answer(answer, scenario)
     expected_route = scenario.get("expected_route")
-    gemma_decision = gemma_decision_for(route, model, config["fallback_model"])
+    fallback_model = fallback_model_for_scenario(config, scenario)
+    gemma_decision = gemma_decision_for(route, model, fallback_model)
     return {
         "config": config["name"],
         "task_id": scenario["task_id"],
@@ -317,7 +351,8 @@ def run_scenario(config, scenario):
         "route_reason": result.route_reason,
         "model": model,
         "gemma_decision": gemma_decision,
-        "gemma_candidate_model": config["fallback_model"] if is_gemma_model(config["fallback_model"]) else None,
+        "model_preferences": model_preference_for_scenario(config, scenario),
+        "gemma_candidate_model": fallback_model if is_gemma_model(fallback_model) else None,
         "validation_escalation_enabled": bool(config.get("validation_escalation")),
         "escalation_model": config.get("escalation_model"),
         "escalated_after_validation": route == "fireworks" and escalated_after_validation,
