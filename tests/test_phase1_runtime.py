@@ -311,6 +311,45 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(summary["ineligible_categories"], ["sentiment_classification"])
         self.assertEqual(summary["export_count"], 1)
 
+    def test_readiness_report_infers_legacy_recommendation_evidence(self):
+        categories = (
+            "code_debugging",
+            "code_generation",
+            "factual_knowledge",
+            "logical_deductive_reasoning",
+            "mathematical_reasoning",
+            "named_entity_recognition",
+            "sentiment_classification",
+            "text_summarisation",
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recommendation_path = Path(tmpdir) / "legacy_recommendation.json"
+            recommendation_path.write_text(
+                json.dumps({
+                    "rows": 240,
+                    "runs": 3,
+                    "recommendations": {
+                        category: {
+                            "model": "kimi-k2p7-code",
+                            "prompt_policy": "original",
+                            "eligible": True,
+                        }
+                        for category in categories
+                    },
+                    "exports": {
+                        "ROUTER_MODE": "conservative",
+                    },
+                }) + "\n",
+                encoding="utf-8",
+            )
+
+            summary = submission_readiness_report.recommendation_summary(recommendation_path)
+
+        self.assertEqual(summary["status"], "passed")
+        self.assertTrue(summary["inferred_legacy_evidence"])
+        self.assertEqual(summary["missing_categories"], [])
+        self.assertEqual(summary["ineligible_categories"], [])
+
     def test_compare_eval_reports_ranks_multiple_candidates(self):
         records = [
             {

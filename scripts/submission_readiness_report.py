@@ -3,6 +3,8 @@ import json
 import subprocess
 from pathlib import Path
 
+from scripts.recommend_from_model_matrix import DEFAULT_REQUIRED_CATEGORIES, evidence_status
+
 
 ROOT = Path(__file__).resolve().parents[1]
 ACCEPTANCE_REPORT = ROOT / "eval_runs" / "phase1_acceptance_latest.json"
@@ -135,13 +137,23 @@ def recommendation_summary(path: Path | None) -> dict | None:
             "path": display_path(path),
         }
     payload = read_json(path)
-    evidence = payload.get("evidence", {})
+    inferred_legacy_evidence = False
+    status = payload.get("evidence_status")
+    evidence = payload.get("evidence")
+    recommendations = payload.get("recommendations", {})
+    if status is None and isinstance(recommendations, dict):
+        evidence = evidence_status(recommendations, DEFAULT_REQUIRED_CATEGORIES)
+        status = evidence["status"]
+        inferred_legacy_evidence = True
+    if not isinstance(evidence, dict):
+        evidence = {}
     exports = payload.get("exports", {})
     return {
-        "status": payload.get("evidence_status", "unknown"),
+        "status": status or "unknown",
         "path": display_path(path),
         "rows": payload.get("rows"),
         "runs": payload.get("runs"),
+        "inferred_legacy_evidence": inferred_legacy_evidence,
         "missing_categories": evidence.get("missing_categories", []),
         "ineligible_categories": evidence.get("ineligible_categories", []),
         "export_count": len(exports) if isinstance(exports, dict) else 0,
