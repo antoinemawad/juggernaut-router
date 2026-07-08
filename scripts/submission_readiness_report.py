@@ -1,12 +1,16 @@
 import argparse
 import json
 import subprocess
+import sys
 from pathlib import Path
-
-from scripts.recommend_from_model_matrix import DEFAULT_REQUIRED_CATEGORIES, evidence_status
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.recommend_from_model_matrix import DEFAULT_REQUIRED_CATEGORIES, evidence_status
+
 ACCEPTANCE_REPORT = ROOT / "eval_runs" / "phase1_acceptance_latest.json"
 QUALITY_REPORT = ROOT / "eval_runs" / "local_quality_gate_latest.json"
 EVAL_RUNS = ROOT / "eval_runs"
