@@ -38,6 +38,7 @@ Final pre-submit checklist for Track 1 only.
 - [ ] linux/amd64 image built. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 - [ ] Image compressed size is under 10GB. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).txt`.
 - [ ] Local image size guard is below the conservative 8GB ceiling before final push.
+- [ ] Final build/push/check commands generated: `python3 scripts/final_submission_commands.py <public-image-tag>`.
 - [ ] Image is publicly pullable. Source: `Guides/Participant Guide_ AMD Developer Hackathon (ACT II).pdf`.
 
 ## Tests and Validation

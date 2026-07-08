@@ -69,6 +69,7 @@ def main():
         "scripts/check_submission_static.py",
         "scripts/check_docker_runtime.py",
         "scripts/compare_eval_reports.py",
+        "scripts/final_submission_commands.py",
         "scripts/run_phase1_acceptance.py",
         "scripts/submission_readiness_report.py",
         "scripts/validate_submission_io.py",

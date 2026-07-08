@@ -2,12 +2,20 @@ import argparse
 import json
 import os
 import re
+import sys
 import time
 import urllib.error
 import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.check_live_eval_env import validate_live_eval_env
 
 
 ALLOWED_TRACK1_MODELS = [
@@ -31,6 +39,12 @@ def load_scenarios(path):
             if line:
                 scenarios.append(json.loads(line))
     return scenarios
+
+
+def limit_scenarios(scenarios, limit):
+    if limit is None:
+        return scenarios
+    return scenarios[:limit]
 
 
 def env_models():
@@ -319,6 +333,7 @@ def main():
     )
     parser.add_argument("--live", action="store_true", help="Call Fireworks through FIREWORKS_BASE_URL.")
     parser.add_argument("--max-tokens", type=int, default=256)
+    parser.add_argument("--limit", type=int, default=None, help="Run only the first N scenarios for smoke tests.")
     args = parser.parse_args()
 
     requested_models = [model.strip() for model in args.models.split(",") if model.strip()]
@@ -327,9 +342,9 @@ def main():
     if not models:
         raise SystemExit("No requested models are present in ALLOWED_MODELS.")
     if args.live:
-        for name in ("FIREWORKS_API_KEY", "FIREWORKS_BASE_URL", "ALLOWED_MODELS"):
-            if not os.environ.get(name):
-                raise SystemExit(f"--live requires {name}")
+        env_errors = validate_live_eval_env(os.environ)
+        if env_errors:
+            raise SystemExit("--live environment is not ready: " + "; ".join(env_errors))
     if args.prompt_policies.strip() == "all":
         prompt_policies = list(PROMPT_POLICIES)
     else:
@@ -338,7 +353,7 @@ def main():
     if invalid_policies:
         raise SystemExit(f"Unknown prompt policies: {', '.join(invalid_policies)}")
 
-    scenarios = load_scenarios(args.scenarios)
+    scenarios = limit_scenarios(load_scenarios(args.scenarios), args.limit)
     run_id = datetime.now(timezone.utc).strftime("model_matrix_%Y%m%d_%H%M%S")
     args.out_dir.mkdir(parents=True, exist_ok=True)
     log_path = args.out_dir / f"{run_id}.jsonl"

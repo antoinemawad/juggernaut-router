@@ -14,6 +14,7 @@ from app.normalization import normalize_answer
 from app.telemetry import TelemetryLogger
 from app.types import SAFE_FALLBACK_ANSWER
 from scripts.check_live_eval_env import validate_live_eval_env
+from scripts.final_submission_commands import validate_image_ref
 from scripts import check_submission_static
 
 
@@ -69,6 +70,11 @@ class Phase1RuntimeTests(unittest.TestCase):
             "ALLOWED_MODELS": "not-a-track1-model",
         })
         self.assertTrue(any("unexpected model" in error for error in errors))
+
+    def test_final_submission_image_ref_validator(self):
+        self.assertEqual(validate_image_ref("docker.io/team/juggernaut-router:act2"), [])
+        self.assertTrue(validate_image_ref("juggernaut-router:local"))
+        self.assertTrue(validate_image_ref("docker.io/team/juggernaut-router"))
 
     def test_parse_allowed_models_deduplicates_and_strips(self):
         self.assertEqual(parse_allowed_models(" a, b ,,a "), ["a", "b"])

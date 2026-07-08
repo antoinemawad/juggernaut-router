@@ -42,6 +42,7 @@ Before any live Fireworks/AMD notebook model matrix run, validate the injected e
 
 ```bash
 python3 scripts/check_live_eval_env.py --print-models
+python3 eval/model_matrix.py --live --limit 2 --models minimax-m3 --prompt-policies original
 ```
 
 ## Router Config Sweep
@@ -129,6 +130,12 @@ docker buildx build --platform linux/amd64 \
 ```
 
 Before submitting, pull the public image and run it with mounted `/input` and `/output`.
+
+To print the final build/push/check commands from a chosen public image tag:
+
+```bash
+python3 scripts/final_submission_commands.py docker.io/<user>/juggernaut-router:act2
+```
 
 ## Submission Materials
 

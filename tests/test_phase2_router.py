@@ -9,7 +9,7 @@ from app.config import RuntimeConfig
 from app.deadline import DeadlineManager
 from app.solvers.basic import LocalSolverResult
 from app.validators import validate_local_answer
-from eval.model_matrix import DEFAULT_SCENARIOS, load_scenarios, score_answer
+from eval.model_matrix import DEFAULT_SCENARIOS, limit_scenarios, load_scenarios, score_answer
 from eval.router_config_sweep import DEFAULT_CONFIGS, route_matches_expected, run_scenario, summarize
 from scripts.check_expected_routes import check_routes, config_by_name
 
@@ -650,6 +650,12 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(label_score, 1.0)
         self.assertTrue(numeric_passed)
         self.assertEqual(numeric_score, 1.0)
+
+    def test_model_matrix_limit_scenarios_supports_live_smoke_tests(self):
+        scenarios = load_scenarios(DEFAULT_SCENARIOS)
+        self.assertEqual(len(limit_scenarios(scenarios, None)), len(scenarios))
+        self.assertEqual(len(limit_scenarios(scenarios, 3)), 3)
+        self.assertEqual(limit_scenarios(scenarios, 3)[0]["task_id"], scenarios[0]["task_id"])
 
 
 if __name__ == "__main__":

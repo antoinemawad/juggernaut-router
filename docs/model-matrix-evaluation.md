@@ -153,10 +153,17 @@ export FIREWORKS_API_KEY=...
 export FIREWORKS_BASE_URL=...
 export ALLOWED_MODELS=minimax-m3,kimi-k2p7-code,gemma-4-31b-it,gemma-4-26b-a4b-it,gemma-4-31b-it-nvfp4
 python3 scripts/check_live_eval_env.py --print-models
-python3 eval/model_matrix.py --live
+python3 eval/model_matrix.py --live --limit 2 --models minimax-m3 --prompt-policies original
 ```
 
 Run the env check first so live calls only use the judging proxy and Track 1 model allowlist.
+Use the limited command as the first live smoke test before spending a full matrix.
+
+After the smoke test succeeds:
+
+```bash
+python3 eval/model_matrix.py --live --prompt-policies all
+```
 
 ## Prompt Policy Testing
 
