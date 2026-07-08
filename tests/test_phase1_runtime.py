@@ -16,6 +16,7 @@ from app.types import SAFE_FALLBACK_ANSWER
 from eval.model_matrix import parse_dev_model_map, provider_model_for
 from scripts.check_live_eval_env import validate_live_eval_env
 from scripts.final_submission_commands import validate_image_ref
+from scripts.validate_runtime_recommendation import isolated_env, validate_recommendation
 from scripts import check_submission_static
 from scripts import build_evidence_manifest
 from scripts import compare_eval_reports
@@ -358,6 +359,89 @@ class Phase1RuntimeTests(unittest.TestCase):
             rendered,
         )
         self.assertIn("export ROUTER_MODELS_REMOTE_CODE='kimi-k2p7-code'", rendered)
+
+    def test_runtime_recommendation_env_is_isolated(self):
+        env = isolated_env(
+            {
+                "ROUTER_MODE": "stale",
+                "ROUTER_PROMPT_POLICY_BY_CATEGORY": "old=value",
+                "LOCAL_CONFIDENCE_THRESHOLD": "0.1",
+                "FIREWORKS_MAX_TOKENS": "999",
+                "KEEP_ME": "yes",
+            },
+            {
+                "ROUTER_MODE": "conservative",
+                "ROUTER_PROMPT_POLICY_BY_CATEGORY": None,
+                "FIREWORKS_MAX_TOKENS": "192",
+            },
+        )
+
+        self.assertEqual(env["KEEP_ME"], "yes")
+        self.assertEqual(env["ROUTER_MODE"], "conservative")
+        self.assertEqual(env["FIREWORKS_MAX_TOKENS"], "192")
+        self.assertNotIn("ROUTER_PROMPT_POLICY_BY_CATEGORY", env)
+        self.assertNotIn("LOCAL_CONFIDENCE_THRESHOLD", env)
+
+    def test_runtime_recommendation_validation_writes_pass_report(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            recommendation = tmp / "recommendation.json"
+            recommendation.write_text(
+                json.dumps({
+                    "exports": {
+                        "ROUTER_MODE": "conservative",
+                        "FIREWORKS_MAX_TOKENS": "192",
+                    }
+                }) + "\n",
+                encoding="utf-8",
+            )
+            out_json = tmp / "validation.json"
+            out_md = tmp / "validation.md"
+            seen_envs = []
+
+            def fake_runner(cmd, env):
+                seen_envs.append(env)
+                return {
+                    "cmd": cmd,
+                    "returncode": 0,
+                    "started_at": "start",
+                    "finished_at": "finish",
+                    "output_tail": "",
+                }
+
+            report = validate_recommendation(recommendation, out_json, out_md, runner=fake_runner)
+
+            self.assertEqual(report["status"], "passed")
+            self.assertTrue(out_json.exists())
+            self.assertTrue(out_md.exists())
+            self.assertEqual(seen_envs[0]["ROUTER_MODE"], "conservative")
+
+    def test_runtime_recommendation_validation_stops_on_failure(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            recommendation = tmp / "recommendation.json"
+            recommendation.write_text(json.dumps({"exports": {"ROUTER_MODE": "conservative"}}) + "\n", encoding="utf-8")
+            calls = []
+
+            def fake_runner(cmd, env):
+                calls.append(cmd)
+                return {
+                    "cmd": cmd,
+                    "returncode": 1,
+                    "started_at": "start",
+                    "finished_at": "finish",
+                    "output_tail": "failed",
+                }
+
+            report = validate_recommendation(
+                recommendation,
+                tmp / "validation.json",
+                tmp / "validation.md",
+                runner=fake_runner,
+            )
+
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(len(calls), 1)
 
     def test_deadline_suppresses_retry_when_budget_is_low(self):
         clock = FakeClock()

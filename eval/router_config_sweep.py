@@ -517,7 +517,7 @@ def main():
     args = parser.parse_args()
 
     scenarios = load_scenarios(args.scenarios)
-    run_id = datetime.now(timezone.utc).strftime("router_sweep_%Y%m%d_%H%M%S")
+    run_id = datetime.now(timezone.utc).strftime("router_sweep_%Y%m%d_%H%M%S_%f")
     args.out_dir.mkdir(parents=True, exist_ok=True)
     log_path = args.out_dir / f"{run_id}.jsonl"
     report_path = args.out_dir / f"{run_id}.md"

@@ -461,7 +461,7 @@ def main():
         raise SystemExit(f"Unknown prompt policies: {', '.join(invalid_policies)}")
 
     scenarios = limit_scenarios(load_scenarios(args.scenarios), args.limit)
-    run_id = datetime.now(timezone.utc).strftime("model_matrix_%Y%m%d_%H%M%S")
+    run_id = datetime.now(timezone.utc).strftime("model_matrix_%Y%m%d_%H%M%S_%f")
     args.out_dir.mkdir(parents=True, exist_ok=True)
     log_path = args.out_dir / f"{run_id}.jsonl"
     report_path = args.out_dir / f"{run_id}.md"
