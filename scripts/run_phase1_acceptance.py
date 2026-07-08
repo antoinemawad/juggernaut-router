@@ -42,6 +42,7 @@ def write_report(results: list[dict], status: str) -> Path:
         "checks": results,
         "acceptance_criteria": [
             "local quality gate passes",
+            "static submission compliance guard passes",
             "official output shape is valid",
             "malformed input and telemetry tests pass",
             "Fireworks failure tests pass",

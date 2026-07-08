@@ -38,6 +38,12 @@ python3 scripts/validate_submission_io.py local_test/output/results.json
 
 Open `notebooks/amd_ai_manual_checkpoint.ipynb` in the AMD AI Notebook connected to this repo. It runs safe local tests, prints commit/manual-test commands, then intentionally stops before live Fireworks or Docker submission work.
 
+Before any live Fireworks/AMD notebook model matrix run, validate the injected env:
+
+```bash
+python3 scripts/check_live_eval_env.py --print-models
+```
+
 ## Router Config Sweep
 
 Before spending official submission attempts, compare candidate router configurations locally:

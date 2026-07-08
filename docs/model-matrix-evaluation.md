@@ -152,10 +152,11 @@ Use only after local `.env` values are loaded into the shell:
 export FIREWORKS_API_KEY=...
 export FIREWORKS_BASE_URL=...
 export ALLOWED_MODELS=minimax-m3,kimi-k2p7-code,gemma-4-31b-it,gemma-4-26b-a4b-it,gemma-4-31b-it-nvfp4
+python3 scripts/check_live_eval_env.py --print-models
 python3 eval/model_matrix.py --live
 ```
 
-The script intentionally refuses `--live` unless all three env vars exist.
+Run the env check first so live calls only use the judging proxy and Track 1 model allowlist.
 
 ## Prompt Policy Testing
 

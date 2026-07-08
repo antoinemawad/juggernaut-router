@@ -13,6 +13,7 @@ from app.main import main
 from app.normalization import normalize_answer
 from app.telemetry import TelemetryLogger
 from app.types import SAFE_FALLBACK_ANSWER
+from scripts.check_live_eval_env import validate_live_eval_env
 from scripts import check_submission_static
 
 
@@ -44,6 +45,30 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(check_submission_static.check_no_forbidden_tracked_files(), [])
         self.assertEqual(check_submission_static.check_ignore_files(), [])
         self.assertEqual(check_submission_static.check_dockerfile_is_submission_scoped(), [])
+
+    def test_live_eval_env_validator_accepts_judging_proxy_env(self):
+        errors = validate_live_eval_env({
+            "FIREWORKS_API_KEY": "secret",
+            "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+            "ALLOWED_MODELS": "minimax-m3,kimi-k2p7-code",
+        })
+        self.assertEqual(errors, [])
+
+    def test_live_eval_env_validator_rejects_normal_fireworks_host(self):
+        errors = validate_live_eval_env({
+            "FIREWORKS_API_KEY": "secret",
+            "FIREWORKS_BASE_URL": "https://api." + "fireworks.ai/inference/v1",
+            "ALLOWED_MODELS": "minimax-m3",
+        })
+        self.assertTrue(any("judging proxy" in error for error in errors))
+
+    def test_live_eval_env_validator_rejects_unexpected_model(self):
+        errors = validate_live_eval_env({
+            "FIREWORKS_API_KEY": "secret",
+            "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+            "ALLOWED_MODELS": "not-a-track1-model",
+        })
+        self.assertTrue(any("unexpected model" in error for error in errors))
 
     def test_parse_allowed_models_deduplicates_and_strips(self):
         self.assertEqual(parse_allowed_models(" a, b ,,a "), ["a", "b"])

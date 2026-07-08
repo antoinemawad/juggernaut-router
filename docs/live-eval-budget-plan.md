@@ -60,6 +60,7 @@ Approximate calls: scenario count routed remote.
 
 ## Stop Rules
 
+- Run `python3 scripts/check_live_eval_env.py --print-models` before spending live calls.
 - Stop live expansion if response schema/token fields look wrong.
 - Stop if calls are not going through `FIREWORKS_BASE_URL`.
 - Stop if prompt policy reduces accuracy.
