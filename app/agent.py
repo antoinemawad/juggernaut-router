@@ -78,7 +78,7 @@ def answer_task(
         )
 
     remote_mode = _select_remote_mode(classification, local_result)
-    prompt_policy = _prompt_policy_for_remote_mode(remote_mode)
+    prompt_policy = _prompt_policy_for_remote_mode(remote_mode, config)
     remote_prompt = _apply_prompt_policy(prompt, prompt_policy)
     remote_prompt_token_estimate = estimate_tokens(remote_prompt)
     if deadline is not None and not deadline.can_spend(config.fireworks_timeout_seconds):
@@ -238,11 +238,15 @@ def _preferred_models_for_remote_mode(remote_mode: str) -> tuple[str, ...]:
     return ("minimax-m3", "gemma-4-26b-a4b-it", "gemma-4-31b-it")
 
 
-def _prompt_policy_for_remote_mode(remote_mode: str) -> str:
-    if remote_mode in {"remote_code", "remote_format_strict"}:
-        return "answer_only"
-    if remote_mode in {"remote_accuracy", "remote_concise"}:
-        return "compact"
+def _prompt_policy_for_remote_mode(remote_mode: str, config: RuntimeConfig) -> str:
+    if remote_mode == "remote_code":
+        return config.prompt_policy_remote_code
+    if remote_mode == "remote_format_strict":
+        return config.prompt_policy_remote_format_strict
+    if remote_mode == "remote_accuracy":
+        return config.prompt_policy_remote_accuracy
+    if remote_mode == "remote_concise":
+        return config.prompt_policy_remote_concise
     return "original"
 
 

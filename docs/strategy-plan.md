@@ -63,6 +63,7 @@ Native.Builder may be used for prototyping, prompt exploration, demos, or workfl
 - Model selection should remain configuration-driven so we can update category preferences after experiments without rewriting router logic.
 - For each category, track both the best-accuracy model and the cheapest passing model.
 - Prompt policy should also be selected from evidence: original input, compact prompt, or answer-only prompt.
+- Runtime prompt policies are configurable per remote mode through `ROUTER_PROMPT_POLICY_REMOTE_ACCURACY`, `ROUTER_PROMPT_POLICY_REMOTE_CODE`, `ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT`, and `ROUTER_PROMPT_POLICY_REMOTE_CONCISE`.
 - Gemma candidates should be evaluated in the same matrix as all other allowed models and promoted only through cheapest-sufficient evidence.
 
 ## Category-by-Category Strategy

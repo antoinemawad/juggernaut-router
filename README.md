@@ -24,6 +24,15 @@ Required runtime env vars for live Fireworks fallback:
 
 All Fireworks calls are built from `FIREWORKS_BASE_URL`; do not hardcode the normal Fireworks API URL.
 
+Optional prompt-policy tuning env vars:
+
+- `ROUTER_PROMPT_POLICY_REMOTE_ACCURACY`
+- `ROUTER_PROMPT_POLICY_REMOTE_CODE`
+- `ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT`
+- `ROUTER_PROMPT_POLICY_REMOTE_CONCISE`
+
+Allowed values are `original`, `compact`, and `answer_only`. Defaults are evidence-biased but configurable so notebook/live runs can compare models without code changes.
+
 ## Local Smoke Test
 
 ```bash

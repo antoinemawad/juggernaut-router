@@ -11,6 +11,8 @@ DEFAULT_ALLOWED_PLANNING_MODELS = (
     "gemma-4-31b-it-nvfp4",
 )
 
+PROMPT_POLICIES = {"original", "compact", "answer_only"}
+
 
 def _get_int(name: str, default: int, minimum: int | None = None, maximum: int | None = None) -> int:
     raw = os.environ.get(name)
@@ -51,6 +53,14 @@ def _get_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _get_prompt_policy(name: str, default: str) -> str:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    value = raw.strip().lower()
+    return value if value in PROMPT_POLICIES else default
+
+
 def parse_allowed_models(raw: str | None) -> list[str]:
     if not raw:
         return []
@@ -82,6 +92,10 @@ class RuntimeConfig:
     fireworks_base_url: str | None
     allowed_models: tuple[str, ...]
     fireworks_max_tokens: int
+    prompt_policy_remote_accuracy: str = "compact"
+    prompt_policy_remote_code: str = "answer_only"
+    prompt_policy_remote_format_strict: str = "answer_only"
+    prompt_policy_remote_concise: str = "compact"
 
     @classmethod
     def from_env(cls) -> "RuntimeConfig":
@@ -107,6 +121,13 @@ class RuntimeConfig:
             fireworks_base_url=os.environ.get("FIREWORKS_BASE_URL"),
             allowed_models=tuple(parse_allowed_models(os.environ.get("ALLOWED_MODELS"))),
             fireworks_max_tokens=_get_int("FIREWORKS_MAX_TOKENS", 256, 1, 4096),
+            prompt_policy_remote_accuracy=_get_prompt_policy("ROUTER_PROMPT_POLICY_REMOTE_ACCURACY", "compact"),
+            prompt_policy_remote_code=_get_prompt_policy("ROUTER_PROMPT_POLICY_REMOTE_CODE", "answer_only"),
+            prompt_policy_remote_format_strict=_get_prompt_policy(
+                "ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT",
+                "answer_only",
+            ),
+            prompt_policy_remote_concise=_get_prompt_policy("ROUTER_PROMPT_POLICY_REMOTE_CONCISE", "compact"),
         )
 
     def first_allowed_model(self) -> str | None:

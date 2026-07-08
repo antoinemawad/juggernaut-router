@@ -130,6 +130,23 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(config.local_proof_budget_ms, 250)
         self.assertFalse(config.local_cross_check_enabled)
 
+    def test_config_parses_remote_prompt_policy_knobs(self):
+        with patch.dict(
+            os.environ,
+            {
+                "ROUTER_PROMPT_POLICY_REMOTE_ACCURACY": "original",
+                "ROUTER_PROMPT_POLICY_REMOTE_CODE": "answer_only",
+                "ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT": "compact",
+                "ROUTER_PROMPT_POLICY_REMOTE_CONCISE": "invalid-policy",
+            },
+            clear=True,
+        ):
+            config = RuntimeConfig.from_env()
+        self.assertEqual(config.prompt_policy_remote_accuracy, "original")
+        self.assertEqual(config.prompt_policy_remote_code, "answer_only")
+        self.assertEqual(config.prompt_policy_remote_format_strict, "compact")
+        self.assertEqual(config.prompt_policy_remote_concise, "compact")
+
     def test_deadline_suppresses_retry_when_budget_is_low(self):
         clock = FakeClock()
         deadline = DeadlineManager(total_seconds=10, safety_margin_seconds=3, clock=clock)

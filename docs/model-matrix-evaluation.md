@@ -303,6 +303,17 @@ After each serious run, produce a table like:
 
 The final router should eventually consume these decisions through configuration, not hardcoded one-off conditionals.
 
+Runtime prompt-policy defaults can be overridden without code changes:
+
+```bash
+export ROUTER_PROMPT_POLICY_REMOTE_ACCURACY=compact
+export ROUTER_PROMPT_POLICY_REMOTE_CODE=answer_only
+export ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT=answer_only
+export ROUTER_PROMPT_POLICY_REMOTE_CONCISE=compact
+```
+
+Allowed values are `original`, `compact`, and `answer_only`.
+
 ## Run Protocol
 
 1. Run mock mode.
