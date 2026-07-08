@@ -159,6 +159,19 @@ python3 eval/model_matrix.py --live --limit 2 --models minimax-m3 --prompt-polic
 Run the env check first so live calls only use the judging proxy and Track 1 model allowlist.
 Use the limited command as the first live smoke test before spending a full matrix.
 
+If the AMD notebook has no judging proxy yet, use the normal Fireworks endpoint only as a
+development-only model behavior test. These results are useful for prompt/model tuning, but
+they are not official judging-proxy token data:
+
+```bash
+export FIREWORKS_BASE_URL=https://api.fireworks.ai/inference/v1
+python3 scripts/check_live_eval_env.py --print-models --allow-normal-fireworks-dev
+python3 eval/model_matrix.py --live --allow-normal-fireworks-dev --limit 2 --models minimax-m3 --prompt-policies original
+```
+
+Remove the dev override and restore the injected `FIREWORKS_BASE_URL` before any official
+submission or judging-proxy validation.
+
 After the smoke test succeeds:
 
 ```bash

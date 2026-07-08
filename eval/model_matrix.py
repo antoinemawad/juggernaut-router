@@ -332,6 +332,11 @@ def main():
         help="Comma-separated prompt policies: original, compact, answer_only, or all.",
     )
     parser.add_argument("--live", action="store_true", help="Call Fireworks through FIREWORKS_BASE_URL.")
+    parser.add_argument(
+        "--allow-normal-fireworks-dev",
+        action="store_true",
+        help="Development only: allow --live against the normal Fireworks API when the judging proxy is unavailable.",
+    )
     parser.add_argument("--max-tokens", type=int, default=256)
     parser.add_argument("--limit", type=int, default=None, help="Run only the first N scenarios for smoke tests.")
     args = parser.parse_args()
@@ -342,9 +347,14 @@ def main():
     if not models:
         raise SystemExit("No requested models are present in ALLOWED_MODELS.")
     if args.live:
-        env_errors = validate_live_eval_env(os.environ)
+        env_errors = validate_live_eval_env(
+            os.environ,
+            allow_normal_fireworks_dev=args.allow_normal_fireworks_dev,
+        )
         if env_errors:
             raise SystemExit("--live environment is not ready: " + "; ".join(env_errors))
+        if args.allow_normal_fireworks_dev:
+            print("WARNING: normal Fireworks dev override is enabled; results are not judging-proxy token data.")
     if args.prompt_policies.strip() == "all":
         prompt_policies = list(PROMPT_POLICIES)
     else:

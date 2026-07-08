@@ -63,6 +63,17 @@ class Phase1RuntimeTests(unittest.TestCase):
         })
         self.assertTrue(any("judging proxy" in error for error in errors))
 
+    def test_live_eval_env_validator_allows_normal_fireworks_for_explicit_dev_runs(self):
+        errors = validate_live_eval_env(
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://api." + "fireworks.ai/inference/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            allow_normal_fireworks_dev=True,
+        )
+        self.assertEqual(errors, [])
+
     def test_live_eval_env_validator_rejects_unexpected_model(self):
         errors = validate_live_eval_env({
             "FIREWORKS_API_KEY": "secret",
