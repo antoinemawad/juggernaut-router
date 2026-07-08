@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -12,7 +13,7 @@ from app.fireworks_client import ask_fireworks_structured, select_allowed_model
 from app.main import main
 from app.normalization import normalize_answer
 from app.telemetry import TelemetryLogger
-from app.types import SAFE_FALLBACK_ANSWER
+from app.types import SAFE_FALLBACK_ANSWER, AgentResult
 from eval.model_matrix import parse_dev_model_map, provider_model_for
 from scripts.check_live_eval_env import validate_live_eval_env
 from scripts.final_submission_commands import validate_image_ref
@@ -883,6 +884,48 @@ class Phase1RuntimeTests(unittest.TestCase):
         task_ids = [row["task_id"] for row in rows]
         self.assertEqual(len(task_ids), len(set(task_ids)))
         self.assertEqual(task_ids[:2], ["dup", "dup_2"])
+
+    def test_parallel_main_preserves_output_order(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "tasks.json"
+            output_path = Path(tmpdir) / "results.json"
+            input_path.write_text(
+                json.dumps([
+                    {"task_id": "slow", "prompt": "slow"},
+                    {"task_id": "fast", "prompt": "fast"},
+                ]),
+                encoding="utf-8",
+            )
+
+            def fake_answer_task(task_id, prompt, config=None, deadline=None):
+                if task_id == "slow":
+                    time.sleep(0.02)
+                return AgentResult(
+                    answer=f"{task_id} answer",
+                    route="local",
+                    route_reason="test",
+                )
+
+            with patch.dict(
+                os.environ,
+                {
+                    "INPUT_PATH": str(input_path),
+                    "OUTPUT_PATH": str(output_path),
+                    "REMOTE_WORKER_COUNT": "2",
+                },
+                clear=True,
+            ), patch("app.main.answer_task", side_effect=fake_answer_task):
+                main()
+
+            rows = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            rows,
+            [
+                {"task_id": "slow", "answer": "slow answer"},
+                {"task_id": "fast", "answer": "fast answer"},
+            ],
+        )
 
     def test_main_writes_empty_results_for_non_array_input(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.agent import answer_task
 from app.config import RuntimeConfig
@@ -91,43 +92,94 @@ def main():
         write_results(config, results)
         return
 
-    for task in tasks:
-        task_id = task["task_id"]
-        prompt = task["prompt"]
-
-        try:
-            if task.get("input_error"):
-                answer = SAFE_FALLBACK_ANSWER
-                telemetry.log({
-                    "task_id": task_id,
-                    "route": "fallback",
-                    "route_reason": task["input_error"],
-                    "error": task["input_error"],
-                    "batch_elapsed_ms_at_start": deadline.elapsed_ms(),
-                    "batch_elapsed_ms_at_finish": deadline.elapsed_ms(),
-                    "remaining_budget_ms": deadline.remaining_budget_ms(),
-                })
-            else:
-                agent_result = answer_task(task_id, prompt, config=config, deadline=deadline)
-                answer = agent_result.answer
-                telemetry.log(agent_result.telemetry_record(task_id))
-        except Exception as exc:
-            answer = SAFE_FALLBACK_ANSWER
-            telemetry.log({
-                "task_id": task_id,
-                "route": "fallback",
-                "route_reason": "unhandled_task_exception",
-                "error": type(exc).__name__,
-                "batch_elapsed_ms_at_finish": deadline.elapsed_ms(),
-                "remaining_budget_ms": deadline.remaining_budget_ms(),
-            })
-
-        results.append({
-            "task_id": task_id,
-            "answer": normalize_answer(answer),
-        })
+    results = run_tasks(tasks, config, deadline, telemetry)
 
     write_results(config, results)
+
+
+def run_tasks(
+    tasks: list[dict],
+    config: RuntimeConfig,
+    deadline: DeadlineManager,
+    telemetry: TelemetryLogger,
+) -> list[dict]:
+    if not tasks:
+        return []
+
+    results: list[dict | None] = [None] * len(tasks)
+    max_workers = max(1, min(config.remote_worker_count, len(tasks)))
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(process_task, index, task, config, deadline): (index, task)
+            for index, task in enumerate(tasks)
+        }
+        for future in as_completed(futures):
+            index, task = futures[future]
+            try:
+                output_row, telemetry_record = future.result()
+            except Exception as exc:
+                task_id = task.get("task_id", f"invalid_{index}")
+                output_row = {
+                    "task_id": task_id,
+                    "answer": SAFE_FALLBACK_ANSWER,
+                }
+                telemetry_record = {
+                    "task_id": task_id,
+                    "route": "fallback",
+                    "route_reason": "unhandled_worker_exception",
+                    "error": type(exc).__name__,
+                    "batch_elapsed_ms_at_finish": deadline.elapsed_ms(),
+                    "remaining_budget_ms": deadline.remaining_budget_ms(),
+                }
+            results[index] = output_row
+            telemetry.log(telemetry_record)
+
+    return [row for row in results if row is not None]
+
+
+def process_task(
+    index: int,
+    task: dict,
+    config: RuntimeConfig,
+    deadline: DeadlineManager,
+) -> tuple[dict, dict]:
+    task_id = task["task_id"]
+    prompt = task["prompt"]
+    started_ms = deadline.elapsed_ms()
+
+    try:
+        if task.get("input_error"):
+            answer = SAFE_FALLBACK_ANSWER
+            telemetry_record = {
+                "task_id": task_id,
+                "route": "fallback",
+                "route_reason": task["input_error"],
+                "error": task["input_error"],
+                "batch_elapsed_ms_at_start": started_ms,
+                "batch_elapsed_ms_at_finish": deadline.elapsed_ms(),
+                "remaining_budget_ms": deadline.remaining_budget_ms(),
+            }
+        else:
+            agent_result = answer_task(task_id, prompt, config=config, deadline=deadline)
+            answer = agent_result.answer
+            telemetry_record = agent_result.telemetry_record(task_id)
+    except Exception as exc:
+        answer = SAFE_FALLBACK_ANSWER
+        telemetry_record = {
+            "task_id": task_id,
+            "route": "fallback",
+            "route_reason": "unhandled_task_exception",
+            "error": type(exc).__name__,
+            "batch_elapsed_ms_at_start": started_ms,
+            "batch_elapsed_ms_at_finish": deadline.elapsed_ms(),
+            "remaining_budget_ms": deadline.remaining_budget_ms(),
+        }
+
+    return {
+        "task_id": task_id,
+        "answer": normalize_answer(answer),
+    }, telemetry_record
 
 
 def write_results(config: RuntimeConfig, results: list[dict]) -> None:
