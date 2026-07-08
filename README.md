@@ -31,7 +31,7 @@ Optional prompt-policy tuning env vars:
 - `ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT`
 - `ROUTER_PROMPT_POLICY_REMOTE_CONCISE`
 
-Allowed values are `original`, `compact`, and `answer_only`. Defaults are evidence-biased but configurable so notebook/live runs can compare models without code changes.
+Allowed values are `original`, `compact`, `answer_only`, and `final_only`. Defaults are evidence-biased but configurable so notebook/live runs can compare models without code changes.
 
 Optional remote model preference env vars:
 

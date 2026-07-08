@@ -269,7 +269,7 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 
 - Name: Prompt Policy Comparison
 - Date: TBD
-- Goal: Decide when to send original input, compact prompt, or answer-only prompt to Fireworks.
+- Goal: Decide when to send original input, compact prompt, answer-only prompt, or final-only prompt to Fireworks.
 - Strategy tested: `original` vs `compact` vs `answer_only` prompt policies in `eval/model_matrix.py`.
 - Dataset: Category-balanced scenarios, with emphasis on exact-wording-sensitive categories.
 - Local solver coverage: Not used; this isolates Fireworks prompt-policy behavior.

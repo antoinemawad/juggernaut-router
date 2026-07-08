@@ -29,7 +29,7 @@ ALLOWED_TRACK1_MODELS = [
 
 DEFAULT_SCENARIOS = Path(__file__).with_name("model_matrix_scenarios.jsonl")
 DEFAULT_OUT_DIR = Path(__file__).resolve().parents[1] / "eval_runs"
-PROMPT_POLICIES = ("original", "compact", "answer_only")
+PROMPT_POLICIES = ("original", "compact", "answer_only", "final_only")
 NORMAL_FIREWORKS_HOST = "api." + "fireworks.ai"
 
 
@@ -105,6 +105,14 @@ def prompt_for_policy(scenario, policy):
             "Do not restate the task, explain reasoning, mention instructions, or add markdown unless the task asks for it.\n\n"
             "Task:\n" + prompt
         )
+    if policy == "final_only":
+        return (
+            "You are being evaluated. Output exactly the final answer and nothing else.\n"
+            "Forbidden: task restatement, analysis, hidden reasoning, plans, markdown fences, and phrases like "
+            "'The user wants' or 'I need to'.\n"
+            "If code is requested, output only valid code. If a label is requested, output the label first.\n\n"
+            "Task:\n" + prompt + "\n\nFinal answer only:"
+        )
     raise ValueError(f"Unknown prompt policy: {policy}")
 
 
@@ -113,6 +121,11 @@ def score_answer(answer, scenario):
     expected_answer = str(scenario.get("expected_answer", "")).strip()
     answer_text = str(answer or "").strip()
     answer_lower = answer_text.lower()
+    constraints = set(scenario.get("constraints", [])) | set(scenario.get("output_constraints", []))
+    if constraints & {"answer_only", "code_only", "no_explanation", "exact_numeric", "one_word"}:
+        leaked = analysis_leakage(answer_text)
+        if leaked:
+            return False, 0.0, [f"format_leakage={leaked}"]
 
     if verifier == "label_set" and expected_answer:
         expected_label = expected_answer.lower()
@@ -136,6 +149,24 @@ def score_answer(answer, scenario):
     if missing:
         notes.append("missing_keywords=" + ",".join(missing))
     return passed, round(score, 3), notes
+
+
+def analysis_leakage(answer):
+    lowered = str(answer or "").lower()
+    markers = (
+        "the user wants",
+        "let me",
+        "i need to",
+        "i should",
+        "constraints:",
+        "the task asks",
+        "i will",
+        "we need",
+    )
+    for marker in markers:
+        if marker in lowered:
+            return marker
+    return None
 
 
 def _numbers(text):
@@ -395,7 +426,7 @@ def main():
     parser.add_argument(
         "--prompt-policies",
         default="original",
-        help="Comma-separated prompt policies: original, compact, answer_only, or all.",
+        help="Comma-separated prompt policies: original, compact, answer_only, final_only, or all.",
     )
     parser.add_argument("--live", action="store_true", help="Call Fireworks through FIREWORKS_BASE_URL.")
     parser.add_argument(

@@ -21,7 +21,7 @@ Build an evidence table that answers:
 - Which categories need Fireworks accuracy mode?
 - Which categories can be safely handled locally before Fireworks?
 - Which prompt and `max_tokens` settings reduce tokens without hurting correctness?
-- Which prompt policy is best: original, compact, or answer-only?
+- Which prompt policy is best: original, compact, answer-only, or final-only?
 - Which categories are Gemma-safe, Gemma-risky, or Gemma bonus candidates?
 - Where does Gemma save scored Fireworks tokens versus fallback models?
 
@@ -212,17 +212,18 @@ Uncertain prompt-shaping decisions must be tested with metrics instead of guesse
 
 Development-only Kimi evidence from the AMD notebook on 2026-07-08:
 
-- `kimi-k2p7-code` mapped to public `accounts/fireworks/models/kimi-k2p6` scored 94.4% over 72 live dev rows.
-- `compact` was strongest in that run: 100.0% pass rate, 0.976 average score, 289.5 average tokens.
-- `original` used fewer tokens but missed accuracy: 91.7% pass rate, 0.951 average score, 275.9 average tokens.
-- `answer_only` caused task restatement/analysis on some format tasks and needed stricter anti-restatement wording.
-- These results are not official judging-proxy token data, but they justify testing `compact` as the default remote-accuracy prompt policy.
+- `kimi-k2p7-code` mapped to public `accounts/fireworks/models/kimi-k2p6` scored 91.7% over a clean 72-row dev run.
+- In that clean run, `original` was strongest globally: 95.8% pass rate, 0.950 average score, 269.8 average tokens.
+- `answer_only` and `compact` caused task restatement/analysis leakage on some strict-format tasks.
+- `final_only` was added as an experimental stricter policy to test against this leakage.
+- These results are not official judging-proxy token data, but they justify preserving original prompts unless repeated evidence proves a stricter wrapper is safer.
 
 Supported prompt policies:
 
 - `original`: send the scenario prompt as written.
 - `compact`: add a short accuracy/constraint wrapper.
 - `answer_only`: ask for final answer only while preserving requested format.
+- `final_only`: stricter anti-reasoning wrapper for models that restate the task or expose analysis.
 
 Run all prompt policies in mock mode:
 
@@ -239,7 +240,7 @@ python3 eval/model_matrix.py --live --prompt-policies all
 Use prompt-policy results to decide:
 
 - whether prompt wrappers improve accuracy,
-- whether answer-only mode saves completion tokens safely,
+- whether answer-only/final-only mode saves completion tokens safely,
 - which categories must preserve original wording,
 - which categories can use compact prompts without losing score.
 
@@ -324,7 +325,7 @@ export ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT=answer_only
 export ROUTER_PROMPT_POLICY_REMOTE_CONCISE=compact
 ```
 
-Allowed values are `original`, `compact`, and `answer_only`.
+Allowed values are `original`, `compact`, `answer_only`, and `final_only`.
 
 Remote model preference defaults can also be overridden:
 
@@ -348,7 +349,7 @@ The client still refuses to use models outside runtime `ALLOWED_MODELS`.
 7. Run full model matrix.
 8. Review failures by category.
 9. Tune prompt templates and `max_tokens`.
-10. Compare `original`, `compact`, and `answer_only` prompt policies.
+10. Compare `original`, `compact`, `answer_only`, and `final_only` prompt policies.
 11. Re-run only affected categories to save credits.
 12. Promote category/model/prompt-policy decisions into router configuration.
 

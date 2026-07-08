@@ -11,7 +11,7 @@ DEFAULT_ALLOWED_PLANNING_MODELS = (
     "gemma-4-31b-it-nvfp4",
 )
 
-PROMPT_POLICIES = {"original", "compact", "answer_only"}
+PROMPT_POLICIES = {"original", "compact", "answer_only", "final_only"}
 DEFAULT_REMOTE_ACCURACY_MODELS = ("minimax-m3", "gemma-4-31b-it", "kimi-k2p7-code")
 DEFAULT_REMOTE_CODE_MODELS = ("kimi-k2p7-code", "minimax-m3", "gemma-4-31b-it")
 DEFAULT_REMOTE_FORMAT_STRICT_MODELS = ("minimax-m3", "kimi-k2p7-code", "gemma-4-31b-it")

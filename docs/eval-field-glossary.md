@@ -25,7 +25,7 @@ Purpose: avoid confusion between related scenario and routing fields.
 - `router_mode`: conservative, balanced, or aggressive.
 - `remote_mode`: concise, accuracy, format-strict, or code.
 - `selected_model`: model chosen from `ALLOWED_MODELS`.
-- `prompt_policy`: original, compact, or answer-only.
+- `prompt_policy`: original, compact, answer-only, or final-only.
 - `validator_passed`: whether local/remote output passed local checks.
 - `retry_count`: number of retries used, capped by config.
 - `error`: sanitized error label/message; must not contain secrets.

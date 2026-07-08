@@ -262,6 +262,14 @@ def _apply_prompt_policy(prompt: str, prompt_policy: str) -> str:
             "Do not restate the task, explain reasoning, mention instructions, or add markdown unless the task asks for it.\n\n"
             "Task:\n" + prompt
         )
+    if prompt_policy == "final_only":
+        return (
+            "You are being evaluated. Output exactly the final answer and nothing else.\n"
+            "Forbidden: task restatement, analysis, hidden reasoning, plans, markdown fences, and phrases like "
+            "'The user wants' or 'I need to'.\n"
+            "If code is requested, output only valid code. If a label is requested, output the label first.\n\n"
+            "Task:\n" + prompt + "\n\nFinal answer only:"
+        )
     return prompt
 
 

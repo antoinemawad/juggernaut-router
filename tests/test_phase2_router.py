@@ -778,6 +778,30 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertTrue(numeric_passed)
         self.assertEqual(numeric_score, 1.0)
 
+    def test_eval_scoring_rejects_reasoning_leakage_for_strict_outputs(self):
+        passed, score, notes = score_answer(
+            "The user wants me to compute the final price. The answer is $60.",
+            {
+                "verifier": "numeric_exact",
+                "expected_answer": "$60",
+                "constraints": ["answer_only", "exact_numeric"],
+            },
+        )
+
+        self.assertFalse(passed)
+        self.assertEqual(score, 0.0)
+        self.assertTrue(any(note.startswith("format_leakage=") for note in notes))
+
+    def test_final_only_prompt_policy_forbids_reasoning_leakage(self):
+        prompt = prompt_for_policy(
+            {"prompt": "Return only the final price for an $80 item after 25% discount."},
+            "final_only",
+        )
+
+        self.assertIn("Final answer only:", prompt)
+        self.assertIn("Forbidden:", prompt)
+        self.assertIn("The user wants", prompt)
+
     def test_model_matrix_limit_scenarios_supports_live_smoke_tests(self):
         scenarios = load_scenarios(DEFAULT_SCENARIOS)
         self.assertEqual(len(limit_scenarios(scenarios, None)), len(scenarios))

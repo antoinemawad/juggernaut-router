@@ -138,7 +138,7 @@ class Phase1RuntimeTests(unittest.TestCase):
             os.environ,
             {
                 "ROUTER_PROMPT_POLICY_REMOTE_ACCURACY": "original",
-                "ROUTER_PROMPT_POLICY_REMOTE_CODE": "answer_only",
+                "ROUTER_PROMPT_POLICY_REMOTE_CODE": "final_only",
                 "ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT": "compact",
                 "ROUTER_PROMPT_POLICY_REMOTE_CONCISE": "invalid-policy",
             },
@@ -146,7 +146,7 @@ class Phase1RuntimeTests(unittest.TestCase):
         ):
             config = RuntimeConfig.from_env()
         self.assertEqual(config.prompt_policy_remote_accuracy, "original")
-        self.assertEqual(config.prompt_policy_remote_code, "answer_only")
+        self.assertEqual(config.prompt_policy_remote_code, "final_only")
         self.assertEqual(config.prompt_policy_remote_format_strict, "compact")
         self.assertEqual(config.prompt_policy_remote_concise, "compact")
 

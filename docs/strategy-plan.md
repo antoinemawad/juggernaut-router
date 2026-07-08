@@ -62,7 +62,7 @@ Native.Builder may be used for prototyping, prompt exploration, demos, or workfl
 - Per-category model defaults should be selected from logged model-matrix evidence, not guesses.
 - Model selection should remain configuration-driven so we can update category preferences after experiments without rewriting router logic.
 - For each category, track both the best-accuracy model and the cheapest passing model.
-- Prompt policy should also be selected from evidence: original input, compact prompt, or answer-only prompt.
+- Prompt policy should also be selected from evidence: original input, compact prompt, answer-only prompt, or final-only prompt.
 - Runtime prompt policies are configurable per remote mode through `ROUTER_PROMPT_POLICY_REMOTE_ACCURACY`, `ROUTER_PROMPT_POLICY_REMOTE_CODE`, `ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT`, and `ROUTER_PROMPT_POLICY_REMOTE_CONCISE`.
 - Runtime model preferences are configurable per remote mode through `ROUTER_MODELS_REMOTE_ACCURACY`, `ROUTER_MODELS_REMOTE_CODE`, `ROUTER_MODELS_REMOTE_FORMAT_STRICT`, and `ROUTER_MODELS_REMOTE_CONCISE`; the Fireworks client still intersects these with `ALLOWED_MODELS`.
 - Gemma candidates should be evaluated in the same matrix as all other allowed models and promoted only through cheapest-sufficient evidence.
@@ -95,7 +95,7 @@ Every task should pass through this decision sequence:
    - Use Fireworks when the category is risky, confidence is low, solver coverage is missing, or validation fails.
 8. Fireworks mode selection: choose concise, accuracy, format-strict, or code mode.
 9. Fireworks model selection: choose from `ALLOWED_MODELS` based on category/model matrix results.
-10. Prompt policy selection: use original prompt when exact wording matters; use compact or answer-only only when experiments show no accuracy loss.
+10. Prompt policy selection: use original prompt when exact wording matters; use compact, answer-only, or final-only only when experiments show no accuracy loss.
 11. Deadline check: skip unsafe retries or choose a safe fallback when remaining batch time is too low.
 12. Decision logging: record route, risk, validator notes, model, prompt policy, tokens, latency, deadline decisions, and errors.
 
