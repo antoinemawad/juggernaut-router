@@ -71,6 +71,7 @@ def main():
         "scripts/check_docker_runtime.py",
         "scripts/compare_eval_reports.py",
         "scripts/final_submission_commands.py",
+        "scripts/recommend_from_model_matrix.py",
         "scripts/recommend_runtime_env.py",
         "scripts/run_phase1_acceptance.py",
         "scripts/summarize_model_matrix_runs.py",

@@ -1,7 +1,11 @@
 import json
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
+from contextlib import redirect_stdout
+from io import StringIO
 
 from app.agent import answer_task
 from app.classifier import classify_prompt
@@ -12,6 +16,11 @@ from app.validators import validate_local_answer
 from eval.model_matrix import DEFAULT_SCENARIOS, estimate_tokens, limit_scenarios, load_scenarios, prompt_for_policy, score_answer
 from eval.router_config_sweep import DEFAULT_CONFIGS, route_matches_expected, run_scenario, summarize
 from scripts.check_expected_routes import check_routes, config_by_name
+from scripts.recommend_from_model_matrix import (
+    choose_by_category,
+    exports_for_recommendations,
+    main as recommend_from_model_matrix_main,
+)
 from scripts.recommend_runtime_env import exports_for_config
 
 
@@ -991,6 +1000,119 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertIn("ROUTER_MODELS_BY_CATEGORY", exports)
         self.assertIn("code_generation=kimi-k2p7-code,minimax-m3", exports["ROUTER_MODELS_BY_CATEGORY"])
         self.assertIn("mathematical_reasoning=kimi-k2p7-code,minimax-m3", exports["ROUTER_MODELS_BY_CATEGORY"])
+
+    def test_model_matrix_recommender_promotes_only_eligible_category_picks(self):
+        rows = []
+        for run_id in ("run_a", "run_b"):
+            rows.extend(
+                [
+                    {
+                        "run_id": run_id,
+                        "category": "factual_knowledge",
+                        "model": "kimi-k2p7-code",
+                        "prompt_policy": "original",
+                        "passed": True,
+                        "score": 1.0,
+                        "total_tokens": 260,
+                    },
+                    {
+                        "run_id": run_id,
+                        "category": "code_generation",
+                        "model": "kimi-k2p7-code",
+                        "prompt_policy": "compact",
+                        "passed": False,
+                        "score": 0.5,
+                        "total_tokens": 330,
+                    },
+                ]
+            )
+
+        recommendations = choose_by_category(
+            rows,
+            min_pass_rate=0.85,
+            min_avg_score=0.85,
+            min_runs=2,
+            fallback_model="minimax-m3",
+            fallback_policy="original",
+        )
+
+        self.assertTrue(recommendations["factual_knowledge"]["eligible"])
+        self.assertEqual(recommendations["factual_knowledge"]["model"], "kimi-k2p7-code")
+        self.assertFalse(recommendations["code_generation"]["eligible"])
+        self.assertEqual(recommendations["code_generation"]["model"], "minimax-m3")
+
+    def test_model_matrix_recommender_exports_runtime_env(self):
+        recommendations = {
+            "factual_knowledge": {
+                "model": "kimi-k2p7-code",
+                "prompt_policy": "original",
+                "eligible": True,
+            },
+            "mathematical_reasoning": {
+                "model": "kimi-k2p7-code",
+                "prompt_policy": "answer_only",
+                "eligible": True,
+            },
+        }
+
+        exports = dict(exports_for_recommendations(
+            recommendations,
+            fallback_model="minimax-m3",
+            fallback_policy="original",
+            max_tokens=192,
+        ))
+
+        self.assertEqual(exports["ROUTER_MODE"], "conservative")
+        self.assertEqual(exports["FIREWORKS_MAX_TOKENS"], "192")
+        self.assertIn("factual_knowledge=kimi-k2p7-code,minimax-m3", exports["ROUTER_MODELS_BY_CATEGORY"])
+        self.assertIn("mathematical_reasoning=kimi-k2p7-code,minimax-m3", exports["ROUTER_MODELS_BY_CATEGORY"])
+        self.assertEqual(exports["ROUTER_PROMPT_POLICY_BY_CATEGORY"], "mathematical_reasoning=answer_only")
+
+    def test_model_matrix_recommender_cli_writes_artifacts(self):
+        rows = [
+            {
+                "run_id": "run_a",
+                "category": "named_entity_recognition",
+                "model": "kimi-k2p7-code",
+                "prompt_policy": "original",
+                "passed": True,
+                "score": 1.0,
+                "total_tokens": 300,
+            },
+            {
+                "run_id": "run_b",
+                "category": "named_entity_recognition",
+                "model": "kimi-k2p7-code",
+                "prompt_policy": "original",
+                "passed": True,
+                "score": 1.0,
+                "total_tokens": 320,
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            report = tmp / "model_matrix.jsonl"
+            report.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+            out_json = tmp / "recommendation.json"
+            out_md = tmp / "recommendation.md"
+
+            with redirect_stdout(StringIO()):
+                status = recommend_from_model_matrix_main([
+                    str(report),
+                    "--out-json",
+                    str(out_json),
+                    "--out-md",
+                    str(out_md),
+                    "--min-runs",
+                    "2",
+                ])
+
+            payload = json.loads(out_json.read_text(encoding="utf-8"))
+            self.assertEqual(status, 0)
+            self.assertTrue(out_md.exists())
+            self.assertEqual(payload["recommendations"]["named_entity_recognition"]["model"], "kimi-k2p7-code")
+            self.assertIn("ROUTER_MODELS_BY_CATEGORY", payload["exports"])
 
     def test_expected_route_script_rows_match_full_fixture(self):
         rows = check_routes(config_by_name("strict_hybrid"), load_scenarios(DEFAULT_SCENARIOS))
