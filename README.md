@@ -33,6 +33,15 @@ Optional prompt-policy tuning env vars:
 
 Allowed values are `original`, `compact`, and `answer_only`. Defaults are evidence-biased but configurable so notebook/live runs can compare models without code changes.
 
+Optional remote model preference env vars:
+
+- `ROUTER_MODELS_REMOTE_ACCURACY`
+- `ROUTER_MODELS_REMOTE_CODE`
+- `ROUTER_MODELS_REMOTE_FORMAT_STRICT`
+- `ROUTER_MODELS_REMOTE_CONCISE`
+
+Values are comma-separated model aliases. The Fireworks client still selects only models present in `ALLOWED_MODELS`.
+
 ## Local Smoke Test
 
 ```bash

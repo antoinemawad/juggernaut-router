@@ -147,6 +147,23 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(config.prompt_policy_remote_format_strict, "compact")
         self.assertEqual(config.prompt_policy_remote_concise, "compact")
 
+    def test_config_parses_remote_model_preference_knobs(self):
+        with patch.dict(
+            os.environ,
+            {
+                "ROUTER_MODELS_REMOTE_ACCURACY": "gemma-4-31b-it,minimax-m3,gemma-4-31b-it",
+                "ROUTER_MODELS_REMOTE_CODE": "kimi-k2p7-code",
+                "ROUTER_MODELS_REMOTE_FORMAT_STRICT": "gemma-4-26b-a4b-it,kimi-k2p7-code",
+                "ROUTER_MODELS_REMOTE_CONCISE": "",
+            },
+            clear=True,
+        ):
+            config = RuntimeConfig.from_env()
+        self.assertEqual(config.models_remote_accuracy, ("gemma-4-31b-it", "minimax-m3"))
+        self.assertEqual(config.models_remote_code, ("kimi-k2p7-code",))
+        self.assertEqual(config.models_remote_format_strict, ("gemma-4-26b-a4b-it", "kimi-k2p7-code"))
+        self.assertEqual(config.models_remote_concise, ("minimax-m3", "gemma-4-26b-a4b-it", "gemma-4-31b-it"))
+
     def test_deadline_suppresses_retry_when_budget_is_low(self):
         clock = FakeClock()
         deadline = DeadlineManager(total_seconds=10, safety_margin_seconds=3, clock=clock)

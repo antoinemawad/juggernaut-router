@@ -116,7 +116,7 @@ def answer_task(
         remote_prompt,
         config=config,
         deadline=deadline,
-        preferred_models=_preferred_models_for_remote_mode(remote_mode),
+        preferred_models=_preferred_models_for_remote_mode(remote_mode, config),
         system_prompt=_system_prompt_for_remote_mode(remote_mode),
     )
     timings.remote_elapsed_ms = remote.elapsed_ms
@@ -228,14 +228,14 @@ def _select_remote_mode(classification, local_result=None) -> str:
     return "remote_concise"
 
 
-def _preferred_models_for_remote_mode(remote_mode: str) -> tuple[str, ...]:
+def _preferred_models_for_remote_mode(remote_mode: str, config: RuntimeConfig) -> tuple[str, ...]:
     if remote_mode == "remote_code":
-        return ("kimi-k2p7-code", "minimax-m3", "gemma-4-31b-it")
+        return config.models_remote_code
     if remote_mode == "remote_accuracy":
-        return ("minimax-m3", "gemma-4-31b-it", "kimi-k2p7-code")
+        return config.models_remote_accuracy
     if remote_mode == "remote_format_strict":
-        return ("minimax-m3", "kimi-k2p7-code", "gemma-4-31b-it")
-    return ("minimax-m3", "gemma-4-26b-a4b-it", "gemma-4-31b-it")
+        return config.models_remote_format_strict
+    return config.models_remote_concise
 
 
 def _prompt_policy_for_remote_mode(remote_mode: str, config: RuntimeConfig) -> str:

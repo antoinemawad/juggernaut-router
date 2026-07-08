@@ -12,6 +12,10 @@ DEFAULT_ALLOWED_PLANNING_MODELS = (
 )
 
 PROMPT_POLICIES = {"original", "compact", "answer_only"}
+DEFAULT_REMOTE_ACCURACY_MODELS = ("minimax-m3", "gemma-4-31b-it", "kimi-k2p7-code")
+DEFAULT_REMOTE_CODE_MODELS = ("kimi-k2p7-code", "minimax-m3", "gemma-4-31b-it")
+DEFAULT_REMOTE_FORMAT_STRICT_MODELS = ("minimax-m3", "kimi-k2p7-code", "gemma-4-31b-it")
+DEFAULT_REMOTE_CONCISE_MODELS = ("minimax-m3", "gemma-4-26b-a4b-it", "gemma-4-31b-it")
 
 
 def _get_int(name: str, default: int, minimum: int | None = None, maximum: int | None = None) -> int:
@@ -61,6 +65,11 @@ def _get_prompt_policy(name: str, default: str) -> str:
     return value if value in PROMPT_POLICIES else default
 
 
+def _get_model_preference(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    models = parse_allowed_models(os.environ.get(name))
+    return tuple(models) if models else default
+
+
 def parse_allowed_models(raw: str | None) -> list[str]:
     if not raw:
         return []
@@ -96,6 +105,10 @@ class RuntimeConfig:
     prompt_policy_remote_code: str = "answer_only"
     prompt_policy_remote_format_strict: str = "answer_only"
     prompt_policy_remote_concise: str = "compact"
+    models_remote_accuracy: tuple[str, ...] = DEFAULT_REMOTE_ACCURACY_MODELS
+    models_remote_code: tuple[str, ...] = DEFAULT_REMOTE_CODE_MODELS
+    models_remote_format_strict: tuple[str, ...] = DEFAULT_REMOTE_FORMAT_STRICT_MODELS
+    models_remote_concise: tuple[str, ...] = DEFAULT_REMOTE_CONCISE_MODELS
 
     @classmethod
     def from_env(cls) -> "RuntimeConfig":
@@ -128,6 +141,19 @@ class RuntimeConfig:
                 "answer_only",
             ),
             prompt_policy_remote_concise=_get_prompt_policy("ROUTER_PROMPT_POLICY_REMOTE_CONCISE", "compact"),
+            models_remote_accuracy=_get_model_preference(
+                "ROUTER_MODELS_REMOTE_ACCURACY",
+                DEFAULT_REMOTE_ACCURACY_MODELS,
+            ),
+            models_remote_code=_get_model_preference("ROUTER_MODELS_REMOTE_CODE", DEFAULT_REMOTE_CODE_MODELS),
+            models_remote_format_strict=_get_model_preference(
+                "ROUTER_MODELS_REMOTE_FORMAT_STRICT",
+                DEFAULT_REMOTE_FORMAT_STRICT_MODELS,
+            ),
+            models_remote_concise=_get_model_preference(
+                "ROUTER_MODELS_REMOTE_CONCISE",
+                DEFAULT_REMOTE_CONCISE_MODELS,
+            ),
         )
 
     def first_allowed_model(self) -> str | None:

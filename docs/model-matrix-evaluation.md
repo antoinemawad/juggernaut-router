@@ -314,6 +314,17 @@ export ROUTER_PROMPT_POLICY_REMOTE_CONCISE=compact
 
 Allowed values are `original`, `compact`, and `answer_only`.
 
+Remote model preference defaults can also be overridden:
+
+```bash
+export ROUTER_MODELS_REMOTE_ACCURACY=gemma-4-31b-it,minimax-m3,kimi-k2p7-code
+export ROUTER_MODELS_REMOTE_CODE=kimi-k2p7-code,minimax-m3,gemma-4-31b-it
+export ROUTER_MODELS_REMOTE_FORMAT_STRICT=minimax-m3,kimi-k2p7-code,gemma-4-31b-it
+export ROUTER_MODELS_REMOTE_CONCISE=gemma-4-26b-a4b-it,gemma-4-31b-it,minimax-m3
+```
+
+The client still refuses to use models outside runtime `ALLOWED_MODELS`.
+
 ## Run Protocol
 
 1. Run mock mode.

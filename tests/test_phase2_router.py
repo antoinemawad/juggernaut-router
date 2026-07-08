@@ -179,6 +179,32 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertTrue(captured["payload"]["messages"][1]["content"].startswith("Classify the sentiment"))
         self.assertNotIn("Do not restate the task", captured["payload"]["messages"][1]["content"])
 
+    def test_remote_accuracy_model_preference_can_be_overridden(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse()
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3,gemma-4-31b-it,kimi-k2p7-code",
+                "ROUTER_MODELS_REMOTE_ACCURACY": "gemma-4-31b-it,minimax-m3,kimi-k2p7-code",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", fake_urlopen):
+            result = answer_task(
+                "sentiment",
+                "Classify the sentiment as positive, negative, or neutral: The setup was easy, but unreliable.",
+            )
+
+        self.assertEqual(result.remote_mode, "remote_accuracy")
+        self.assertEqual(result.selected_model, "gemma-4-31b-it")
+        self.assertEqual(captured["payload"]["model"], "gemma-4-31b-it")
+
     def test_ambiguous_ner_routes_remote_instead_of_unsafe_local(self):
         with patch.dict(
             os.environ,
