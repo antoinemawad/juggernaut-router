@@ -600,6 +600,28 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertGreater(row["total_tokens"], 0)
         self.assertTrue(row["expected_route_match"])
 
+    def test_router_sweep_records_gemma_scorecard_fields(self):
+        config = next(item for item in DEFAULT_CONFIGS if item["name"] == "gemma_first_router")
+        scenario = {
+            "task_id": "sentiment_mixed",
+            "category": "sentiment_classification",
+            "prompt": "Classify the sentiment as positive, negative, or neutral and give a short reason: The setup was easy, but the results were unreliable.",
+            "expected_keywords": ["neutral"],
+            "expected_answer": "neutral",
+            "expected_route": "remote_accuracy",
+            "verifier": "label_set",
+            "constraints": ["label_plus_reason"],
+        }
+        row = run_scenario(config, scenario)
+        self.assertEqual(row["route"], "fireworks")
+        self.assertEqual(row["model"], "gemma-4-31b-it")
+        self.assertEqual(row["gemma_decision"], "selected")
+        self.assertEqual(row["gemma_candidate_model"], "gemma-4-31b-it")
+        self.assertEqual(row["local_inference_usage"], "deterministic_only")
+        self.assertIn("prompt_tokens", row)
+        self.assertIn("completion_tokens", row)
+        self.assertIn("format_failure", row)
+
     def test_router_sweep_rejects_ambiguous_ner_local_candidate(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "aggressive_local")
         scenario = {
@@ -641,6 +663,25 @@ class Phase2RouterTests(unittest.TestCase):
                 mismatches.append((row["task_id"], row["expected_route"], row["route"], row["route_reason"]))
 
         self.assertEqual(mismatches, [])
+
+    def test_router_sweep_summary_includes_scorecard_metrics(self):
+        scenarios = load_scenarios(DEFAULT_SCENARIOS)[:4]
+        configs = [
+            next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid"),
+            next(item for item in DEFAULT_CONFIGS if item["name"] == "gemma_first_router"),
+        ]
+        rows = [run_scenario(config, scenario) for config in configs for scenario in scenarios]
+        by_config, _by_category, _ranked, _eligible, _winner = summarize(rows, 0.85)
+
+        strict = by_config["strict_hybrid"]
+        gemma = by_config["gemma_first_router"]
+        for bucket in (strict, gemma):
+            self.assertIn("prompt_tokens", bucket)
+            self.assertIn("completion_tokens", bucket)
+            self.assertIn("format_failure", bucket)
+            self.assertIn("fallback", bucket)
+        self.assertGreaterEqual(gemma["gemma_selected"], 1)
+        self.assertGreaterEqual(strict["gemma_skipped"], 1)
 
     def test_expected_route_script_rows_match_full_fixture(self):
         rows = check_routes(config_by_name("strict_hybrid"), load_scenarios(DEFAULT_SCENARIOS))

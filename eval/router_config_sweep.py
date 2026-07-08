@@ -44,6 +44,15 @@ DEFAULT_CONFIGS = [
         "local_confidence_threshold": 0.95,
     },
     {
+        "name": "gemma_first_router",
+        "local_enabled": True,
+        "router_mode": "conservative",
+        "fallback_model": "gemma-4-31b-it",
+        "prompt_policy": "compact",
+        "max_tokens": 192,
+        "local_confidence_threshold": 0.95,
+    },
+    {
         "name": "balanced_hybrid",
         "local_enabled": True,
         "router_mode": "balanced",
@@ -62,6 +71,31 @@ DEFAULT_CONFIGS = [
         "local_confidence_threshold": 0.82,
     },
 ]
+
+FORMAT_VERIFIERS = {"entity_labels", "label_set", "numeric_exact", "python_syntax", "word_count"}
+
+
+def is_gemma_model(model):
+    return isinstance(model, str) and model.startswith("gemma-")
+
+
+def gemma_decision_for(route, selected_model, fallback_model):
+    if route != "fireworks":
+        return "not_applicable"
+    if is_gemma_model(selected_model):
+        return "selected"
+    if is_gemma_model(fallback_model):
+        return "escalated_from"
+    return "skipped"
+
+
+def is_format_failure(scenario, passed):
+    if passed:
+        return False
+    if scenario.get("verifier") in FORMAT_VERIFIERS:
+        return True
+    constraints = set(scenario.get("constraints", [])) | set(scenario.get("output_constraints", []))
+    return bool(constraints & {"answer_only", "code_only", "entity_labels", "exact_numeric", "exact_word_count", "no_explanation", "one_word"})
 
 
 def estimate_remote_tokens(config, scenario, answer):
@@ -145,6 +179,7 @@ def run_scenario(config, scenario):
 
     passed, score, notes = score_answer(answer, scenario)
     expected_route = scenario.get("expected_route")
+    gemma_decision = gemma_decision_for(route, model, config["fallback_model"])
     return {
         "config": config["name"],
         "task_id": scenario["task_id"],
@@ -166,11 +201,14 @@ def run_scenario(config, scenario):
         "route": route,
         "route_reason": result.route_reason,
         "model": model,
+        "gemma_decision": gemma_decision,
+        "gemma_candidate_model": config["fallback_model"] if is_gemma_model(config["fallback_model"]) else None,
         "prompt_policy": config["prompt_policy"],
         "max_tokens": config["max_tokens"],
         "router_mode": config["router_mode"],
         "local_confidence_threshold": config["local_confidence_threshold"],
         "local_answer_present": local_answer_present,
+        "local_inference_usage": "deterministic_only",
         "local_score": round(local_score, 3),
         "classification_confidence": result.metadata.get("classification_confidence"),
         "risk_score": result.metadata.get("risk_score"),
@@ -188,6 +226,8 @@ def run_scenario(config, scenario):
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "total_tokens": total_tokens,
+        "fallback": route == "fallback",
+        "format_failure": is_format_failure(scenario, passed),
         "passed": passed,
         "score": score,
         "answer": answer,
@@ -202,16 +242,32 @@ def summarize(rows, accuracy_threshold):
         "passed": 0,
         "score": 0.0,
         "tokens": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
         "local": 0,
         "route_match": 0,
+        "fallback": 0,
+        "format_failure": 0,
+        "gemma_selected": 0,
+        "gemma_skipped": 0,
+        "gemma_escalated_from": 0,
+        "latency": 0,
     })
     by_config_category = defaultdict(lambda: {
         "cases": 0,
         "passed": 0,
         "score": 0.0,
         "tokens": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
         "local": 0,
         "route_match": 0,
+        "fallback": 0,
+        "format_failure": 0,
+        "gemma_selected": 0,
+        "gemma_skipped": 0,
+        "gemma_escalated_from": 0,
+        "latency": 0,
     })
 
     for row in rows:
@@ -219,9 +275,17 @@ def summarize(rows, accuracy_threshold):
             bucket["cases"] += 1
             bucket["passed"] += int(row["passed"])
             bucket["score"] += row["score"]
-            bucket["tokens"] += row["total_tokens"]
+            bucket["tokens"] += row.get("total_tokens", 0)
+            bucket["prompt_tokens"] += row.get("prompt_tokens", 0)
+            bucket["completion_tokens"] += row.get("completion_tokens", 0)
             bucket["local"] += int(row["route"] == "local")
-            bucket["route_match"] += int(row["expected_route_match"])
+            bucket["route_match"] += int(row.get("expected_route_match", False))
+            bucket["fallback"] += int(row.get("fallback", False))
+            bucket["format_failure"] += int(row.get("format_failure", False))
+            bucket["gemma_selected"] += int(row.get("gemma_decision") == "selected")
+            bucket["gemma_skipped"] += int(row.get("gemma_decision") == "skipped")
+            bucket["gemma_escalated_from"] += int(row.get("gemma_decision") == "escalated_from")
+            bucket["latency"] += row.get("task_elapsed_ms", 0)
 
     ranked = sorted(
         by_config.items(),
@@ -250,17 +314,20 @@ def write_report(path, rows, accuracy_threshold):
         "",
         "## Summary by Config",
         "",
-        "| Config | Cases | Pass Rate | Avg Score | Total Tokens | Avg Tokens | Local Route Rate | Expected Route Match | Eligible |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| Config | Cases | Pass Rate | Avg Score | Input Tokens | Output Tokens | Total Tokens | Avg Tokens | Local Rate | Fallback Rate | Format Fail Rate | Gemma Selected | Gemma Skipped | Gemma Escalated | Avg Latency ms | Route Match | Eligible |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
     eligible_names = {name for name, _data in eligible}
     for name, data in ranked:
         cases = data["cases"]
         lines.append(
             f"| {name} | {cases} | {data['passed'] / cases:.1%} | "
-            f"{data['score'] / cases:.3f} | {data['tokens']} | "
+            f"{data['score'] / cases:.3f} | {data['prompt_tokens']} | "
+            f"{data['completion_tokens']} | {data['tokens']} | "
             f"{data['tokens'] / cases:.1f} | {data['local'] / cases:.1%} | "
-            f"{data['route_match'] / cases:.1%} | "
+            f"{data['fallback'] / cases:.1%} | {data['format_failure'] / cases:.1%} | "
+            f"{data['gemma_selected']} | {data['gemma_skipped']} | {data['gemma_escalated_from']} | "
+            f"{data['latency'] / cases:.1f} | {data['route_match'] / cases:.1%} | "
             f"{'yes' if name in eligible_names else 'no'} |"
         )
 
@@ -268,14 +335,16 @@ def write_report(path, rows, accuracy_threshold):
         "",
         "## Summary by Config and Category",
         "",
-        "| Config | Category | Cases | Pass Rate | Avg Score | Total Tokens | Local Route Rate | Expected Route Match |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Config | Category | Cases | Pass Rate | Avg Score | Input Tokens | Output Tokens | Total Tokens | Local Rate | Format Fail Rate | Gemma Selected | Gemma Skipped | Expected Route Match |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ])
     for (name, category), data in sorted(by_config_category.items()):
         cases = data["cases"]
         lines.append(
             f"| {name} | {category} | {cases} | {data['passed'] / cases:.1%} | "
-            f"{data['score'] / cases:.3f} | {data['tokens']} | {data['local'] / cases:.1%} | "
+            f"{data['score'] / cases:.3f} | {data['prompt_tokens']} | {data['completion_tokens']} | "
+            f"{data['tokens']} | {data['local'] / cases:.1%} | {data['format_failure'] / cases:.1%} | "
+            f"{data['gemma_selected']} | {data['gemma_skipped']} | "
             f"{data['route_match'] / cases:.1%} |"
         )
 
