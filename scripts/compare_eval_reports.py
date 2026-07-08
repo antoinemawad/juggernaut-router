@@ -56,42 +56,60 @@ def format_bucket(bucket):
     }
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Compare two eval JSONL reports.")
-    parser.add_argument("baseline", help="Baseline JSONL report path.")
-    parser.add_argument("candidate", help="Candidate JSONL report path.")
-    args = parser.parse_args()
+def compare_to_baseline(baseline, candidate):
+    return {
+        "pass_rate": round(candidate["pass_rate"] - baseline["pass_rate"], 4),
+        "avg_score": round(candidate["avg_score"] - baseline["avg_score"], 4),
+        "total_tokens": candidate["total_tokens"] - baseline["total_tokens"],
+    }
 
-    baseline_rows = load_jsonl(Path(args.baseline))
-    candidate_rows = load_jsonl(Path(args.candidate))
-    baseline_total, baseline_categories = summarize(baseline_rows)
-    candidate_total, candidate_categories = summarize(candidate_rows)
 
-    baseline = format_bucket(baseline_total)
-    candidate = format_bucket(candidate_total)
-    token_delta = candidate["total_tokens"] - baseline["total_tokens"]
-    score_delta = candidate["avg_score"] - baseline["avg_score"]
-    pass_delta = candidate["pass_rate"] - baseline["pass_rate"]
-
-    print("Baseline:", json.dumps(baseline, sort_keys=True))
-    print("Candidate:", json.dumps(candidate, sort_keys=True))
-    print(
-        "Delta:",
-        json.dumps(
-            {
-                "pass_rate": round(pass_delta, 4),
-                "avg_score": round(score_delta, 4),
-                "total_tokens": token_delta,
-            },
-            sort_keys=True,
+def rank_candidates(records):
+    return sorted(
+        records,
+        key=lambda item: (
+            -item["summary"]["pass_rate"],
+            -item["summary"]["avg_score"],
+            item["summary"]["total_tokens"],
         ),
     )
 
-    categories = sorted(set(baseline_categories) | set(candidate_categories))
-    for category in categories:
-        before = format_bucket(baseline_categories.get(category, {"count": 0, "passes": 0, "score": 0, "tokens": 0}))
-        after = format_bucket(candidate_categories.get(category, {"count": 0, "passes": 0, "score": 0, "tokens": 0}))
-        print(f"{category}: {json.dumps({'baseline': before, 'candidate': after}, sort_keys=True)}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Compare eval JSONL reports.")
+    parser.add_argument("baseline", help="Baseline JSONL report path.")
+    parser.add_argument("candidates", nargs="+", help="One or more candidate JSONL report paths.")
+    args = parser.parse_args()
+
+    baseline_rows = load_jsonl(Path(args.baseline))
+    baseline_total, baseline_categories = summarize(baseline_rows)
+    baseline = format_bucket(baseline_total)
+
+    print("Baseline:", json.dumps(baseline, sort_keys=True))
+
+    records = []
+    for candidate_path_raw in args.candidates:
+        candidate_path = Path(candidate_path_raw)
+        candidate_rows = load_jsonl(candidate_path)
+        candidate_total, candidate_categories = summarize(candidate_rows)
+        candidate = format_bucket(candidate_total)
+        delta = compare_to_baseline(baseline, candidate)
+        records.append({"path": str(candidate_path), "summary": candidate, "delta": delta})
+
+        label = "Candidate:" if len(args.candidates) == 1 else f"Candidate {candidate_path}:"
+        print(label, json.dumps(candidate, sort_keys=True))
+        print("Delta:", json.dumps(delta, sort_keys=True))
+
+        categories = sorted(set(baseline_categories) | set(candidate_categories))
+        for category in categories:
+            before = format_bucket(baseline_categories.get(category, {"count": 0, "passes": 0, "score": 0, "tokens": 0}))
+            after = format_bucket(candidate_categories.get(category, {"count": 0, "passes": 0, "score": 0, "tokens": 0}))
+            print(f"{category}: {json.dumps({'baseline': before, 'candidate': after}, sort_keys=True)}")
+
+    if len(records) > 1:
+        print("Ranking:")
+        for index, record in enumerate(rank_candidates(records), start=1):
+            print(f"{index}. {record['path']}: {json.dumps(record['summary'], sort_keys=True)}")
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ from eval.model_matrix import parse_dev_model_map, provider_model_for
 from scripts.check_live_eval_env import validate_live_eval_env
 from scripts.final_submission_commands import validate_image_ref
 from scripts import check_submission_static
+from scripts import compare_eval_reports
 from scripts import submission_readiness_report
 
 
@@ -202,6 +203,30 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(matrix["mode"], "mock")
         self.assertEqual(matrix["errors"], 1)
         self.assertEqual(matrix["models"], ["minimax-m3"])
+
+    def test_compare_eval_reports_ranks_multiple_candidates(self):
+        records = [
+            {
+                "path": "candidate_low_tokens.jsonl",
+                "summary": {"pass_rate": 1.0, "avg_score": 1.0, "total_tokens": 50},
+            },
+            {
+                "path": "candidate_high_tokens.jsonl",
+                "summary": {"pass_rate": 1.0, "avg_score": 1.0, "total_tokens": 100},
+            },
+            {
+                "path": "candidate_lower_accuracy.jsonl",
+                "summary": {"pass_rate": 0.9, "avg_score": 0.95, "total_tokens": 10},
+            },
+        ]
+
+        ranked = compare_eval_reports.rank_candidates(records)
+
+        self.assertEqual([item["path"] for item in ranked], [
+            "candidate_low_tokens.jsonl",
+            "candidate_high_tokens.jsonl",
+            "candidate_lower_accuracy.jsonl",
+        ])
 
     def test_deadline_suppresses_retry_when_budget_is_low(self):
         clock = FakeClock()
