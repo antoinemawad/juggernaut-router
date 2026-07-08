@@ -20,6 +20,37 @@ def load_jsonl(path: Path) -> list[dict]:
     return rows
 
 
+def run_id_for(row: dict) -> str:
+    return row.get("run_id") or row.get("_source_file") or "unknown"
+
+
+def filter_rows(rows: list[dict], drop_error_rows=False, max_run_error_rate: float | None = None) -> tuple[list[dict], dict]:
+    dropped = {
+        "error_rows": 0,
+        "error_runs": [],
+    }
+    if max_run_error_rate is not None:
+        by_run = defaultdict(lambda: {"rows": 0, "errors": 0})
+        for row in rows:
+            bucket = by_run[run_id_for(row)]
+            bucket["rows"] += 1
+            bucket["errors"] += int(bool(row.get("error")))
+        dropped_runs = {
+            run_id
+            for run_id, item in by_run.items()
+            if item["rows"] and item["errors"] / item["rows"] > max_run_error_rate
+        }
+        dropped["error_runs"] = sorted(dropped_runs)
+        rows = [row for row in rows if run_id_for(row) not in dropped_runs]
+
+    if drop_error_rows:
+        before = len(rows)
+        rows = [row for row in rows if not row.get("error")]
+        dropped["error_rows"] = before - len(rows)
+
+    return rows, dropped
+
+
 def bucket() -> dict:
     return {
         "rows": 0,
@@ -34,7 +65,7 @@ def bucket() -> dict:
 
 def add_row(item: dict, row: dict) -> None:
     item["rows"] += 1
-    item["runs"].add(row.get("run_id") or row.get("_source_file"))
+    item["runs"].add(run_id_for(row))
     item["passed"] += int(bool(row.get("passed")))
     item["score"] += float(row.get("score") or 0)
     item["tokens"] += int(row.get("total_tokens") or 0)
@@ -95,7 +126,8 @@ def recommended_by_category(by_category_model_policy: dict) -> dict:
     }
 
 
-def write_markdown(path: Path, rows: list[dict]) -> None:
+def write_markdown(path: Path, rows: list[dict], dropped: dict | None = None) -> None:
+    dropped = dropped or {"error_rows": 0, "error_runs": []}
     by_model_policy, by_category_model_policy, by_category = summarize(rows)
     formatted_model_policy = {
         key: format_bucket(value)
@@ -111,7 +143,9 @@ def write_markdown(path: Path, rows: list[dict]) -> None:
         "# Model Matrix Multi-Run Summary",
         "",
         f"Rows: {len(rows)}",
-        f"Source runs: {len({row.get('run_id') or row.get('_source_file') for row in rows})}",
+        f"Source runs: {len({run_id_for(row) for row in rows})}",
+        f"Dropped error rows: {dropped.get('error_rows', 0)}",
+        f"Dropped high-error runs: {len(dropped.get('error_runs', []))}",
         "",
         "## Model And Prompt Policy",
         "",
@@ -151,6 +185,15 @@ def write_markdown(path: Path, rows: list[dict]) -> None:
             f"{data['avg_score']:.3f} | {data['avg_tokens']:.1f} | {data['runs']} |"
         )
 
+    if dropped.get("error_runs"):
+        lines.extend([
+            "",
+            "## Dropped High-Error Runs",
+            "",
+        ])
+        for run_id in dropped["error_runs"]:
+            lines.append(f"- `{run_id}`")
+
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -158,11 +201,23 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Summarize one or more model_matrix JSONL runs.")
     parser.add_argument("reports", nargs="+", type=Path, help="model_matrix_*.jsonl files.")
     parser.add_argument("--out", type=Path, default=None, help="Optional markdown output path.")
+    parser.add_argument("--drop-error-rows", action="store_true", help="Exclude rows that have a non-empty error field.")
+    parser.add_argument(
+        "--max-run-error-rate",
+        type=float,
+        default=None,
+        help="Exclude whole runs whose error-row rate is greater than this value, e.g. 0.25.",
+    )
     args = parser.parse_args()
 
     rows = []
     for path in args.reports:
         rows.extend(load_jsonl(path))
+    rows, dropped = filter_rows(
+        rows,
+        drop_error_rows=args.drop_error_rows,
+        max_run_error_rate=args.max_run_error_rate,
+    )
     if not rows:
         raise SystemExit("No rows found.")
 
@@ -170,9 +225,11 @@ def main() -> int:
     if out is None:
         out = Path("eval_runs") / "model_matrix_multi_run_summary.md"
     out.parent.mkdir(parents=True, exist_ok=True)
-    write_markdown(out, rows)
+    write_markdown(out, rows, dropped)
     print(f"Rows: {len(rows)}")
-    print(f"Runs: {len({row.get('run_id') or row.get('_source_file') for row in rows})}")
+    print(f"Runs: {len({run_id_for(row) for row in rows})}")
+    print(f"Dropped error rows: {dropped.get('error_rows', 0)}")
+    print(f"Dropped high-error runs: {len(dropped.get('error_runs', []))}")
     print(f"Report: {out}")
     return 0
 

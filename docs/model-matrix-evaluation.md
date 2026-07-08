@@ -198,7 +198,7 @@ After collecting multiple live or development-only runs, summarize stability acr
 changing router defaults:
 
 ```bash
-python3 scripts/summarize_model_matrix_runs.py eval_runs/model_matrix_*.jsonl --out eval_runs/model_matrix_multi_run_summary.md
+python3 scripts/summarize_model_matrix_runs.py eval_runs/model_matrix_*.jsonl --max-run-error-rate 0.25 --out eval_runs/model_matrix_multi_run_summary.md
 ```
 
 The multi-run summary ranks model/prompt-policy pairs by pass rate first, average score second,
@@ -209,7 +209,7 @@ promote a model only when it is stable across repeated runs and still respects t
 To summarize the two most recent matrix runs in a shell:
 
 ```bash
-python3 scripts/summarize_model_matrix_runs.py $(ls -t eval_runs/model_matrix_*.jsonl | head -2) --out eval_runs/kimi_two_run_summary.md
+python3 scripts/summarize_model_matrix_runs.py $(ls -t eval_runs/model_matrix_*.jsonl | head -2) --max-run-error-rate 0.25 --out eval_runs/kimi_two_run_summary.md
 ```
 
 Do not paste placeholder filenames such as `model_matrix_YYYYMMDD_HHMMSS.jsonl`; use the real
@@ -225,6 +225,9 @@ cat eval_runs/evidence_manifest.md
 Raw `eval_runs/` artifacts are intentionally not committed to git. Keep them in the AMD notebook
 or local machine, and promote only curated decisions, screenshots, tables, and summary text into
 docs/slides.
+
+If a run shows 0 tokens and errors for every row, treat it as an environment/API failure, not model
+evidence. The `--max-run-error-rate 0.25` flag drops runs where more than 25% of rows errored.
 
 ## Prompt Policy Testing
 

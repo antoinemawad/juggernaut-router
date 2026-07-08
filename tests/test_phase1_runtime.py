@@ -275,6 +275,37 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(recommendations["code_generation"][0], ("kimi-k2p7-code", "compact"))
         self.assertEqual(recommendations["code_generation"][1]["runs"], 2)
 
+    def test_model_matrix_summary_can_drop_high_error_runs(self):
+        rows = [
+            {
+                "run_id": "good",
+                "category": "factual_knowledge",
+                "model": "kimi-k2p7-code",
+                "prompt_policy": "original",
+                "passed": True,
+                "score": 1.0,
+                "total_tokens": 100,
+                "latency_ms": 20,
+                "error": None,
+            },
+            {
+                "run_id": "bad",
+                "category": "factual_knowledge",
+                "model": "kimi-k2p7-code",
+                "prompt_policy": "final_only",
+                "passed": False,
+                "score": 0.0,
+                "total_tokens": 0,
+                "latency_ms": 20,
+                "error": "HTTPError",
+            },
+        ]
+
+        filtered, dropped = summarize_model_matrix_runs.filter_rows(rows, max_run_error_rate=0.25)
+
+        self.assertEqual([row["run_id"] for row in filtered], ["good"])
+        self.assertEqual(dropped["error_runs"], ["bad"])
+
     def test_evidence_manifest_summarizes_eval_run_files(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
