@@ -46,6 +46,7 @@ Final pre-submit checklist for Track 1 only.
 - [ ] Local quality gate passes: `python3 scripts/run_local_quality_gate.py`.
 - [ ] Phase 1 acceptance passes: `python3 scripts/run_phase1_acceptance.py`.
 - [ ] Phase 1 Docker acceptance passes before image push: `python3 scripts/run_phase1_acceptance.py --include-docker`.
+- [ ] Submission readiness report says `ready_for_live_eval_or_final_submission_prep`: `python3 scripts/submission_readiness_report.py --include-docker`.
 - [ ] Eval coverage checker passes: `python3 scripts/check_eval_coverage.py`.
 - [ ] Regression tier coverage passes: `python3 scripts/check_eval_coverage.py eval/golden_tier_2_regression.jsonl --profile tier`.
 - [ ] Adversarial tier coverage passes: `python3 scripts/check_eval_coverage.py eval/golden_tier_3_adversarial.jsonl --profile tier`.

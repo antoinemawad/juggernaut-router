@@ -78,6 +78,12 @@ python3 scripts/run_phase1_acceptance.py --include-docker
 
 The acceptance gate writes `eval_runs/phase1_acceptance_latest.json` for demo and submission-prep evidence.
 
+After acceptance, print the latest readiness summary:
+
+```bash
+python3 scripts/submission_readiness_report.py --include-docker
+```
+
 Tiered eval coverage can also be checked directly:
 
 ```bash
