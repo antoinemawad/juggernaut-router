@@ -148,6 +148,7 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.selected_model, "minimax-m3")
         self.assertEqual(result.remote_mode, "remote_accuracy")
+        self.assertEqual(result.prompt_policy, "compact")
         self.assertEqual(captured["url"], "https://judge-proxy.example/v1/chat/completions")
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
 
@@ -211,7 +212,9 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.remote_mode, "remote_format_strict")
         self.assertEqual(result.prompt_policy, "answer_only")
         self.assertTrue(captured["payload"]["messages"][1]["content"].startswith("Return only the final answer."))
+        self.assertIn("Do not restate the task", captured["payload"]["messages"][1]["content"])
         self.assertIn("output format exactly", captured["payload"]["messages"][0]["content"])
+        self.assertIn("Do not restate the task", captured["payload"]["messages"][0]["content"])
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
 
     def test_sarcasm_sentiment_routes_remote(self):
@@ -342,6 +345,7 @@ class Phase2RouterTests(unittest.TestCase):
 
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.remote_mode, "remote_accuracy")
+        self.assertEqual(result.prompt_policy, "compact")
         self.assertEqual(result.answer, "$66.00")
 
     def test_remote_sentiment_answer_is_normalized_to_label(self):
@@ -359,6 +363,7 @@ class Phase2RouterTests(unittest.TestCase):
 
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.remote_mode, "remote_accuracy")
+        self.assertEqual(result.prompt_policy, "compact")
         self.assertEqual(result.answer, "negative")
 
     def test_incomplete_logic_routes_remote_even_if_simple_pattern_matches(self):

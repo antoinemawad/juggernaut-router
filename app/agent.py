@@ -241,24 +241,40 @@ def _preferred_models_for_remote_mode(remote_mode: str) -> tuple[str, ...]:
 def _prompt_policy_for_remote_mode(remote_mode: str) -> str:
     if remote_mode in {"remote_code", "remote_format_strict"}:
         return "answer_only"
-    if remote_mode == "remote_concise":
+    if remote_mode in {"remote_accuracy", "remote_concise"}:
         return "compact"
     return "original"
 
 
 def _apply_prompt_policy(prompt: str, prompt_policy: str) -> str:
     if prompt_policy == "compact":
-        return "Answer accurately and concisely. Preserve all constraints.\n\nTask:\n" + prompt
+        return (
+            "Answer accurately and concisely. Preserve every requested constraint. "
+            "Do not restate the task.\n\nTask:\n" + prompt
+        )
     if prompt_policy == "answer_only":
-        return "Return only the final answer. Preserve exact requested format.\n\nTask:\n" + prompt
+        return (
+            "Return only the final answer. Preserve the exact requested format. "
+            "Do not restate the task, explain reasoning, mention instructions, or add markdown unless the task asks for it.\n\n"
+            "Task:\n" + prompt
+        )
     return prompt
 
 
 def _system_prompt_for_remote_mode(remote_mode: str) -> str:
     if remote_mode == "remote_code":
-        return "Return correct code in English context only when requested. Preserve code-only constraints exactly."
+        return (
+            "Return the corrected or requested code only when code-only is requested. "
+            "Do not include analysis, markdown fences, prose, or task restatement unless the user explicitly asks for them."
+        )
     if remote_mode == "remote_format_strict":
-        return "Follow the requested output format exactly. Return no extra explanation unless requested."
+        return (
+            "Follow the requested output format exactly. Return only the answer. "
+            "Do not restate the task, explain reasoning, or mention instructions unless requested."
+        )
     if remote_mode == "remote_accuracy":
-        return "Answer accurately in English. Reason carefully and preserve all task constraints."
-    return "Answer accurately and concisely in English."
+        return (
+            "Answer accurately in English. Reason internally, but return only the concise final answer "
+            "in the requested format."
+        )
+    return "Answer accurately and concisely in English. Do not restate the task."

@@ -95,9 +95,16 @@ def prompt_for_policy(scenario, policy):
     if policy == "original":
         return prompt
     if policy == "compact":
-        return "Answer the task accurately and concisely. Preserve all constraints.\n\nTask:\n" + prompt
+        return (
+            "Answer the task accurately and concisely. Preserve every requested constraint. "
+            "Do not restate the task.\n\nTask:\n" + prompt
+        )
     if policy == "answer_only":
-        return "Return only the final answer. Preserve exact requested format.\n\nTask:\n" + prompt
+        return (
+            "Return only the final answer. Preserve the exact requested format. "
+            "Do not restate the task, explain reasoning, mention instructions, or add markdown unless the task asks for it.\n\n"
+            "Task:\n" + prompt
+        )
     raise ValueError(f"Unknown prompt policy: {policy}")
 
 
@@ -165,7 +172,8 @@ def call_fireworks(model, scenario, prompt, max_tokens, allow_normal_fireworks_d
                 "role": "system",
                 "content": (
                     "Answer accurately and concisely in English. "
-                    "Follow the requested output format exactly."
+                    "Follow the requested output format exactly. "
+                    "Do not restate the task or explain reasoning unless requested."
                 ),
             },
             {"role": "user", "content": prompt},

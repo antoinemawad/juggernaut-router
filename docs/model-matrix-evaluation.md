@@ -194,6 +194,14 @@ python3 eval/model_matrix.py --live --prompt-policies all
 
 Uncertain prompt-shaping decisions must be tested with metrics instead of guessed.
 
+Development-only Kimi evidence from the AMD notebook on 2026-07-08:
+
+- `kimi-k2p7-code` mapped to public `accounts/fireworks/models/kimi-k2p6` scored 94.4% over 72 live dev rows.
+- `compact` was strongest in that run: 100.0% pass rate, 0.976 average score, 289.5 average tokens.
+- `original` used fewer tokens but missed accuracy: 91.7% pass rate, 0.951 average score, 275.9 average tokens.
+- `answer_only` caused task restatement/analysis on some format tasks and needed stricter anti-restatement wording.
+- These results are not official judging-proxy token data, but they justify testing `compact` as the default remote-accuracy prompt policy.
+
 Supported prompt policies:
 
 - `original`: send the scenario prompt as written.
