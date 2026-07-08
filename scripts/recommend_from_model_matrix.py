@@ -15,6 +15,16 @@ from scripts.summarize_model_matrix_runs import filter_rows, load_jsonl, run_id_
 DEFAULT_FALLBACK_MODEL = "minimax-m3"
 DEFAULT_FALLBACK_POLICY = "original"
 DEFAULT_MAX_TOKENS = 192
+DEFAULT_REQUIRED_CATEGORIES = (
+    "code_debugging",
+    "code_generation",
+    "factual_knowledge",
+    "logical_deductive_reasoning",
+    "mathematical_reasoning",
+    "named_entity_recognition",
+    "sentiment_classification",
+    "text_summarisation",
+)
 
 
 def bucket() -> dict:
@@ -159,6 +169,39 @@ def exports_for_recommendations(
     ]
 
 
+def parse_required_categories(raw: str) -> tuple[str, ...]:
+    if raw is None:
+        return DEFAULT_REQUIRED_CATEGORIES
+    categories = []
+    seen = set()
+    for item in raw.split(","):
+        category = item.strip()
+        if category and category not in seen:
+            categories.append(category)
+            seen.add(category)
+    return tuple(categories)
+
+
+def evidence_status(recommendations: dict[str, dict], required_categories: tuple[str, ...]) -> dict:
+    covered = set(recommendations)
+    required = set(required_categories)
+    missing = sorted(required - covered)
+    ineligible = sorted(
+        category
+        for category in required & covered
+        if not recommendations[category].get("eligible")
+    )
+    status = "passed" if not missing and not ineligible else "needs_more_evidence"
+    return {
+        "status": status,
+        "required_categories": list(required_categories),
+        "covered_categories": sorted(covered),
+        "eligible_categories": sorted(category for category, item in recommendations.items() if item.get("eligible")),
+        "missing_categories": missing,
+        "ineligible_categories": ineligible,
+    }
+
+
 def render_shell(exports: list[tuple[str, str | None]], source_reports: list[Path]) -> str:
     lines = [
         "# Runtime env recommendation from model matrix evidence",
@@ -172,11 +215,25 @@ def render_shell(exports: list[tuple[str, str | None]], source_reports: list[Pat
     return "\n".join(lines)
 
 
-def write_markdown(path: Path, recommendations: dict[str, dict], exports: list[tuple[str, str | None]]) -> None:
+def write_markdown(
+    path: Path,
+    recommendations: dict[str, dict],
+    exports: list[tuple[str, str | None]],
+    status: dict,
+) -> None:
     lines = [
         "# Model Matrix Runtime Recommendation",
         "",
         f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        f"Evidence status: `{status['status']}`",
+        "",
+        "## Evidence Coverage",
+        "",
+        f"- Required categories: {len(status['required_categories'])}",
+        f"- Covered categories: {len(status['covered_categories'])}",
+        f"- Eligible categories: {len(status['eligible_categories'])}",
+        f"- Missing categories: {', '.join(status['missing_categories']) if status['missing_categories'] else 'none'}",
+        f"- Ineligible categories: {', '.join(status['ineligible_categories']) if status['ineligible_categories'] else 'none'}",
         "",
         "## Category Decisions",
         "",
@@ -209,6 +266,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
     parser.add_argument("--drop-error-rows", action="store_true")
     parser.add_argument("--max-run-error-rate", type=float, default=0.25)
+    parser.add_argument(
+        "--required-categories",
+        default=",".join(DEFAULT_REQUIRED_CATEGORIES),
+        help="Comma-separated categories that must be covered and eligible. Use an empty string to disable.",
+    )
     args = parser.parse_args(argv)
 
     rows = []
@@ -236,9 +298,15 @@ def main(argv: list[str] | None = None) -> int:
         fallback_policy=args.fallback_policy,
         max_tokens=args.max_tokens,
     )
+    status = evidence_status(
+        recommendations,
+        required_categories=parse_required_categories(args.required_categories),
+    )
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "evidence_status": status["status"],
+        "evidence": status,
         "source_reports": [str(path) for path in args.reports],
         "rows": len(rows),
         "runs": len({run_id_for(row) for row in rows}),
@@ -254,9 +322,10 @@ def main(argv: list[str] | None = None) -> int:
     args.out_json.parent.mkdir(parents=True, exist_ok=True)
     args.out_md.parent.mkdir(parents=True, exist_ok=True)
     args.out_json.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
-    write_markdown(args.out_md, recommendations, exports)
+    write_markdown(args.out_md, recommendations, exports, status)
 
     print(render_shell(exports, args.reports))
+    print(f"Evidence status: {status['status']}")
     print(f"JSON: {args.out_json}")
     print(f"Markdown: {args.out_md}")
     return 0

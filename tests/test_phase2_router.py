@@ -18,9 +18,11 @@ from eval.router_config_sweep import DEFAULT_CONFIGS, route_matches_expected, ru
 from scripts.check_expected_routes import check_routes, config_by_name
 from scripts.recommend_from_model_matrix import (
     choose_by_category,
+    evidence_status,
     exports_for_recommendations,
     main as recommend_from_model_matrix_main,
 )
+from scripts.validate_runtime_recommendation import load_recommendation
 from scripts.recommend_runtime_env import exports_for_config
 
 
@@ -1173,6 +1175,62 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertIn("mathematical_reasoning=kimi-k2p7-code,minimax-m3", exports["ROUTER_MODELS_BY_CATEGORY"])
         self.assertEqual(exports["ROUTER_PROMPT_POLICY_BY_CATEGORY"], "mathematical_reasoning=answer_only")
 
+    def test_model_matrix_recommender_marks_missing_categories_as_insufficient(self):
+        recommendations = {
+            "factual_knowledge": {
+                "model": "kimi-k2p7-code",
+                "prompt_policy": "original",
+                "eligible": True,
+            },
+        }
+
+        status = evidence_status(
+            recommendations,
+            required_categories=("factual_knowledge", "code_generation"),
+        )
+
+        self.assertEqual(status["status"], "needs_more_evidence")
+        self.assertEqual(status["missing_categories"], ["code_generation"])
+
+    def test_model_matrix_recommender_marks_full_eligible_coverage_passed(self):
+        recommendations = {
+            "factual_knowledge": {
+                "model": "kimi-k2p7-code",
+                "prompt_policy": "original",
+                "eligible": True,
+            },
+            "code_generation": {
+                "model": "kimi-k2p7-code",
+                "prompt_policy": "compact",
+                "eligible": True,
+            },
+        }
+
+        status = evidence_status(
+            recommendations,
+            required_categories=("factual_knowledge", "code_generation"),
+        )
+
+        self.assertEqual(status["status"], "passed")
+        self.assertEqual(status["missing_categories"], [])
+        self.assertEqual(status["ineligible_categories"], [])
+
+    def test_runtime_recommendation_validation_rejects_insufficient_evidence(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recommendation = Path(tmpdir) / "recommendation.json"
+            recommendation.write_text(
+                json.dumps({
+                    "evidence_status": "needs_more_evidence",
+                    "exports": {
+                        "ROUTER_MODE": "conservative",
+                    },
+                }) + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ValueError):
+                load_recommendation(recommendation)
+
     def test_model_matrix_recommender_cli_writes_artifacts(self):
         rows = [
             {
@@ -1211,11 +1269,14 @@ class Phase2RouterTests(unittest.TestCase):
                     str(out_md),
                     "--min-runs",
                     "2",
+                    "--required-categories",
+                    "named_entity_recognition",
                 ])
 
             payload = json.loads(out_json.read_text(encoding="utf-8"))
             self.assertEqual(status, 0)
             self.assertTrue(out_md.exists())
+            self.assertEqual(payload["evidence_status"], "passed")
             self.assertEqual(payload["recommendations"]["named_entity_recognition"]["model"], "kimi-k2p7-code")
             self.assertIn("ROUTER_MODELS_BY_CATEGORY", payload["exports"])
 

@@ -22,6 +22,9 @@ def load_recommendation(path: Path) -> dict:
     exports = payload.get("exports")
     if not isinstance(exports, dict):
         raise ValueError(f"{path} does not contain an exports object")
+    evidence_status = payload.get("evidence_status")
+    if evidence_status is not None and evidence_status != "passed":
+        raise ValueError(f"{path} evidence_status is {evidence_status!r}, not 'passed'")
     return payload
 
 
