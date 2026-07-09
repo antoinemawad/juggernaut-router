@@ -24,6 +24,9 @@ FORBIDDEN_TRACKED_PATTERNS = (
     "*.pt",
     "*.pth",
 )
+ALLOWED_TRACKED_ARTIFACTS = {
+    "models/.gitkeep",
+}
 
 
 def git_tracked_files() -> list[str]:
@@ -66,6 +69,8 @@ def check_no_forbidden_runtime_url() -> list[str]:
 def check_no_forbidden_tracked_files() -> list[str]:
     errors = []
     for tracked in git_tracked_files():
+        if tracked in ALLOWED_TRACKED_ARTIFACTS:
+            continue
         for pattern in FORBIDDEN_TRACKED_PATTERNS:
             if fnmatch.fnmatch(tracked, pattern):
                 errors.append(f"forbidden tracked artifact: {tracked}")

@@ -1,3 +1,19 @@
+FROM python:3.11-slim AS local-model-deps
+
+WORKDIR /app
+
+ARG ENABLE_LOCAL_MODEL=false
+
+COPY requirements-local-model.txt ./requirements-local-model.txt
+
+RUN mkdir -p /wheels && \
+    if [ "${ENABLE_LOCAL_MODEL}" = "true" ]; then \
+      apt-get update && \
+      apt-get install -y --no-install-recommends build-essential cmake ca-certificates && \
+      pip wheel --prefer-binary --wheel-dir=/wheels -r requirements-local-model.txt && \
+      rm -rf /var/lib/apt/lists/*; \
+    fi
+
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -7,14 +23,21 @@ ARG LOCAL_MODEL_URL=
 ARG LOCAL_MODEL_FILENAME=local-model.gguf
 
 COPY requirements-local-model.txt ./requirements-local-model.txt
+COPY --from=local-model-deps /wheels /wheels
+
+RUN mkdir -p /app/models && \
+    if [ "${ENABLE_LOCAL_MODEL}" = "true" ]; then \
+      apt-get update && \
+      apt-get install -y --no-install-recommends ca-certificates libgomp1 && \
+      pip install --no-cache-dir --no-index --find-links=/wheels -r requirements-local-model.txt && \
+      rm -rf /wheels /var/lib/apt/lists/*; \
+    fi
+
 COPY app ./app
 COPY models ./models
 
 RUN mkdir -p /app/models && \
     if [ "${ENABLE_LOCAL_MODEL}" = "true" ]; then \
-      apt-get update && \
-      apt-get install -y --no-install-recommends build-essential cmake curl ca-certificates && \
-      pip install --no-cache-dir -r requirements-local-model.txt && \
       if [ -n "${LOCAL_MODEL_URL}" ]; then \
         python -c "import os, urllib.request; urllib.request.urlretrieve(os.environ['LOCAL_MODEL_URL'], '/app/models/' + os.environ['LOCAL_MODEL_FILENAME'])"; \
       fi && \
@@ -22,9 +45,7 @@ RUN mkdir -p /app/models && \
         first_model=$(find /app/models -maxdepth 1 -type f -name '*.gguf' | head -1); \
         if [ -n "$first_model" ]; then cp "$first_model" "/app/models/${LOCAL_MODEL_FILENAME}"; fi; \
       fi && \
-      test -f "/app/models/${LOCAL_MODEL_FILENAME}" && \
-      apt-get purge -y --auto-remove build-essential cmake curl && \
-      rm -rf /var/lib/apt/lists/*; \
+      test -f "/app/models/${LOCAL_MODEL_FILENAME}"; \
     fi
 
 ENV ROUTER_PROFILE=accuracy_gate \
