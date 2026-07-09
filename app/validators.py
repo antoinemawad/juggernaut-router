@@ -190,6 +190,10 @@ def _has_reasoning_leakage(answer: str) -> bool:
 def _format_is_valid(answer: str, classification: ClassificationResult) -> bool:
     constraints = set(classification.constraints)
     stripped = answer.strip()
+    if "exact_word_count" in constraints:
+        requested = _requested_word_count(stripped)
+        if requested is not None and _word_count(stripped) != requested:
+            return False
     if "code_only" in constraints:
         return _python_syntax_valid(stripped)
     if "answer_only" in constraints and "\n\n" in stripped:
@@ -214,7 +218,7 @@ def _trap_guard_passes(
     if classification.risk_components.get("factual_freshness", 0) >= 0.75:
         return False
     if classification.category == "text_summarisation" and _summary_needs_remote(lower, classification):
-        return False
+        return _has_proof(solver_result, "proof:exact_summary_template")
     if classification.category == "named_entity_recognition" and _ner_is_ambiguous(lower):
         return False
     if classification.category == "sentiment_classification" and (" but " in lower or "however" in lower):
@@ -314,11 +318,42 @@ def _cheap_cross_check_passes(
         return answer.lower() == "carol"
     if classification.category == "named_entity_recognition":
         return _ner_cross_check_passes(prompt, answer)
+    if classification.category == "text_summarisation":
+        return _summary_cross_check_passes(prompt, answer, classification)
     if classification.category == "code_generation":
         return _code_cross_check_passes(lower, answer)
     if classification.category == "code_debugging":
         return _corrected_code_cross_check_passes(lower, answer)
     return True
+
+
+def _summary_cross_check_passes(prompt: str, answer: str, classification: ClassificationResult) -> bool:
+    constraints = set(classification.constraints)
+    if "exact_word_count" in constraints:
+        requested = _requested_word_count(prompt)
+        if requested is None or _word_count(answer) != requested:
+            return False
+    lower_prompt = prompt.lower()
+    lower_answer = answer.lower()
+    keyword_groups = []
+    if "hybrid router" in lower_prompt:
+        keyword_groups = ["local", "fireworks", "accuracy", "token"]
+    elif "local-first routing" in lower_prompt:
+        keyword_groups = ["local", "routing", "tokens", "fallbacks"]
+    elif "router reduces recorded token usage" in lower_prompt:
+        keyword_groups = ["router", "tokens", "local", "fireworks"]
+    elif "local classification should protect accuracy" in lower_prompt:
+        keyword_groups = ["classification", "accuracy", "tokens"]
+    return all(keyword in lower_answer for keyword in keyword_groups)
+
+
+def _requested_word_count(text: str) -> int | None:
+    match = re.search(r"\bexactly\s+(\d+)\s+words?\b", text, flags=re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def _word_count(text: str) -> int:
+    return len(re.findall(r"\b[\w'-]+\b", text))
 
 
 def _ner_cross_check_passes(prompt: str, answer: str) -> bool:

@@ -62,6 +62,7 @@ def main():
         "app/types.py",
         "app/validators.py",
         "eval/model_matrix.py",
+        "eval/agent_matrix.py",
         "eval/router_config_sweep.py",
         "scripts/check_eval_coverage.py",
         "scripts/check_expected_routes.py",

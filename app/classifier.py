@@ -122,6 +122,8 @@ def _apply_constraint_risk(lower: str, constraints: list[str], risk: dict[str, f
         risk["format_strictness"] = max(risk["format_strictness"], 0.3)
     if "exactly" in lower or "round " in lower:
         risk["format_strictness"] = max(risk["format_strictness"], 0.45)
+    if re.search(r"\bexactly\s+\d+\s+words?\b", lower):
+        constraints.append("exact_word_count")
     if "two sentences" in lower:
         constraints.append("two_sentences")
 

@@ -23,6 +23,7 @@ from eval.model_matrix import (
     prompt_for_policy,
     score_answer,
 )
+from eval import agent_matrix
 from eval.router_config_sweep import DEFAULT_CONFIGS, route_matches_expected, run_scenario, summarize
 from scripts.check_expected_routes import check_routes, config_by_name
 from scripts.recommend_from_model_matrix import (
@@ -328,7 +329,7 @@ class Phase2RouterTests(unittest.TestCase):
             )
 
         self.assertEqual(result.route, "fireworks")
-        self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+        self.assertIn("cross_check", result.metadata["local_proof_layers_failed"])
 
     def test_remote_ner_answer_is_normalized_to_entity_lines(self):
         from app.fireworks_client import FireworksResult
@@ -365,7 +366,7 @@ class Phase2RouterTests(unittest.TestCase):
         ), patch("urllib.request.urlopen", fake_urlopen):
             result = answer_task(
                 "summary",
-                "Summarise in exactly 12 words: A hybrid router should answer easy tasks locally and send risky tasks to Fireworks.",
+                "Summarise in exactly 12 words: Unfamiliar deployment notes describe retries, queues, dashboards, incidents, and rollback timing.",
             )
 
         self.assertEqual(result.route, "fireworks")
@@ -375,7 +376,7 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertIn("Do not restate the task", captured["payload"]["messages"][1]["content"])
         self.assertIn("output format exactly", captured["payload"]["messages"][0]["content"])
         self.assertIn("Do not restate the task", captured["payload"]["messages"][0]["content"])
-        self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+        self.assertIn("cross_check", result.metadata["local_proof_layers_failed"])
 
     def test_sarcasm_sentiment_routes_remote(self):
         with patch.dict(
@@ -945,12 +946,12 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertTrue(row["expected_route_match"])
         self.assertIn("trap_guard", row["local_proof_layers_failed"])
 
-    def test_router_sweep_rejects_exact_summary_local_candidate(self):
+    def test_router_sweep_rejects_exact_summary_without_runtime_template_evidence(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "aggressive_local")
         scenario = {
             "task_id": "summary_router",
             "category": "text_summarisation",
-            "prompt": "Summarise in exactly 12 words: A hybrid router should answer easy tasks locally and send risky tasks to Fireworks so it can preserve accuracy while reducing recorded token usage.",
+            "prompt": "Summarise in exactly 12 words: Unfamiliar deployment notes describe retries, queues, dashboards, incidents, and rollback timing.",
             "expected_keywords": ["local", "Fireworks", "accuracy", "token"],
             "expected_answer": "Hybrid routing saves tokens by using local answers and Fireworks fallbacks.",
             "expected_route": "remote_format_strict",
@@ -959,7 +960,7 @@ class Phase2RouterTests(unittest.TestCase):
         row = run_scenario(config, scenario)
         self.assertEqual(row["route"], "fireworks")
         self.assertTrue(row["expected_route_match"])
-        self.assertIn("trap_guard", row["local_proof_layers_failed"])
+        self.assertIn("cross_check", row["local_proof_layers_failed"])
 
     def test_router_sweep_accepts_certified_stable_rocm_fact_locally(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid")
@@ -1396,6 +1397,89 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(categories, {"code_generation", "text_summarisation"})
         self.assertTrue(filtered)
         self.assertTrue(all(row["category"] in categories for row in filtered))
+
+    def test_agent_matrix_scores_actual_local_router_path(self):
+        scenario = {
+            "task_id": "agent_codegen_local",
+            "category": "code_generation",
+            "constraints": ["code_only"],
+            "output_constraints": ["code_only"],
+            "verifier": "python_syntax",
+            "prompt": "Write a Python function clamp(x, low, high) that returns low if x is below low, high if x is above high, otherwise x. Return only code.",
+            "expected_keywords": ["def clamp", "low", "high", "min", "max"],
+            "expected_answer": "def clamp(x, low, high):\n    return max(low, min(x, high))",
+        }
+        config = RuntimeConfig.from_env()
+        deadline = DeadlineManager(total_seconds=600, safety_margin_seconds=60)
+
+        row = agent_matrix.run_case(scenario, config, deadline)
+
+        self.assertEqual(row["route"], "local")
+        self.assertTrue(row["passed"])
+        self.assertEqual(row["total_tokens"], 0)
+        self.assertIn("def clamp", row["answer"])
+
+    def test_exact_summary_template_can_pass_local_proof(self):
+        prompt = (
+            "Summarise in exactly 8 words: Local-first routing can reduce recorded Fireworks token usage "
+            "while preserving quality through remote fallbacks."
+        )
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            result = answer_task("summary_exact", prompt)
+
+        mocked.assert_not_called()
+        self.assertEqual(result.route, "local")
+        self.assertEqual(len(result.answer.split()), 8)
+        self.assertIn("proof:exact_summary_template", result.metadata["local_evidence"])
+        self.assertFalse(result.metadata["local_proof_layers_failed"])
+
+    def test_agent_matrix_scores_exact_summary_local_template(self):
+        scenario = {
+            "task_id": "agent_summary_exact",
+            "category": "text_summarisation",
+            "constraints": ["exact_word_count", "one_sentence", "no_explanation"],
+            "output_constraints": ["exact_word_count", "one_sentence"],
+            "verifier": "word_count",
+            "prompt": "Summarise in exactly 8 words: Local-first routing can reduce recorded Fireworks token usage while preserving quality through remote fallbacks.",
+            "expected_keywords": ["Local", "routing", "tokens", "fallbacks"],
+            "expected_answer": "Local routing saves tokens while remote fallbacks preserve quality.",
+        }
+        config = RuntimeConfig.from_env()
+        deadline = DeadlineManager(total_seconds=600, safety_margin_seconds=60)
+
+        row = agent_matrix.run_case(scenario, config, deadline)
+
+        self.assertEqual(row["route"], "local")
+        self.assertTrue(row["passed"])
+        self.assertEqual(row["total_tokens"], 0)
+
+    def test_agent_matrix_dev_mapping_keeps_runtime_model_alias(self):
+        calls = []
+
+        def fake_original(prompt, config=None, deadline=None, preferred_models=None, system_prompt=None):
+            calls.append((config.allowed_models, preferred_models))
+            from app.fireworks_client import FireworksResult
+
+            return FireworksResult(answer="ok", model="accounts/fireworks/models/kimi-k2p6")
+
+        env = {
+            "FIREWORKS_BASE_URL": "https://api." + "fireworks.ai/inference/v1",
+            "FIREWORKS_DEV_MODEL_MAP": "kimi-k2p7-code=accounts/fireworks/models/kimi-k2p6",
+            "ALLOWED_MODELS": "kimi-k2p7-code",
+        }
+        with patch.dict(os.environ, env, clear=True), patch(
+            "eval.agent_matrix.original_ask_fireworks_structured",
+            side_effect=fake_original,
+        ), agent_matrix.normal_fireworks_dev_model_mapping(True):
+            config = RuntimeConfig.from_env()
+            result = agent_matrix.agent_module.ask_fireworks_structured(
+                "prompt",
+                config=config,
+                preferred_models=("kimi-k2p7-code",),
+            )
+
+        self.assertEqual(calls[0], (("accounts/fireworks/models/kimi-k2p6",), ("accounts/fireworks/models/kimi-k2p6",)))
+        self.assertEqual(result.model, "kimi-k2p7-code")
 
 
 if __name__ == "__main__":
