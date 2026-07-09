@@ -13,7 +13,16 @@ from app.config import RuntimeConfig
 from app.deadline import DeadlineManager
 from app.solvers.basic import LocalSolverResult
 from app.validators import validate_local_answer
-from eval.model_matrix import DEFAULT_SCENARIOS, estimate_tokens, limit_scenarios, load_scenarios, prompt_for_policy, score_answer
+from eval.model_matrix import (
+    DEFAULT_SCENARIOS,
+    estimate_tokens,
+    filter_scenarios_by_categories,
+    limit_scenarios,
+    load_scenarios,
+    parse_categories,
+    prompt_for_policy,
+    score_answer,
+)
 from eval.router_config_sweep import DEFAULT_CONFIGS, route_matches_expected, run_scenario, summarize
 from scripts.check_expected_routes import check_routes, config_by_name
 from scripts.recommend_from_model_matrix import (
@@ -1376,6 +1385,15 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(len(limit_scenarios(scenarios, None)), len(scenarios))
         self.assertEqual(len(limit_scenarios(scenarios, 3)), 3)
         self.assertEqual(limit_scenarios(scenarios, 3)[0]["task_id"], scenarios[0]["task_id"])
+
+    def test_model_matrix_category_filter_supports_focused_live_tests(self):
+        scenarios = load_scenarios(DEFAULT_SCENARIOS)
+        categories = parse_categories("code_generation,text_summarisation")
+        filtered = filter_scenarios_by_categories(scenarios, categories)
+
+        self.assertEqual(categories, {"code_generation", "text_summarisation"})
+        self.assertTrue(filtered)
+        self.assertTrue(all(row["category"] in categories for row in filtered))
 
 
 if __name__ == "__main__":

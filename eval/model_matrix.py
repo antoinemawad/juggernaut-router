@@ -49,6 +49,19 @@ def limit_scenarios(scenarios, limit):
     return scenarios[:limit]
 
 
+def parse_categories(raw):
+    if raw is None:
+        return None
+    categories = [category.strip() for category in raw.split(",") if category.strip()]
+    return set(categories) if categories else None
+
+
+def filter_scenarios_by_categories(scenarios, categories):
+    if not categories:
+        return scenarios
+    return [scenario for scenario in scenarios if scenario.get("category") in categories]
+
+
 def env_models():
     raw = os.environ.get("ALLOWED_MODELS", "")
     models = [model.strip() for model in raw.split(",") if model.strip()]
@@ -436,6 +449,11 @@ def main():
     )
     parser.add_argument("--max-tokens", type=int, default=256)
     parser.add_argument("--limit", type=int, default=None, help="Run only the first N scenarios for smoke tests.")
+    parser.add_argument(
+        "--categories",
+        default=None,
+        help="Comma-separated scenario categories to run, e.g. code_generation,text_summarisation.",
+    )
     args = parser.parse_args()
 
     requested_models = [model.strip() for model in args.models.split(",") if model.strip()]
@@ -460,7 +478,10 @@ def main():
     if invalid_policies:
         raise SystemExit(f"Unknown prompt policies: {', '.join(invalid_policies)}")
 
-    scenarios = limit_scenarios(load_scenarios(args.scenarios), args.limit)
+    categories = parse_categories(args.categories)
+    scenarios = limit_scenarios(filter_scenarios_by_categories(load_scenarios(args.scenarios), categories), args.limit)
+    if not scenarios:
+        raise SystemExit("No scenarios matched the requested filters.")
     run_id = datetime.now(timezone.utc).strftime("model_matrix_%Y%m%d_%H%M%S_%f")
     args.out_dir.mkdir(parents=True, exist_ok=True)
     log_path = args.out_dir / f"{run_id}.jsonl"
