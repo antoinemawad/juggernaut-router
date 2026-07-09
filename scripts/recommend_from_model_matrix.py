@@ -78,6 +78,19 @@ def is_eligible(data: dict, min_pass_rate: float, min_avg_score: float, min_runs
     )
 
 
+def eligibility_failures(data: dict, min_pass_rate: float, min_avg_score: float, min_runs: int) -> list[str]:
+    failures = []
+    if data["runs"] < min_runs:
+        failures.append(f"runs<{min_runs}")
+    if data["errors"] != 0:
+        failures.append("errors>0")
+    if data["pass_rate"] < min_pass_rate:
+        failures.append(f"pass_rate<{min_pass_rate:.2f}")
+    if data["avg_score"] < min_avg_score:
+        failures.append(f"avg_score<{min_avg_score:.2f}")
+    return failures
+
+
 def choose_by_category(
     rows: list[dict],
     min_pass_rate: float,
@@ -110,6 +123,12 @@ def choose_by_category(
             "model": model if eligible else fallback_model,
             "prompt_policy": policy if eligible else fallback_policy,
             "eligible": eligible,
+            "eligibility_failures": [] if eligible else eligibility_failures(
+                data,
+                min_pass_rate,
+                min_avg_score,
+                min_runs,
+            ),
             "observed_best_model": model,
             "observed_best_prompt_policy": policy,
             "pass_rate": round(data["pass_rate"], 4),
@@ -237,15 +256,16 @@ def write_markdown(
         "",
         "## Category Decisions",
         "",
-        "| Category | Runtime Model | Runtime Prompt | Eligible | Observed Best | Pass Rate | Avg Score | Avg Tokens | Runs |",
-        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: |",
+        "| Category | Runtime Model | Runtime Prompt | Eligible | Observed Best | Pass Rate | Avg Score | Avg Tokens | Runs | Failure Reasons |",
+        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- |",
     ]
     for category, item in sorted(recommendations.items()):
         observed = f"{item['observed_best_model']} / {item['observed_best_prompt_policy']}"
+        failures = ", ".join(item.get("eligibility_failures", [])) or "none"
         lines.append(
             f"| {category} | {item['model']} | {item['prompt_policy']} | "
             f"{'yes' if item['eligible'] else 'no'} | {observed} | "
-            f"{item['pass_rate']:.1%} | {item['avg_score']:.3f} | {item['avg_tokens']:.1f} | {item['runs']} |"
+            f"{item['pass_rate']:.1%} | {item['avg_score']:.3f} | {item['avg_tokens']:.1f} | {item['runs']} | {failures} |"
         )
     lines.extend(["", "## Shell Exports", "", "```bash"])
     lines.extend(render_shell(exports, []).splitlines()[2:])

@@ -1156,6 +1156,8 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(recommendations["factual_knowledge"]["model"], "kimi-k2p7-code")
         self.assertFalse(recommendations["code_generation"]["eligible"])
         self.assertEqual(recommendations["code_generation"]["model"], "minimax-m3")
+        self.assertIn("pass_rate<0.85", recommendations["code_generation"]["eligibility_failures"])
+        self.assertIn("avg_score<0.85", recommendations["code_generation"]["eligibility_failures"])
 
     def test_model_matrix_recommender_exports_runtime_env(self):
         recommendations = {
