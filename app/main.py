@@ -172,10 +172,10 @@ def main():
         write_results(config, results)
         return
 
-    results = run_tasks(tasks, config, deadline, telemetry)
+    results, route_summary = run_tasks(tasks, config, deadline, telemetry)
 
     write_results(config, results)
-    summary = summarize_results(tasks, results, deadline, telemetry)
+    summary = summarize_results(tasks, results, config, deadline, telemetry, route_summary)
     log_runtime_event("finish", summary)
 
 
@@ -189,10 +189,12 @@ def startup_diagnostics(
         "cwd": os.getcwd(),
         "output_path": str(config.output_path),
         "router_mode": config.router_mode,
+        "router_profile": config.router_profile,
         "allowed_models": list(config.allowed_models),
         "fireworks_base_url_present": bool(config.fireworks_base_url),
         "fireworks_api_key_present": bool(config.fireworks_api_key),
         "local_model_enabled": config.local_model_enabled,
+        "local_model_path": str(config.local_model_path) if config.local_model_path else None,
         "tasks_parsed": tasks_parsed,
         "input_error": input_error,
         **input_diagnostics,
@@ -202,16 +204,20 @@ def startup_diagnostics(
 def summarize_results(
     tasks: list[dict],
     results: list[dict],
+    config: RuntimeConfig,
     deadline: DeadlineManager,
     telemetry: TelemetryLogger,
+    route_summary: dict | None = None,
 ) -> dict:
     return {
         "tasks_read": len(tasks),
         "answers_written": len(results),
         "output_answer_count_matches_tasks": len(tasks) == len(results),
         "output_empty": len(results) == 0,
+        "output_file_path": str(config.output_path),
         "batch_elapsed_ms": deadline.elapsed_ms(),
         "telemetry_enabled": telemetry.enabled,
+        **(route_summary or {}),
     }
 
 
@@ -225,14 +231,15 @@ def run_tasks(
     config: RuntimeConfig,
     deadline: DeadlineManager,
     telemetry: TelemetryLogger,
-) -> list[dict]:
+) -> tuple[list[dict], dict]:
     if not tasks:
         log_runtime_event("no_tasks", {
             "message": "zero tasks parsed; output will be an empty valid results array",
         })
-        return []
+        return [], empty_route_summary()
 
     results: list[dict | None] = [None] * len(tasks)
+    telemetry_records: list[dict] = []
     max_workers = max(1, min(config.remote_worker_count, len(tasks)))
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -260,8 +267,40 @@ def run_tasks(
                 }
             results[index] = output_row
             telemetry.log(telemetry_record)
+            telemetry_records.append(telemetry_record)
 
-    return [row for row in results if row is not None]
+    return [row for row in results if row is not None], summarize_telemetry_records(telemetry_records)
+
+
+def empty_route_summary() -> dict:
+    return {
+        "deterministic_count": 0,
+        "local_llm_count": 0,
+        "fireworks_count": 0,
+        "escalations_count": 0,
+        "fallbacks_count": 0,
+        "local_failures_or_timeouts": 0,
+    }
+
+
+def summarize_telemetry_records(records: list[dict]) -> dict:
+    summary = empty_route_summary()
+    for record in records:
+        route = record.get("route")
+        if route == "local":
+            summary["deterministic_count"] += 1
+        elif route == "local_model":
+            summary["local_llm_count"] += 1
+        elif route == "fireworks":
+            summary["fireworks_count"] += 1
+        elif route == "fallback":
+            summary["fallbacks_count"] += 1
+        if record.get("remote_escalated_after_validation"):
+            summary["escalations_count"] += 1
+        local_error = str(record.get("local_model_error") or "")
+        if local_error and local_error not in {"local_model_disabled", "missing_local_model_command"}:
+            summary["local_failures_or_timeouts"] += 1
+    return summary
 
 
 def process_task(

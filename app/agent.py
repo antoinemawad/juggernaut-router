@@ -86,12 +86,14 @@ def answer_task(
 
     local_model = None
     local_model_validation = None
-    if _should_try_local_model(config, deadline):
+    local_model_skip_reason = _local_model_skip_reason(config, deadline, classification, prompt)
+    if local_model_skip_reason is None:
         local_model = ask_local_model_structured(
             remote_prompt,
             config=config,
             deadline=deadline,
             system_prompt=system_prompt,
+            task_id=task_id,
         )
         timings.local_model_elapsed_ms = local_model.elapsed_ms
         if local_model.error is None:
@@ -132,6 +134,11 @@ def answer_task(
                         "local_model_validation_passed": list(local_model_validation.passed_layers),
                         "local_model_validation_failed": list(local_model_validation.failed_layers),
                         "local_model_validation_notes": list(local_model_validation.notes),
+                        "local_model_path": local_model.model_path,
+                        "local_model_runtime": local_model.runtime,
+                        "local_model_prompt_tokens_estimate": local_model.prompt_tokens_estimate,
+                        "local_model_output_tokens_estimate": local_model.output_tokens_estimate,
+                        "final_answer_type": _answer_type(local_model_answer),
                     },
                 )
     if deadline is not None and not deadline.can_spend(config.fireworks_timeout_seconds):
@@ -163,6 +170,9 @@ def answer_task(
                 "local_proof_layers_failed": list(validation.failed_layers),
                 "validator_notes": list(validation.notes),
                 "local_model_error": local_model.error if local_model is not None else None,
+                "local_model_skip_reason": local_model_skip_reason,
+                "local_model_path": local_model.model_path if local_model is not None else None,
+                "local_model_runtime": local_model.runtime if local_model is not None else None,
                 "local_model_validation_failed": (
                     list(local_model_validation.failed_layers) if local_model_validation is not None else []
                 ),
@@ -243,16 +253,23 @@ def answer_task(
             "fireworks_error": remote.error,
             "remote_validation_escalation_enabled": config.remote_validation_escalation_enabled,
             "local_model_attempted": local_model is not None,
+            "local_model_skip_reason": local_model_skip_reason,
             "local_model_error": local_model.error if local_model is not None else None,
+            "local_model_path": local_model.model_path if local_model is not None else None,
+            "local_model_runtime": local_model.runtime if local_model is not None else None,
+            "local_model_prompt_tokens_estimate": local_model.prompt_tokens_estimate if local_model is not None else None,
+            "local_model_output_tokens_estimate": local_model.output_tokens_estimate if local_model is not None else None,
             "local_model_validation_failed": (
                 list(local_model_validation.failed_layers) if local_model_validation is not None else []
             ),
+            "validation_result": "accepted" if remote_validation.accepted else "rejected",
             "remote_escalated_after_validation": escalation is not None,
             "remote_escalation_model": escalation.model if escalation is not None else None,
             "remote_escalation_error": escalation.error if escalation is not None else None,
             "remote_escalation_validation_failed": (
                 list(escalation_validation.failed_layers) if escalation_validation is not None else []
             ),
+            "final_answer_type": _answer_type(answer),
         },
     )
 
@@ -358,12 +375,58 @@ def _should_escalate_remote_answer(remote, remote_validation, config: RuntimeCon
     return True
 
 
-def _should_try_local_model(config: RuntimeConfig, deadline: DeadlineManager | None) -> bool:
-    if not config.local_model_enabled or not config.local_model_command:
-        return False
+def _local_model_skip_reason(config: RuntimeConfig, deadline: DeadlineManager | None, classification, prompt: str) -> str | None:
+    if not config.local_model_enabled:
+        return "local_model_disabled"
+    if config.local_model_path is None and not config.local_model_command:
+        return "local_model_runtime_missing"
     if deadline is not None and not deadline.can_spend(config.local_model_timeout_seconds):
-        return False
-    return True
+        return "deadline_suppressed_local_model"
+    if len(prompt) > _local_model_max_prompt_chars(config):
+        return "prompt_too_long_for_local_model"
+    if classification.category not in _local_model_safe_categories(config):
+        return "category_not_local_model_safe"
+    if classification.risk_components.get("ambiguity", 0) >= 0.5 and classification.category not in {
+        "sentiment_classification",
+        "named_entity_recognition",
+    }:
+        return "ambiguous_task"
+    if classification.risk_components.get("factual_freshness", 0) >= 0.5:
+        return "fresh_factual_task"
+    if classification.risk_components.get("reasoning_depth", 0) >= 0.75:
+        return "deep_reasoning_task"
+    if classification.category in {"code_generation", "code_debugging"} and "code_only" not in set(classification.constraints):
+        return "code_task_requires_fireworks"
+    return None
+
+
+def _local_model_safe_categories(config: RuntimeConfig) -> set[str]:
+    safe = {
+        "sentiment_classification",
+        "named_entity_recognition",
+        "mathematical_reasoning",
+        "logical_deductive_reasoning",
+    }
+    if config.router_profile == "token_competitive":
+        safe.update({"factual_knowledge", "text_summarisation", "code_generation"})
+    return safe
+
+
+def _local_model_max_prompt_chars(config: RuntimeConfig) -> int:
+    return 900 if config.router_profile == "accuracy_gate" else 1600
+
+
+def _answer_type(answer: str) -> str:
+    stripped = answer.strip()
+    if not stripped:
+        return "empty"
+    if stripped.startswith("{") or stripped.startswith("["):
+        return "json_like"
+    if "\n" in stripped:
+        return "multiline"
+    if stripped.replace(".", "", 1).replace("-", "", 1).isdigit():
+        return "numeric"
+    return "text"
 
 
 def _escalation_models(current_model: str | None, config: RuntimeConfig) -> tuple[str, ...]:

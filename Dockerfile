@@ -2,10 +2,41 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY app ./app
+ARG ENABLE_LOCAL_MODEL=false
+ARG LOCAL_MODEL_URL=
+ARG LOCAL_MODEL_FILENAME=local-model.gguf
 
-ENV ROUTER_MODE=accuracy_first \
+COPY requirements-local-model.txt ./requirements-local-model.txt
+COPY app ./app
+COPY models ./models
+
+RUN mkdir -p /app/models && \
+    if [ "${ENABLE_LOCAL_MODEL}" = "true" ]; then \
+      apt-get update && \
+      apt-get install -y --no-install-recommends build-essential cmake curl ca-certificates && \
+      pip install --no-cache-dir -r requirements-local-model.txt && \
+      if [ -n "${LOCAL_MODEL_URL}" ]; then \
+        python -c "import os, urllib.request; urllib.request.urlretrieve(os.environ['LOCAL_MODEL_URL'], '/app/models/' + os.environ['LOCAL_MODEL_FILENAME'])"; \
+      fi && \
+      if [ ! -f "/app/models/${LOCAL_MODEL_FILENAME}" ]; then \
+        first_model=$(find /app/models -maxdepth 1 -type f -name '*.gguf' | head -1); \
+        if [ -n "$first_model" ]; then cp "$first_model" "/app/models/${LOCAL_MODEL_FILENAME}"; fi; \
+      fi && \
+      test -f "/app/models/${LOCAL_MODEL_FILENAME}" && \
+      apt-get purge -y --auto-remove build-essential cmake curl && \
+      rm -rf /var/lib/apt/lists/*; \
+    fi
+
+ENV ROUTER_PROFILE=accuracy_gate \
+    ROUTER_MODE=accuracy_first \
     LOCAL_CONFIDENCE_THRESHOLD=0.95 \
+    LOCAL_MODEL_ENABLED=${ENABLE_LOCAL_MODEL} \
+    LOCAL_MODEL_PATH=/app/models/${LOCAL_MODEL_FILENAME} \
+    LOCAL_MODEL_MAX_TOKENS=128 \
+    LOCAL_MODEL_CONTEXT=1024 \
+    LOCAL_MODEL_THREADS=2 \
+    LOCAL_MODEL_TEMPERATURE=0 \
+    LOCAL_MODEL_TIMEOUT_SECONDS=20 \
     FIREWORKS_MAX_TOKENS=192 \
     FIREWORKS_MAX_RETRIES=1 \
     ROUTER_PROMPT_POLICY_REMOTE_ACCURACY=original \

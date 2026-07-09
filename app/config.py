@@ -30,10 +30,16 @@ RECOMMENDATION_EXPORT_NAMES = {
     "LOCAL_CONFIDENCE_THRESHOLD",
     "LOCAL_MODEL_COMMAND",
     "LOCAL_MODEL_ENABLED",
+    "LOCAL_MODEL_CONTEXT",
     "LOCAL_MODEL_MAX_CHARS",
+    "LOCAL_MODEL_MAX_TOKENS",
+    "LOCAL_MODEL_PATH",
+    "LOCAL_MODEL_TEMPERATURE",
+    "LOCAL_MODEL_THREADS",
     "LOCAL_MODEL_TIMEOUT_SECONDS",
     "REMOTE_VALIDATION_ESCALATION_ENABLED",
     "ROUTER_MODE",
+    "ROUTER_PROFILE",
     "ROUTER_MODELS_BY_CATEGORY",
     "ROUTER_MODELS_REMOTE_ACCURACY",
     "ROUTER_MODELS_REMOTE_CODE",
@@ -218,8 +224,14 @@ class RuntimeConfig:
     fireworks_base_url: str | None
     allowed_models: tuple[str, ...]
     fireworks_max_tokens: int
+    router_profile: str = "accuracy_gate"
     local_model_enabled: bool = False
     local_model_command: str | None = None
+    local_model_path: Path | None = None
+    local_model_max_tokens: int = 128
+    local_model_context: int = 1024
+    local_model_threads: int = 2
+    local_model_temperature: float = 0.0
     local_model_timeout_seconds: int = 20
     local_model_max_chars: int = 4096
     prompt_policy_remote_accuracy: str = "compact"
@@ -239,9 +251,18 @@ class RuntimeConfig:
     def from_env(cls) -> "RuntimeConfig":
         env = _effective_env()
         router_log_path = env.get("ROUTER_LOG_PATH")
-        mode = env.get("ROUTER_MODE", "conservative").strip().lower()
+        profile_raw = env.get("ROUTER_PROFILE")
+        profile = (profile_raw or "accuracy_gate").strip().lower()
+        if profile not in {"accuracy_gate", "token_competitive"}:
+            profile = "accuracy_gate"
+        if profile_raw:
+            default_mode = "accuracy_first" if profile == "accuracy_gate" else "balanced"
+        else:
+            default_mode = "conservative"
+        mode = env.get("ROUTER_MODE", default_mode).strip().lower()
         if mode not in {"conservative", "balanced", "aggressive", "accuracy_first"}:
-            mode = "conservative"
+            mode = default_mode
+        local_model_path = env.get("LOCAL_MODEL_PATH")
 
         return cls(
             input_path=Path(env.get("INPUT_PATH", "/input/tasks.json")),
@@ -257,6 +278,11 @@ class RuntimeConfig:
             local_cross_check_enabled=_get_bool_from(env, "LOCAL_CROSS_CHECK_ENABLED", True),
             local_model_enabled=_get_bool_from(env, "LOCAL_MODEL_ENABLED", False),
             local_model_command=env.get("LOCAL_MODEL_COMMAND") or None,
+            local_model_path=Path(local_model_path) if local_model_path else None,
+            local_model_max_tokens=_get_int_from(env, "LOCAL_MODEL_MAX_TOKENS", 128, 1, 512),
+            local_model_context=_get_int_from(env, "LOCAL_MODEL_CONTEXT", 1024, 256, 4096),
+            local_model_threads=_get_int_from(env, "LOCAL_MODEL_THREADS", 2, 1, 8),
+            local_model_temperature=_get_float_from(env, "LOCAL_MODEL_TEMPERATURE", 0.0, 0.0, 1.0),
             local_model_timeout_seconds=_get_int_from(env, "LOCAL_MODEL_TIMEOUT_SECONDS", 20, 1, 120),
             local_model_max_chars=_get_int_from(env, "LOCAL_MODEL_MAX_CHARS", 4096, 128, 20000),
             router_log_path=Path(router_log_path) if router_log_path else None,
@@ -264,6 +290,7 @@ class RuntimeConfig:
             fireworks_base_url=env.get("FIREWORKS_BASE_URL"),
             allowed_models=tuple(parse_allowed_models(env.get("ALLOWED_MODELS"))),
             fireworks_max_tokens=_get_int_from(env, "FIREWORKS_MAX_TOKENS", 256, 1, 4096),
+            router_profile=profile,
             prompt_policy_remote_accuracy=_get_prompt_policy_from(env, "ROUTER_PROMPT_POLICY_REMOTE_ACCURACY", "compact"),
             prompt_policy_remote_code=_get_prompt_policy_from(env, "ROUTER_PROMPT_POLICY_REMOTE_CODE", "answer_only"),
             prompt_policy_remote_format_strict=_get_prompt_policy_from(

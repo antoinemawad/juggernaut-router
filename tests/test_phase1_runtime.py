@@ -7,6 +7,8 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.error import URLError
 
+from app.agent import _local_model_skip_reason
+from app.classifier import classify_prompt
 from app.config import DEFAULT_ALLOWED_PLANNING_MODELS, RuntimeConfig, parse_allowed_models
 from app.deadline import DeadlineManager
 from app.fireworks_client import ask_fireworks_structured, select_allowed_model
@@ -213,6 +215,88 @@ class Phase1RuntimeTests(unittest.TestCase):
         with patch.dict(os.environ, {"ROUTER_MODE": "accuracy_first"}, clear=True):
             config = RuntimeConfig.from_env()
         self.assertEqual(config.router_mode, "accuracy_first")
+
+    def test_config_maps_accuracy_gate_profile_to_accuracy_first(self):
+        with patch.dict(os.environ, {"ROUTER_PROFILE": "accuracy_gate"}, clear=True):
+            config = RuntimeConfig.from_env()
+        self.assertEqual(config.router_profile, "accuracy_gate")
+        self.assertEqual(config.router_mode, "accuracy_first")
+
+    def test_config_parses_local_llm_knobs(self):
+        with patch.dict(
+            os.environ,
+            {
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_PATH": "/app/models/qwen.gguf",
+                "LOCAL_MODEL_MAX_TOKENS": "96",
+                "LOCAL_MODEL_CONTEXT": "2048",
+                "LOCAL_MODEL_THREADS": "2",
+                "LOCAL_MODEL_TEMPERATURE": "0",
+            },
+            clear=True,
+        ):
+            config = RuntimeConfig.from_env()
+
+        self.assertTrue(config.local_model_enabled)
+        self.assertEqual(str(config.local_model_path), "/app/models/qwen.gguf")
+        self.assertEqual(config.local_model_max_tokens, 96)
+        self.assertEqual(config.local_model_context, 2048)
+        self.assertEqual(config.local_model_threads, 2)
+        self.assertEqual(config.local_model_temperature, 0)
+
+    def test_accuracy_gate_skips_local_model_for_ambiguous_long_task(self):
+        config = RuntimeConfig(
+            input_path=Path("/input/tasks.json"),
+            output_path=Path("/output/results.json"),
+            router_mode="accuracy_first",
+            local_confidence_threshold=0.95,
+            fireworks_timeout_seconds=25,
+            fireworks_max_retries=0,
+            batch_deadline_seconds=600,
+            deadline_safety_margin_seconds=60,
+            remote_worker_count=2,
+            local_proof_budget_ms=100,
+            local_cross_check_enabled=True,
+            router_log_path=None,
+            fireworks_api_key=None,
+            fireworks_base_url=None,
+            allowed_models=(),
+            fireworks_max_tokens=192,
+            router_profile="accuracy_gate",
+            local_model_enabled=True,
+            local_model_path=Path("/app/models/qwen.gguf"),
+        )
+        prompt = "Maybe answer this ambiguous task: " + ("details " * 300)
+        reason = _local_model_skip_reason(config, None, classify_prompt(prompt), prompt)
+
+        self.assertIn(reason, {"ambiguous_task", "prompt_too_long_for_local_model"})
+
+    def test_accuracy_gate_allows_short_verifiable_local_model_task(self):
+        config = RuntimeConfig(
+            input_path=Path("/input/tasks.json"),
+            output_path=Path("/output/results.json"),
+            router_mode="accuracy_first",
+            local_confidence_threshold=0.95,
+            fireworks_timeout_seconds=25,
+            fireworks_max_retries=0,
+            batch_deadline_seconds=600,
+            deadline_safety_margin_seconds=60,
+            remote_worker_count=2,
+            local_proof_budget_ms=100,
+            local_cross_check_enabled=True,
+            router_log_path=None,
+            fireworks_api_key=None,
+            fireworks_base_url=None,
+            allowed_models=(),
+            fireworks_max_tokens=192,
+            router_profile="accuracy_gate",
+            local_model_enabled=True,
+            local_model_path=Path("/app/models/qwen.gguf"),
+        )
+        prompt = "Classify sentiment as positive, negative, or neutral: The setup was easy."
+        reason = _local_model_skip_reason(config, None, classify_prompt(prompt), prompt)
+
+        self.assertIsNone(reason)
 
     def test_load_tasks_accepts_wrapped_official_shape_and_field_aliases(self):
         with tempfile.TemporaryDirectory() as tmpdir:

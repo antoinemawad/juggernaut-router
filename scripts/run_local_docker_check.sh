@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+IMAGE="${IMAGE:-juggernaut-router:local-model}"
+INPUT_DIR="${INPUT_DIR:-$(pwd)/local_test/accuracy_gate_input}"
+OUTPUT_DIR="${OUTPUT_DIR:-$(pwd)/local_test/output/local_model_check}"
+
+mkdir -p "$OUTPUT_DIR"
+rm -f "$OUTPUT_DIR/results.json" "$OUTPUT_DIR/router_log.jsonl"
+
+docker run --rm \
+  --platform linux/amd64 \
+  --memory=4g \
+  --cpus=2 \
+  -e LOCAL_MODEL_ENABLED="${LOCAL_MODEL_ENABLED:-true}" \
+  -e LOCAL_MODEL_PATH="${LOCAL_MODEL_PATH:-/app/models/local-model.gguf}" \
+  -e ROUTER_PROFILE="${ROUTER_PROFILE:-accuracy_gate}" \
+  -e ROUTER_LOG_PATH=/output/router_log.jsonl \
+  -v "$INPUT_DIR:/input:ro" \
+  -v "$OUTPUT_DIR:/output" \
+  "$IMAGE"
+
+python3 - "$INPUT_DIR/tasks.json" "$OUTPUT_DIR/results.json" "$OUTPUT_DIR/router_log.jsonl" <<'PY'
+import json
+import sys
+from collections import Counter
+from pathlib import Path
+
+input_path = Path(sys.argv[1])
+output_path = Path(sys.argv[2])
+log_path = Path(sys.argv[3])
+
+payload = json.loads(input_path.read_text())
+tasks = payload["tasks"] if isinstance(payload, dict) and isinstance(payload.get("tasks"), list) else payload
+results = json.loads(output_path.read_text())
+
+if not isinstance(results, list):
+    raise SystemExit("results.json is not a list")
+if not results:
+    raise SystemExit("results.json is []")
+if len(results) != len(tasks):
+    raise SystemExit(f"answer count mismatch: tasks={len(tasks)} answers={len(results)}")
+
+records = []
+if log_path.exists():
+    records = [json.loads(line) for line in log_path.read_text().splitlines() if line.strip()]
+
+routes = Counter(record.get("route") for record in records if record.get("task_id"))
+remote_calls = sum(1 for record in records if record.get("fireworks_called"))
+fallbacks = routes.get("fallback", 0)
+local_model = routes.get("local_model", 0)
+deterministic = routes.get("local", 0)
+
+print(f"tasks_read: {len(tasks)}")
+print(f"answers_written: {len(results)}")
+print(f"deterministic_count: {deterministic}")
+print(f"local_llm_count: {local_model}")
+print(f"remote_calls: {remote_calls}")
+print(f"fallbacks: {fallbacks}")
+print("first_5_answers:")
+for row in results[:5]:
+    print(json.dumps(row, ensure_ascii=False))
+PY

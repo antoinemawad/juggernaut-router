@@ -16,7 +16,9 @@ venv/
 
 # Model/cache artifacts
 .cache/
-models/
+models/*
+!models/
+!models/.gitkeep
 checkpoints/
 *.safetensors
 *.bin

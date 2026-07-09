@@ -18,7 +18,10 @@ eval/
 eval_runs/
 local_test/
 logs/
-models/
+models/*
+!models/
+!models/.gitkeep
+!models/*.gguf
 checkpoints/
 *.safetensors
 *.bin
