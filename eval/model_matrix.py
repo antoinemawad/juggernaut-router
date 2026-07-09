@@ -326,7 +326,19 @@ def call_fireworks(model, scenario, prompt, max_tokens, allow_normal_fireworks_d
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         data = json.loads(response.read().decode("utf-8"))
-    answer = data["choices"][0]["message"]["content"].strip()
+    choices = data.get("choices") or []
+    if not choices:
+        raise ValueError("Fireworks response contained no choices")
+    choice = choices[0] or {}
+    message = choice.get("message") or {}
+    content = message.get("content")
+    if content is None:
+        finish_reason = choice.get("finish_reason")
+        raise ValueError(f"Fireworks response message content was null; finish_reason={finish_reason}")
+    answer = str(content).strip()
+    if not answer:
+        finish_reason = choice.get("finish_reason")
+        raise ValueError(f"Fireworks response message content was empty; finish_reason={finish_reason}")
     usage = data.get("usage", {})
     return answer, {
         "prompt_tokens": usage.get("prompt_tokens", estimate_tokens(prompt)),

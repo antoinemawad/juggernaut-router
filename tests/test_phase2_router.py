@@ -21,6 +21,7 @@ from eval.model_matrix import (
     load_scenarios,
     parse_categories,
     prompt_for_policy,
+    run_case,
     score_answer,
 )
 from eval import agent_matrix
@@ -116,6 +117,50 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(len(access_failures), 1)
         self.assertEqual(recommendations["factual_knowledge"]["model"], "kimi-k2p7-code")
         self.assertTrue(recommendations["factual_knowledge"]["eligible"])
+
+    def test_model_matrix_records_null_fireworks_content_as_error(self):
+        class NullContentResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self):
+                return json.dumps({
+                    "choices": [{"message": {"content": None}, "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 0, "total_tokens": 10},
+                }).encode("utf-8")
+
+        scenario = {
+            "task_id": "null_content",
+            "category": "factual_knowledge",
+            "prompt": "Return exactly: OK",
+            "expected_keywords": ["OK"],
+            "expected_answer": "OK",
+            "verifier": "keyword_coverage",
+        }
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://api." + "fireworks.ai/inference/v1",
+                "FIREWORKS_DEV_MODEL_MAP": "gemma-4-31b-it-nvfp4=accounts/example/deployments/demo",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=NullContentResponse()):
+            row = run_case(
+                "gemma-4-31b-it-nvfp4",
+                scenario,
+                live=True,
+                max_tokens=16,
+                prompt_policy="original",
+                allow_normal_fireworks_dev=True,
+            )
+
+        self.assertFalse(row["passed"])
+        self.assertIn("content was null", row["error"])
+        self.assertEqual(row["provider_model"], "accounts/example/deployments/demo")
 
     def test_risk_components_include_planned_dimensions(self):
         classification = classify_prompt(
