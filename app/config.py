@@ -18,6 +18,13 @@ DEFAULT_REMOTE_CODE_MODELS = ("kimi-k2p7-code", "minimax-m3", "gemma-4-31b-it")
 DEFAULT_REMOTE_FORMAT_STRICT_MODELS = ("minimax-m3", "kimi-k2p7-code", "gemma-4-31b-it")
 DEFAULT_REMOTE_CONCISE_MODELS = ("minimax-m3", "gemma-4-26b-a4b-it", "gemma-4-31b-it")
 DEFAULT_REMOTE_ESCALATION_MODELS = ("kimi-k2p7-code", "minimax-m3", "gemma-4-31b-it")
+DEFAULT_ACCURACY_FIRST_MODELS = (
+    "gemma-4-31b-it",
+    "kimi-k2p7-code",
+    "gemma-4-26b-a4b-it",
+    "minimax-m3",
+    "gemma-4-31b-it-nvfp4",
+)
 RECOMMENDATION_EXPORT_NAMES = {
     "FIREWORKS_MAX_TOKENS",
     "LOCAL_CONFIDENCE_THRESHOLD",
@@ -233,7 +240,7 @@ class RuntimeConfig:
         env = _effective_env()
         router_log_path = env.get("ROUTER_LOG_PATH")
         mode = env.get("ROUTER_MODE", "conservative").strip().lower()
-        if mode not in {"conservative", "balanced", "aggressive"}:
+        if mode not in {"conservative", "balanced", "aggressive", "accuracy_first"}:
             mode = "conservative"
 
         return cls(

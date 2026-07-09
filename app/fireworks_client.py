@@ -12,6 +12,7 @@ from app.types import SAFE_FALLBACK_ANSWER
 class FireworksResult:
     answer: str
     model: str | None = None
+    http_status: int | None = None
     completion_tokens: int | None = None
     total_tokens: int | None = None
     elapsed_ms: int = 0
@@ -97,16 +98,20 @@ def ask_fireworks_structured(
         try:
             with urllib.request.urlopen(request, timeout=config.fireworks_timeout_seconds) as response:
                 data = json.loads(response.read().decode("utf-8"))
+                http_status = getattr(response, "status", None)
             answer = _extract_answer(data)
             usage = data.get("usage") if isinstance(data, dict) else None
             return FireworksResult(
                 answer=answer,
                 model=model,
+                http_status=http_status,
                 completion_tokens=_usage_int(usage, "completion_tokens"),
                 total_tokens=_usage_int(usage, "total_tokens"),
                 elapsed_ms=timer.elapsed_ms(),
                 retry_count=attempt,
             )
+        except urllib.error.HTTPError as exc:
+            last_error = f"fireworks_http_error:{exc.code}:{_safe_error_body(exc)}"
         except (TimeoutError, urllib.error.URLError) as exc:
             last_error = f"fireworks_network_error:{type(exc).__name__}"
         except (json.JSONDecodeError, ValueError, KeyError, TypeError) as exc:
@@ -134,6 +139,14 @@ def _extract_answer(data) -> str:
     if not isinstance(content, str) or not content.strip():
         raise ValueError("missing_content")
     return content.strip()
+
+
+def _safe_error_body(exc: urllib.error.HTTPError) -> str:
+    try:
+        body = exc.read(500).decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+    return " ".join(body.split())
 
 
 def _usage_int(usage, key: str) -> int | None:

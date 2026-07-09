@@ -1,5 +1,5 @@
 from app.classifier import classify_prompt
-from app.config import RuntimeConfig
+from app.config import DEFAULT_ACCURACY_FIRST_MODELS, RuntimeConfig
 from app.deadline import DeadlineManager, StageTimer
 from app.fireworks_client import ask_fireworks_structured
 from app.local_model_client import ask_local_model_structured
@@ -238,6 +238,9 @@ def answer_task(
             "remote_validation_passed": list(remote_validation.passed_layers),
             "remote_validation_failed": list(remote_validation.failed_layers),
             "remote_validation_notes": list(remote_validation.notes),
+            "fireworks_called": remote.model is not None,
+            "fireworks_http_status": remote.http_status,
+            "fireworks_error": remote.error,
             "remote_validation_escalation_enabled": config.remote_validation_escalation_enabled,
             "local_model_attempted": local_model is not None,
             "local_model_error": local_model.error if local_model is not None else None,
@@ -332,6 +335,8 @@ def _preferred_models_for_remote_mode(
 ) -> tuple[str, ...]:
     if category and config.models_by_category and category in config.models_by_category:
         return config.models_by_category[category]
+    if config.router_mode == "accuracy_first":
+        return DEFAULT_ACCURACY_FIRST_MODELS
     if remote_mode == "remote_code":
         return config.models_remote_code
     if remote_mode == "remote_accuracy":
@@ -344,7 +349,7 @@ def _preferred_models_for_remote_mode(
 def _should_escalate_remote_answer(remote, remote_validation, config: RuntimeConfig, deadline: DeadlineManager | None) -> bool:
     if not config.remote_validation_escalation_enabled:
         return False
-    if remote.error is not None or remote_validation.accepted:
+    if remote.error is None and remote_validation.accepted:
         return False
     if not _escalation_models(remote.model, config):
         return False
@@ -362,7 +367,8 @@ def _should_try_local_model(config: RuntimeConfig, deadline: DeadlineManager | N
 
 
 def _escalation_models(current_model: str | None, config: RuntimeConfig) -> tuple[str, ...]:
-    return tuple(model for model in config.models_remote_escalation if model != current_model)
+    models = DEFAULT_ACCURACY_FIRST_MODELS if config.router_mode == "accuracy_first" else config.models_remote_escalation
+    return tuple(model for model in models if model != current_model)
 
 
 def _escalation_prompt_policy(prompt_policy: str) -> str:

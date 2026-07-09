@@ -1,0 +1,16 @@
+{
+  "tasks": [
+    {
+      "id": "official_like_factual",
+      "question": "In two sentences, explain why a Track 1 router must call Fireworks through FIREWORKS_BASE_URL instead of a hardcoded public API URL."
+    },
+    {
+      "id": "official_like_math",
+      "question": "A product costs $80 and is discounted by 25%. What is the final price? Return only the number with a dollar sign."
+    },
+    {
+      "id": "official_like_code",
+      "question": "Write a Python function named clamp(x, low, high) that returns low when x is below low, high when x is above high, and x otherwise. Return only code."
+    }
+  ]
+}

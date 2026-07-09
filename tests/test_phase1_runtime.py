@@ -10,7 +10,7 @@ from urllib.error import URLError
 from app.config import DEFAULT_ALLOWED_PLANNING_MODELS, RuntimeConfig, parse_allowed_models
 from app.deadline import DeadlineManager
 from app.fireworks_client import ask_fireworks_structured, select_allowed_model
-from app.main import main
+from app.main import load_tasks, main
 from app.normalization import normalize_answer
 from app.telemetry import TelemetryLogger
 from app.types import SAFE_FALLBACK_ANSWER, AgentResult
@@ -208,6 +208,51 @@ class Phase1RuntimeTests(unittest.TestCase):
         with patch.dict(os.environ, {"FIREWORKS_TIMEOUT_SECONDS": "99"}, clear=True):
             config = RuntimeConfig.from_env()
         self.assertEqual(config.fireworks_timeout_seconds, 29)
+
+    def test_config_accepts_accuracy_first_mode(self):
+        with patch.dict(os.environ, {"ROUTER_MODE": "accuracy_first"}, clear=True):
+            config = RuntimeConfig.from_env()
+        self.assertEqual(config.router_mode, "accuracy_first")
+
+    def test_load_tasks_accepts_wrapped_official_shape_and_field_aliases(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "tasks.json"
+            input_path.write_text(
+                json.dumps({
+                    "tasks": [
+                        {"id": "q1", "question": "What is ROCm?"},
+                        {"uid": "q2", "input": {"text": "Summarize AMD GPUs."}},
+                    ]
+                }),
+                encoding="utf-8",
+            )
+            config = RuntimeConfig(input_path=input_path, output_path=Path(tmpdir) / "out.json", router_mode="conservative", local_confidence_threshold=0.95, fireworks_timeout_seconds=25, fireworks_max_retries=0, batch_deadline_seconds=600, deadline_safety_margin_seconds=60, remote_worker_count=2, local_proof_budget_ms=100, local_cross_check_enabled=True, router_log_path=None, fireworks_api_key=None, fireworks_base_url=None, allowed_models=(), fireworks_max_tokens=192)
+
+            tasks, error, diagnostics = load_tasks(config)
+
+        self.assertIsNone(error)
+        self.assertEqual(len(tasks), 2)
+        self.assertEqual(tasks[0]["task_id"], "q1")
+        self.assertEqual(tasks[0]["prompt"], "What is ROCm?")
+        self.assertEqual(tasks[1]["task_id"], "q2")
+        self.assertIn("Summarize AMD GPUs", tasks[1]["prompt"])
+        self.assertEqual(diagnostics["tasks_parsed"], 2)
+
+    def test_load_tasks_discovers_single_json_file_when_default_missing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_dir = Path(tmpdir)
+            (input_dir / "input.json").write_text(
+                json.dumps([{"id": "q1", "text": "Classify sentiment: good."}]),
+                encoding="utf-8",
+            )
+            config = RuntimeConfig(input_path=input_dir / "tasks.json", output_path=input_dir / "out.json", router_mode="conservative", local_confidence_threshold=0.95, fireworks_timeout_seconds=25, fireworks_max_retries=0, batch_deadline_seconds=600, deadline_safety_margin_seconds=60, remote_worker_count=2, local_proof_budget_ms=100, local_cross_check_enabled=True, router_log_path=None, fireworks_api_key=None, fireworks_base_url=None, allowed_models=(), fireworks_max_tokens=192)
+
+            tasks, error, diagnostics = load_tasks(config)
+
+        self.assertIsNone(error)
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["task_id"], "q1")
+        self.assertEqual(diagnostics["input_path_used"], str(input_dir / "input.json"))
 
     def test_config_parses_local_proof_and_cross_check_knobs(self):
         with patch.dict(
