@@ -2,6 +2,7 @@ from app.classifier import classify_prompt
 from app.config import RuntimeConfig
 from app.deadline import DeadlineManager, StageTimer
 from app.fireworks_client import ask_fireworks_structured
+from app.local_model_client import ask_local_model_structured
 from app.normalization import normalize_answer
 from app.solvers.basic import try_basic_solver_structured
 from app.types import SAFE_FALLBACK_ANSWER, AgentResult, TimingMetrics
@@ -81,6 +82,58 @@ def answer_task(
     prompt_policy = _prompt_policy_for_remote_mode(remote_mode, config, classification.category)
     remote_prompt = _apply_prompt_policy(prompt, prompt_policy)
     remote_prompt_token_estimate = estimate_tokens(remote_prompt)
+    system_prompt = _system_prompt_for_remote_mode(remote_mode)
+
+    local_model = None
+    local_model_validation = None
+    if _should_try_local_model(config, deadline):
+        local_model = ask_local_model_structured(
+            remote_prompt,
+            config=config,
+            deadline=deadline,
+            system_prompt=system_prompt,
+        )
+        timings.local_model_elapsed_ms = local_model.elapsed_ms
+        if local_model.error is None:
+            normalize_timer = StageTimer()
+            local_model_answer = _normalize_for_classification(local_model.answer, prompt, classification)
+            timings.normalization_elapsed_ms += normalize_timer.elapsed_ms()
+            local_model_validation = validate_remote_answer(prompt, local_model_answer, classification)
+            if local_model_validation.accepted:
+                _finish_timings(timings, task_timer, deadline)
+                return AgentResult(
+                    answer=local_model_answer,
+                    route="local_model",
+                    route_reason="local_model_validated",
+                    category=classification.category,
+                    router_mode=config.router_mode,
+                    selected_model="local_model",
+                    remote_mode=remote_mode,
+                    prompt_policy=prompt_policy,
+                    max_tokens=config.fireworks_max_tokens,
+                    prompt_char_count=prompt_char_count,
+                    prompt_token_estimate=prompt_token_estimate,
+                    remote_prompt_token_estimate=remote_prompt_token_estimate,
+                    completion_tokens=0,
+                    total_tokens=0,
+                    deadline_decision=_deadline_decision(deadline, config),
+                    timings=timings,
+                    metadata={
+                        "answer_shape": classification.answer_shape,
+                        "constraints": list(classification.constraints),
+                        "classification_confidence": classification.confidence,
+                        "risk_score": classification.risk_score,
+                        "risk_components": classification.risk_components,
+                        "solver_confidence": local_result.confidence if local_result is not None else None,
+                        "local_evidence": list(local_result.evidence) if local_result is not None else [],
+                        "local_proof_layers_passed": list(validation.passed_layers),
+                        "local_proof_layers_failed": list(validation.failed_layers),
+                        "validator_notes": list(validation.notes),
+                        "local_model_validation_passed": list(local_model_validation.passed_layers),
+                        "local_model_validation_failed": list(local_model_validation.failed_layers),
+                        "local_model_validation_notes": list(local_model_validation.notes),
+                    },
+                )
     if deadline is not None and not deadline.can_spend(config.fireworks_timeout_seconds):
         _finish_timings(timings, task_timer, deadline)
         return AgentResult(
@@ -109,6 +162,10 @@ def answer_task(
                 "local_proof_layers_passed": list(validation.passed_layers),
                 "local_proof_layers_failed": list(validation.failed_layers),
                 "validator_notes": list(validation.notes),
+                "local_model_error": local_model.error if local_model is not None else None,
+                "local_model_validation_failed": (
+                    list(local_model_validation.failed_layers) if local_model_validation is not None else []
+                ),
             },
         )
 
@@ -117,7 +174,7 @@ def answer_task(
         config=config,
         deadline=deadline,
         preferred_models=_preferred_models_for_remote_mode(remote_mode, config, classification.category),
-        system_prompt=_system_prompt_for_remote_mode(remote_mode),
+        system_prompt=system_prompt,
     )
     timings.remote_elapsed_ms = remote.elapsed_ms
     normalize_timer = StageTimer()
@@ -182,6 +239,11 @@ def answer_task(
             "remote_validation_failed": list(remote_validation.failed_layers),
             "remote_validation_notes": list(remote_validation.notes),
             "remote_validation_escalation_enabled": config.remote_validation_escalation_enabled,
+            "local_model_attempted": local_model is not None,
+            "local_model_error": local_model.error if local_model is not None else None,
+            "local_model_validation_failed": (
+                list(local_model_validation.failed_layers) if local_model_validation is not None else []
+            ),
             "remote_escalated_after_validation": escalation is not None,
             "remote_escalation_model": escalation.model if escalation is not None else None,
             "remote_escalation_error": escalation.error if escalation is not None else None,
@@ -287,6 +349,14 @@ def _should_escalate_remote_answer(remote, remote_validation, config: RuntimeCon
     if not _escalation_models(remote.model, config):
         return False
     if deadline is not None and not deadline.should_retry(config.fireworks_timeout_seconds):
+        return False
+    return True
+
+
+def _should_try_local_model(config: RuntimeConfig, deadline: DeadlineManager | None) -> bool:
+    if not config.local_model_enabled or not config.local_model_command:
+        return False
+    if deadline is not None and not deadline.can_spend(config.local_model_timeout_seconds):
         return False
     return True
 

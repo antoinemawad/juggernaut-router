@@ -31,6 +31,7 @@ from scripts.recommend_from_model_matrix import (
     evidence_status,
     exports_for_recommendations,
     main as recommend_from_model_matrix_main,
+    split_access_failures,
 )
 from scripts.validate_runtime_recommendation import load_recommendation
 from scripts.recommend_runtime_env import exports_for_config
@@ -76,6 +77,45 @@ class Phase2RouterTests(unittest.TestCase):
         for prompt, expected in cases.items():
             with self.subTest(expected=expected):
                 self.assertEqual(classify_prompt(prompt).category, expected)
+
+    def test_recommendation_excludes_access_failures_from_quality_scoring(self):
+        rows = [
+            {
+                "run_id": "good",
+                "category": "factual_knowledge",
+                "model": "kimi-k2p7-code",
+                "prompt_policy": "original",
+                "passed": True,
+                "score": 1.0,
+                "total_tokens": 100,
+                "error": None,
+                "access_status": "ok",
+            },
+            {
+                "run_id": "access",
+                "category": "factual_knowledge",
+                "model": "gemma-4-26b-a4b-it",
+                "prompt_policy": "original",
+                "passed": False,
+                "score": 0.0,
+                "total_tokens": 0,
+                "error": "HTTPError: HTTP Error 404: Not Found body={\"code\":\"NOT_FOUND\"}",
+                "access_status": "not_found_or_no_access",
+            },
+        ]
+        quality_rows, access_failures = split_access_failures(rows)
+        recommendations = choose_by_category(
+            rows=quality_rows,
+            min_pass_rate=0.80,
+            min_avg_score=0.80,
+            min_runs=1,
+            fallback_model="minimax-m3",
+            fallback_policy="original",
+        )
+
+        self.assertEqual(len(access_failures), 1)
+        self.assertEqual(recommendations["factual_knowledge"]["model"], "kimi-k2p7-code")
+        self.assertTrue(recommendations["factual_knowledge"]["eligible"])
 
     def test_risk_components_include_planned_dimensions(self):
         classification = classify_prompt(
@@ -176,6 +216,67 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.prompt_policy, "compact")
         self.assertEqual(captured["url"], "https://judge-proxy.example/v1/chat/completions")
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
+
+    def test_valid_local_model_answer_prevents_fireworks_call(self):
+        from app.local_model_client import LocalModelResult
+
+        with patch.dict(
+            os.environ,
+            {
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(answer="negative", elapsed_ms=3),
+        ) as local_model, patch("app.agent.ask_fireworks_structured") as fireworks:
+            result = answer_task(
+                "local_model_sentiment",
+                "Classify the sentiment as positive, negative, or neutral. Return only the label: Yeah right, the outage was just perfect.",
+            )
+
+        local_model.assert_called_once()
+        fireworks.assert_not_called()
+        self.assertEqual(result.route, "local_model")
+        self.assertEqual(result.answer, "negative")
+        self.assertEqual(result.total_tokens, 0)
+        self.assertEqual(result.timings.local_model_elapsed_ms, 3)
+
+    def test_invalid_local_model_answer_falls_through_to_fireworks(self):
+        from app.fireworks_client import FireworksResult
+        from app.local_model_client import LocalModelResult
+
+        with patch.dict(
+            os.environ,
+            {
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(answer="The user wants me to choose a label.", elapsed_ms=3),
+        ), patch(
+            "app.agent.ask_fireworks_structured",
+            return_value=FireworksResult(answer="negative", model="minimax-m3", completion_tokens=1, total_tokens=8),
+        ) as fireworks:
+            result = answer_task(
+                "remote_after_bad_local_model",
+                "Classify the sentiment as positive, negative, or neutral. Return only the label: Yeah right, the outage was just perfect.",
+            )
+
+        fireworks.assert_called_once()
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.answer, "negative")
+        self.assertEqual(result.total_tokens, 8)
+        self.assertIn("reasoning_leakage", result.metadata["local_model_validation_failed"])
 
     def test_remote_accuracy_prompt_policy_can_be_overridden(self):
         captured = {}

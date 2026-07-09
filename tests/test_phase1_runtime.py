@@ -7,15 +7,21 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.error import URLError
 
-from app.config import RuntimeConfig, parse_allowed_models
+from app.config import DEFAULT_ALLOWED_PLANNING_MODELS, RuntimeConfig, parse_allowed_models
 from app.deadline import DeadlineManager
 from app.fireworks_client import ask_fireworks_structured, select_allowed_model
 from app.main import main
 from app.normalization import normalize_answer
 from app.telemetry import TelemetryLogger
 from app.types import SAFE_FALLBACK_ANSWER, AgentResult
-from eval.model_matrix import parse_dev_model_map, provider_model_for
+from eval.model_matrix import classify_access_error, parse_dev_model_map, provider_model_for
 from scripts.check_live_eval_env import validate_live_eval_env
+from scripts.debug_fireworks_models import (
+    evaluate_model,
+    is_ready_state,
+    is_not_ready_state,
+    official_model_path,
+)
 from scripts.final_submission_commands import validate_image_ref
 from scripts.validate_runtime_recommendation import isolated_env, validate_recommendation
 from scripts import check_submission_static
@@ -49,6 +55,85 @@ class FakeResponse:
 
 
 class Phase1RuntimeTests(unittest.TestCase):
+    def test_official_track1_aliases_remain_in_config(self):
+        self.assertEqual(
+            DEFAULT_ALLOWED_PLANNING_MODELS,
+            (
+                "minimax-m3",
+                "kimi-k2p7-code",
+                "gemma-4-31b-it",
+                "gemma-4-26b-a4b-it",
+                "gemma-4-31b-it-nvfp4",
+            ),
+        )
+
+    def test_model_access_classifier_categorizes_plain_404_as_no_access(self):
+        self.assertEqual(
+            classify_access_error("HTTPError: HTTP Error 404: Not Found body={\"code\":\"NOT_FOUND\"}"),
+            "not_found_or_no_access",
+        )
+
+    def test_deployment_state_helpers(self):
+        self.assertTrue(is_not_ready_state("CREATING"))
+        self.assertTrue(is_not_ready_state("INITIALIZING"))
+        self.assertTrue(is_not_ready_state("STARTING"))
+        self.assertTrue(is_ready_state("READY"))
+        self.assertTrue(is_ready_state("RUNNING"))
+
+    def test_404_while_deployment_creating_is_deployment_not_ready(self):
+        deployment = {
+            "name": "accounts/antoinemawad-j26hhi0/deployments/demo",
+            "displayName": "gemma-4-26b-a4b-it",
+            "baseModel": official_model_path("gemma-4-26b-a4b-it"),
+            "state": "CREATING",
+            "status": None,
+            "desiredReplicaCount": 1,
+            "directRouteHandle": None,
+            "directRouteType": None,
+            "activeModelVersion": None,
+        }
+        with patch(
+            "scripts.debug_fireworks_models.call_chat_model",
+            return_value=type("Result", (), {
+                "status": "not_found_or_no_access",
+                "http_status": 404,
+                "answer": "",
+                "latency_ms": 1.0,
+                "error": "HTTPError: HTTP Error 404: Not Found",
+            })(),
+        ):
+            result = evaluate_model("gemma-4-26b-a4b-it", [deployment], "antoinemawad-j26hhi0", False)
+
+        self.assertEqual(result["status"], "deployment_not_ready")
+        self.assertTrue(result["deployment_summary"]["any_not_ready"])
+
+    def test_ready_deployment_is_recorded_as_callable_candidate(self):
+        deployment = {
+            "name": "accounts/antoinemawad-j26hhi0/deployments/demo",
+            "displayName": "gemma-4-26b-a4b-it",
+            "baseModel": official_model_path("gemma-4-26b-a4b-it"),
+            "state": "READY",
+            "status": None,
+            "desiredReplicaCount": 1,
+            "directRouteHandle": None,
+            "directRouteType": None,
+            "activeModelVersion": None,
+        }
+        with patch(
+            "scripts.debug_fireworks_models.call_chat_model",
+            return_value=type("Result", (), {
+                "status": "ok",
+                "http_status": 200,
+                "answer": "OK",
+                "latency_ms": 1.0,
+                "error": None,
+            })(),
+        ):
+            result = evaluate_model("gemma-4-26b-a4b-it", [deployment], "antoinemawad-j26hhi0", False)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(result["deployment_summary"]["any_ready"])
+
     def test_static_submission_guard_core_checks_pass(self):
         self.assertEqual(check_submission_static.check_no_forbidden_runtime_url(), [])
         self.assertEqual(check_submission_static.check_no_forbidden_tracked_files(), [])
@@ -130,12 +215,20 @@ class Phase1RuntimeTests(unittest.TestCase):
             {
                 "LOCAL_PROOF_BUDGET_MS": "250",
                 "LOCAL_CROSS_CHECK_ENABLED": "false",
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "local-model-wrapper",
+                "LOCAL_MODEL_TIMEOUT_SECONDS": "17",
+                "LOCAL_MODEL_MAX_CHARS": "2048",
             },
             clear=True,
         ):
             config = RuntimeConfig.from_env()
         self.assertEqual(config.local_proof_budget_ms, 250)
         self.assertFalse(config.local_cross_check_enabled)
+        self.assertTrue(config.local_model_enabled)
+        self.assertEqual(config.local_model_command, "local-model-wrapper")
+        self.assertEqual(config.local_model_timeout_seconds, 17)
+        self.assertEqual(config.local_model_max_chars, 2048)
 
     def test_config_parses_remote_prompt_policy_knobs(self):
         with patch.dict(

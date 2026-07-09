@@ -56,6 +56,7 @@ def main():
         "app/config.py",
         "app/deadline.py",
         "app/fireworks_client.py",
+        "app/local_model_client.py",
         "app/normalization.py",
         "app/solvers/basic.py",
         "app/telemetry.py",

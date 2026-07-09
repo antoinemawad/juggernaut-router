@@ -31,6 +31,17 @@ DEFAULT_SCENARIOS = Path(__file__).with_name("model_matrix_scenarios.jsonl")
 DEFAULT_OUT_DIR = Path(__file__).resolve().parents[1] / "eval_runs"
 PROMPT_POLICIES = ("original", "compact", "answer_only", "final_only")
 NORMAL_FIREWORKS_HOST = "api." + "fireworks.ai"
+ACCESS_FAILURE_STATUSES = {
+    "not_found_or_no_access",
+    "deployment_not_ready",
+    "auth_error",
+    "payload_error",
+    "rate_limit",
+    "server_error",
+    "timeout",
+    "network_error",
+    "unknown_error",
+}
 
 
 def load_scenarios(path):
@@ -77,7 +88,7 @@ def normal_fireworks_dev_enabled(allow_normal_fireworks_dev=False):
 
 def parse_dev_model_map(raw):
     mapping = {}
-    for item in raw.split(","):
+    for item in re.split(r"[,;]", raw):
         item = item.strip()
         if not item:
             continue
@@ -90,6 +101,29 @@ def parse_dev_model_map(raw):
             raise ValueError("FIREWORKS_DEV_MODEL_MAP entries must not be empty")
         mapping[alias] = provider_model
     return mapping
+
+
+def classify_access_error(error):
+    text = str(error or "").lower()
+    if not text:
+        return "ok"
+    if "deployment_not_ready" in text or "creating" in text or "initializing" in text or "starting" in text:
+        return "deployment_not_ready"
+    if "http error 401" in text or "http error 403" in text or "unauthorized" in text or "forbidden" in text:
+        return "auth_error"
+    if "http error 404" in text or "not_found" in text or "not found" in text or "inaccessible" in text:
+        return "not_found_or_no_access"
+    if "http error 400" in text or "invalid request" in text or "payload" in text:
+        return "payload_error"
+    if "http error 429" in text or "rate limit" in text:
+        return "rate_limit"
+    if "http error 5" in text or "server error" in text:
+        return "server_error"
+    if "timeouterror" in text or "timed out" in text or "timeout" in text:
+        return "timeout"
+    if "urlerror" in text or "network" in text or "connection" in text:
+        return "network_error"
+    return "unknown_error"
 
 
 def provider_model_for(alias, allow_normal_fireworks_dev=False):
@@ -294,6 +328,7 @@ def run_case(model, scenario, live, max_tokens, prompt_policy, allow_normal_fire
         passed = False
         score = 0.0
         notes.append(error)
+    access_status = classify_access_error(error)
     return {
         "task_id": scenario["task_id"],
         "category": scenario["category"],
@@ -323,6 +358,8 @@ def run_case(model, scenario, live, max_tokens, prompt_policy, allow_normal_fire
         "expected_answer": scenario.get("expected_answer"),
         "notes": notes,
         "error": error,
+        "access_status": access_status,
+        "access_failure": access_status in ACCESS_FAILURE_STATUSES,
     }
 
 

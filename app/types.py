@@ -13,6 +13,7 @@ class TimingMetrics:
     local_solver_elapsed_ms: int = 0
     validation_elapsed_ms: int = 0
     local_proof_elapsed_ms: int = 0
+    local_model_elapsed_ms: int = 0
     trap_guard_elapsed_ms: int = 0
     cross_check_elapsed_ms: int = 0
     remote_elapsed_ms: int = 0
@@ -29,6 +30,7 @@ class TimingMetrics:
             "local_solver_elapsed_ms": self.local_solver_elapsed_ms,
             "validation_elapsed_ms": self.validation_elapsed_ms,
             "local_proof_elapsed_ms": self.local_proof_elapsed_ms,
+            "local_model_elapsed_ms": self.local_model_elapsed_ms,
             "trap_guard_elapsed_ms": self.trap_guard_elapsed_ms,
             "cross_check_elapsed_ms": self.cross_check_elapsed_ms,
             "remote_elapsed_ms": self.remote_elapsed_ms,

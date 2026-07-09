@@ -21,6 +21,10 @@ DEFAULT_REMOTE_ESCALATION_MODELS = ("kimi-k2p7-code", "minimax-m3", "gemma-4-31b
 RECOMMENDATION_EXPORT_NAMES = {
     "FIREWORKS_MAX_TOKENS",
     "LOCAL_CONFIDENCE_THRESHOLD",
+    "LOCAL_MODEL_COMMAND",
+    "LOCAL_MODEL_ENABLED",
+    "LOCAL_MODEL_MAX_CHARS",
+    "LOCAL_MODEL_TIMEOUT_SECONDS",
     "REMOTE_VALIDATION_ESCALATION_ENABLED",
     "ROUTER_MODE",
     "ROUTER_MODELS_BY_CATEGORY",
@@ -207,6 +211,10 @@ class RuntimeConfig:
     fireworks_base_url: str | None
     allowed_models: tuple[str, ...]
     fireworks_max_tokens: int
+    local_model_enabled: bool = False
+    local_model_command: str | None = None
+    local_model_timeout_seconds: int = 20
+    local_model_max_chars: int = 4096
     prompt_policy_remote_accuracy: str = "compact"
     prompt_policy_remote_code: str = "answer_only"
     prompt_policy_remote_format_strict: str = "answer_only"
@@ -240,6 +248,10 @@ class RuntimeConfig:
             remote_worker_count=_get_int_from(env, "REMOTE_WORKER_COUNT", 2, 1, 8),
             local_proof_budget_ms=_get_int_from(env, "LOCAL_PROOF_BUDGET_MS", 100, 1, 5000),
             local_cross_check_enabled=_get_bool_from(env, "LOCAL_CROSS_CHECK_ENABLED", True),
+            local_model_enabled=_get_bool_from(env, "LOCAL_MODEL_ENABLED", False),
+            local_model_command=env.get("LOCAL_MODEL_COMMAND") or None,
+            local_model_timeout_seconds=_get_int_from(env, "LOCAL_MODEL_TIMEOUT_SECONDS", 20, 1, 120),
+            local_model_max_chars=_get_int_from(env, "LOCAL_MODEL_MAX_CHARS", 4096, 128, 20000),
             router_log_path=Path(router_log_path) if router_log_path else None,
             fireworks_api_key=env.get("FIREWORKS_API_KEY"),
             fireworks_base_url=env.get("FIREWORKS_BASE_URL"),

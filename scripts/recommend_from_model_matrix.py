@@ -10,6 +10,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.summarize_model_matrix_runs import filter_rows, load_jsonl, run_id_for
+from eval.model_matrix import ACCESS_FAILURE_STATUSES, classify_access_error
 
 
 DEFAULT_FALLBACK_MODEL = "minimax-m3"
@@ -45,6 +46,24 @@ def add_row(item: dict, row: dict) -> None:
     item["score"] += float(row.get("score") or 0)
     item["tokens"] += int(row.get("total_tokens") or 0)
     item["errors"] += int(bool(row.get("error")))
+
+
+def is_access_or_deployment_failure(row: dict) -> bool:
+    status = row.get("access_status")
+    if not status or status == "ok":
+        status = classify_access_error(row.get("error"))
+    return bool(row.get("error")) and status in ACCESS_FAILURE_STATUSES
+
+
+def split_access_failures(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    quality_rows = []
+    access_failures = []
+    for row in rows:
+        if is_access_or_deployment_failure(row):
+            access_failures.append(row)
+        else:
+            quality_rows.append(row)
+    return quality_rows, access_failures
 
 
 def format_bucket(item: dict) -> dict:
@@ -239,6 +258,7 @@ def write_markdown(
     recommendations: dict[str, dict],
     exports: list[tuple[str, str | None]],
     status: dict,
+    access_failure_count: int = 0,
 ) -> None:
     lines = [
         "# Model Matrix Runtime Recommendation",
@@ -253,6 +273,9 @@ def write_markdown(
         f"- Eligible categories: {len(status['eligible_categories'])}",
         f"- Missing categories: {', '.join(status['missing_categories']) if status['missing_categories'] else 'none'}",
         f"- Ineligible categories: {', '.join(status['ineligible_categories']) if status['ineligible_categories'] else 'none'}",
+        f"- Access/deployment failure rows excluded from quality scoring: {access_failure_count}",
+        "",
+        "> Models that returned access/deployment errors were excluded from quality scoring. This does not imply low model quality.",
         "",
         "## Category Decisions",
         "",
@@ -301,6 +324,7 @@ def main(argv: list[str] | None = None) -> int:
         drop_error_rows=args.drop_error_rows,
         max_run_error_rate=args.max_run_error_rate,
     )
+    rows, access_failures = split_access_failures(rows)
     if not rows:
         raise SystemExit("No usable rows found.")
 
@@ -331,6 +355,7 @@ def main(argv: list[str] | None = None) -> int:
         "rows": len(rows),
         "runs": len({run_id_for(row) for row in rows}),
         "dropped": dropped,
+        "access_failure_rows_excluded": len(access_failures),
         "thresholds": {
             "min_pass_rate": args.min_pass_rate,
             "min_avg_score": args.min_avg_score,
@@ -342,10 +367,12 @@ def main(argv: list[str] | None = None) -> int:
     args.out_json.parent.mkdir(parents=True, exist_ok=True)
     args.out_md.parent.mkdir(parents=True, exist_ok=True)
     args.out_json.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
-    write_markdown(args.out_md, recommendations, exports, status)
+    write_markdown(args.out_md, recommendations, exports, status, access_failure_count=len(access_failures))
 
     print(render_shell(exports, args.reports))
     print(f"Evidence status: {status['status']}")
+    if access_failures:
+        print(f"Access/deployment failure rows excluded: {len(access_failures)}")
     print(f"JSON: {args.out_json}")
     print(f"Markdown: {args.out_md}")
     return 0
