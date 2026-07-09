@@ -1,4 +1,5 @@
 import argparse
+import ast
 import json
 import os
 import re
@@ -185,6 +186,40 @@ def score_answer(answer, scenario):
         passed = bool(expected_numbers) and expected_numbers[0] in answer_numbers
         return passed, 1.0 if passed else 0.0, [] if passed else [f"expected_number={expected_numbers[0] if expected_numbers else expected_answer}"]
 
+    if verifier == "word_count":
+        expected_count = _expected_word_count(scenario.get("prompt", ""))
+        actual_count = len(_words(answer_text))
+        expected_keywords = scenario.get("expected_keywords", [])
+        matches = [keyword for keyword in expected_keywords if keyword.lower() in answer_lower]
+        keyword_score = len(matches) / max(1, len(expected_keywords))
+        count_score = 1.0 if expected_count is not None and actual_count == expected_count else 0.0
+        score = round((count_score * 0.6) + (keyword_score * 0.4), 3)
+        notes = []
+        if expected_count is not None and actual_count != expected_count:
+            notes.append(f"word_count={actual_count},expected={expected_count}")
+        missing = [keyword for keyword in expected_keywords if keyword.lower() not in {match.lower() for match in matches}]
+        if missing:
+            notes.append("missing_keywords=" + ",".join(missing))
+        return score >= 0.80, score, notes
+
+    if verifier == "python_syntax":
+        code = _strip_code_fence(answer_text)
+        notes = []
+        try:
+            ast.parse(code)
+            syntax_score = 1.0
+        except SyntaxError as exc:
+            syntax_score = 0.0
+            notes.append(f"syntax_error={exc.msg}")
+        expected_keywords = scenario.get("expected_keywords", [])
+        matches = [keyword for keyword in expected_keywords if keyword.lower() in code.lower()]
+        keyword_score = len(matches) / max(1, len(expected_keywords))
+        missing = [keyword for keyword in expected_keywords if keyword.lower() not in {match.lower() for match in matches}]
+        if missing:
+            notes.append("missing_keywords=" + ",".join(missing))
+        score = round((syntax_score * 0.5) + (keyword_score * 0.5), 3)
+        return score >= 0.75 and syntax_score == 1.0, score, notes
+
     expected_keywords = scenario.get("expected_keywords", [])
     matches = [keyword for keyword in expected_keywords if keyword.lower() in answer_lower]
     score = len(matches) / max(1, len(expected_keywords))
@@ -222,6 +257,27 @@ def _numbers(text):
         value = float(raw)
         values.append(str(int(value)) if value.is_integer() else str(value))
     return values
+
+
+def _words(text):
+    return re.findall(r"\b[\w'-]+\b", str(text or ""))
+
+
+def _expected_word_count(prompt):
+    match = re.search(r"exactly\s+(\d+)\s+words?", str(prompt or ""), re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def _strip_code_fence(text):
+    value = str(text or "").strip()
+    if value.startswith("```"):
+        lines = value.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        value = "\n".join(lines).strip()
+    return value
 
 
 def mock_answer(model, scenario):

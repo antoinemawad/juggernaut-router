@@ -1394,8 +1394,9 @@ class Phase2RouterTests(unittest.TestCase):
             self.assertIn("ROUTER_MODELS_BY_CATEGORY", payload["exports"])
 
     def test_expected_route_script_rows_match_full_fixture(self):
-        rows = check_routes(config_by_name("strict_hybrid"), load_scenarios(DEFAULT_SCENARIOS))
-        self.assertEqual(len(rows), 24)
+        scenarios = load_scenarios(DEFAULT_SCENARIOS)
+        rows = check_routes(config_by_name("strict_hybrid"), scenarios)
+        self.assertEqual(len(rows), len(scenarios))
         self.assertTrue(all(row["expected_route_match"] for row in rows))
         self.assertTrue(all(row["remote_mode_match"] for row in rows))
         self.assertTrue(
