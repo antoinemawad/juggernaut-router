@@ -119,7 +119,7 @@ Prompt resizing is allowed only when metrics show it preserves accuracy.
 
 - Measure all-Fireworks baseline accuracy and tokens.
 - Measure local deterministic coverage by category.
-- Compare confidence thresholds: 0.85 vs 0.90 vs 0.95.
+- Compare confidence thresholds: 0.80 vs 0.90 vs 0.95.
 - Compare category-specific Fireworks prompts.
 - Compare allowed model preference by category once `ALLOWED_MODELS` is known.
 - Tune `max_tokens` by category without hurting answer quality.

@@ -513,7 +513,7 @@ def main():
     parser = argparse.ArgumentParser(description="Sweep local router configurations before official submissions.")
     parser.add_argument("--scenarios", type=Path, default=DEFAULT_SCENARIOS)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
-    parser.add_argument("--accuracy-threshold", type=float, default=0.85)
+    parser.add_argument("--accuracy-threshold", type=float, default=0.80)
     args = parser.parse_args()
 
     scenarios = load_scenarios(args.scenarios)

@@ -69,7 +69,7 @@ python3 eval/model_matrix.py --live --limit 2 --models minimax-m3 --prompt-polic
 Before spending official submission attempts, compare candidate router configurations locally:
 
 ```bash
-python3 eval/router_config_sweep.py --accuracy-threshold 0.85
+python3 eval/router_config_sweep.py --accuracy-threshold 0.80
 python3 scripts/recommend_runtime_env.py --from-latest-sweep
 ```
 

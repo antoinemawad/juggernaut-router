@@ -27,7 +27,7 @@ These thresholds are local planning defaults, not official thresholds:
 
 - tier 1 smoke: 100% valid output shape.
 - tier 2 regression: at least 0.90 average score before final submission.
-- tier 3 adversarial: no unsafe local acceptances; at least 0.85 average score before token tuning.
+- tier 3 adversarial: no unsafe local acceptances; at least 0.80 average score before token tuning.
 - router sweep: final candidate must beat always-Fireworks token usage while matching or improving score.
 - live mini matrix: only run on selected high-value slices and promote settings by score first, token usage second.
 

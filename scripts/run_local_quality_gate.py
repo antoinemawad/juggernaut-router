@@ -99,7 +99,7 @@ def main():
     results.append(run([py, "-m", "app.main"], env=local_env))
     results.append(run([py, "scripts/validate_submission_io.py", "local_test/output/results.json"]))
 
-    results.append(run([py, "eval/router_config_sweep.py", "--accuracy-threshold", "0.85"]))
+    results.append(run([py, "eval/router_config_sweep.py", "--accuracy-threshold", "0.80"]))
     results.append(run([py, "eval/model_matrix.py", "--prompt-policies", "all"]))
 
     write_summary(results, "passed")

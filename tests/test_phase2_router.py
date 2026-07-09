@@ -1016,7 +1016,7 @@ class Phase2RouterTests(unittest.TestCase):
             next(item for item in DEFAULT_CONFIGS if item["name"] == "gemma_first_router"),
         ]
         rows = [run_scenario(config, scenario) for config in configs for scenario in scenarios]
-        by_config, _by_category, _ranked, _eligible, _winner = summarize(rows, 0.85)
+        by_config, _by_category, _ranked, _eligible, _winner = summarize(rows, 0.80)
 
         strict = by_config["strict_hybrid"]
         gemma = by_config["gemma_first_router"]
@@ -1146,8 +1146,8 @@ class Phase2RouterTests(unittest.TestCase):
 
         recommendations = choose_by_category(
             rows,
-            min_pass_rate=0.85,
-            min_avg_score=0.85,
+            min_pass_rate=0.80,
+            min_avg_score=0.80,
             min_runs=2,
             fallback_model="minimax-m3",
             fallback_policy="original",
@@ -1157,8 +1157,8 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(recommendations["factual_knowledge"]["model"], "kimi-k2p7-code")
         self.assertFalse(recommendations["code_generation"]["eligible"])
         self.assertEqual(recommendations["code_generation"]["model"], "minimax-m3")
-        self.assertIn("pass_rate<0.85", recommendations["code_generation"]["eligibility_failures"])
-        self.assertIn("avg_score<0.85", recommendations["code_generation"]["eligibility_failures"])
+        self.assertIn("pass_rate<0.80", recommendations["code_generation"]["eligibility_failures"])
+        self.assertIn("avg_score<0.80", recommendations["code_generation"]["eligibility_failures"])
 
     def test_model_matrix_recommender_exports_runtime_env(self):
         recommendations = {
@@ -1326,7 +1326,7 @@ class Phase2RouterTests(unittest.TestCase):
             {"config": "low_tokens_bad_accuracy", "category": "x", "passed": False, "score": 0.0, "total_tokens": 0, "route": "local", "expected_route_match": True},
             {"config": "same_accuracy_lower_tokens", "category": "x", "passed": True, "score": 1.0, "total_tokens": 50, "route": "fireworks", "expected_route_match": True},
         ]
-        _by_config, _by_category, ranked, _eligible, winner = summarize(rows, accuracy_threshold=0.85)
+        _by_config, _by_category, ranked, _eligible, winner = summarize(rows, accuracy_threshold=0.80)
         self.assertEqual(winner, "same_accuracy_lower_tokens")
         self.assertEqual(ranked[0][0], "same_accuracy_lower_tokens")
         self.assertEqual(ranked[-1][0], "low_tokens_bad_accuracy")

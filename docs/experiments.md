@@ -128,12 +128,12 @@ This is the living experiment log for Track 1 strategy selection. Do not record 
 - Failure cases: Missing log fields, untested risk component, unsafe local acceptance, wrong remote mode, invalid normalization.
 - Decision: Do not promote router changes until every risk component and remote mode has at least one passing scenario.
 
-### Confidence Threshold Comparison: 0.85 vs 0.90 vs 0.95
+### Confidence Threshold Comparison: 0.80 vs 0.90 vs 0.95
 
 - Name: Confidence Threshold Comparison
 - Date: TBD
 - Goal: Find the safest configurable threshold for accepting local answers and keep the exact accuracy gate programmable/changeable.
-- Strategy tested: Run identical datasets through local classifier -> local solver -> validator with accept thresholds at 0.85, 0.90, and 0.95.
+- Strategy tested: Run identical datasets through local classifier -> local solver -> validator with accept thresholds at 0.80, 0.90, and 0.95.
 - Dataset: Category-balanced local eval.
 - Local solver coverage: Varies by threshold.
 - Fireworks calls required: Increases as threshold rises.

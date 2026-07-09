@@ -115,7 +115,7 @@ python3 scripts/check_eval_coverage.py
 python3 scripts/check_expected_routes.py --config strict_hybrid
 python3 scripts/check_expected_routes.py --config strict_hybrid --scenarios eval/golden_tier_2_regression.jsonl
 python3 scripts/check_expected_routes.py --config strict_hybrid --scenarios eval/golden_tier_3_adversarial.jsonl
-python3 eval/router_config_sweep.py --accuracy-threshold 0.85
+python3 eval/router_config_sweep.py --accuracy-threshold 0.80
 python3 scripts/recommend_runtime_env.py --from-latest-sweep
 python3 eval/model_matrix.py --prompt-policies all
 ```

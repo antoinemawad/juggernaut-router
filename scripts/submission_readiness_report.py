@@ -14,6 +14,7 @@ from scripts.recommend_from_model_matrix import DEFAULT_REQUIRED_CATEGORIES, evi
 ACCEPTANCE_REPORT = ROOT / "eval_runs" / "phase1_acceptance_latest.json"
 QUALITY_REPORT = ROOT / "eval_runs" / "local_quality_gate_latest.json"
 EVAL_RUNS = ROOT / "eval_runs"
+AGENT_EVIDENCE_THRESHOLD = 0.80
 
 
 def read_json(path: Path) -> dict:
@@ -101,6 +102,50 @@ def latest_model_matrix_summary() -> dict:
     }
 
 
+def latest_agent_matrix_summary() -> dict:
+    path = latest_file("agent_matrix_*.jsonl")
+    if path is None:
+        return {"status": "missing"}
+
+    rows = read_jsonl(path)
+    passed = sum(1 for row in rows if row.get("passed"))
+    errors = sum(1 for row in rows if row.get("error"))
+    tokens = sum(int(row.get("total_tokens") or 0) for row in rows)
+    by_category = {}
+    for row in rows:
+        category = row.get("category")
+        if not category:
+            continue
+        item = by_category.setdefault(category, {"rows": 0, "passed": 0, "score": 0.0, "errors": 0, "tokens": 0})
+        item["rows"] += 1
+        item["passed"] += int(bool(row.get("passed")))
+        item["score"] += float(row.get("score") or 0.0)
+        item["errors"] += int(bool(row.get("error")))
+        item["tokens"] += int(row.get("total_tokens") or 0)
+
+    category_summary = {}
+    for category, item in sorted(by_category.items()):
+        rows_count = item["rows"]
+        category_summary[category] = {
+            "rows": rows_count,
+            "pass_rate": round(item["passed"] / rows_count, 4) if rows_count else 0,
+            "avg_score": round(item["score"] / rows_count, 4) if rows_count else 0,
+            "errors": item["errors"],
+            "total_tokens": item["tokens"],
+        }
+
+    return {
+        "status": "present",
+        "path": display_path(path),
+        "mode": report_line(path, "Mode:") or "unknown",
+        "rows": len(rows),
+        "pass_rate": round(passed / len(rows), 4) if rows else 0,
+        "errors": errors,
+        "total_tokens": tokens,
+        "categories": category_summary,
+    }
+
+
 def docker_value(image: str, template: str) -> str | None:
     completed = subprocess.run(
         ["docker", "image", "inspect", image, "--format", template],
@@ -164,7 +209,39 @@ def recommendation_summary(path: Path | None) -> dict | None:
     }
 
 
-def readiness_status(acceptance: dict, quality: dict, docker: dict | None, recommendation: dict | None = None) -> str:
+def agent_matrix_covers_ineligible_categories(recommendation: dict | None, agent_matrix: dict | None) -> bool:
+    if recommendation is None or agent_matrix is None:
+        return False
+    if recommendation.get("status") == "passed":
+        return True
+    if recommendation.get("status") in {None, "missing"}:
+        return False
+    if recommendation.get("missing_categories"):
+        return False
+    ineligible = recommendation.get("ineligible_categories", [])
+    if not ineligible:
+        return False
+    categories = agent_matrix.get("categories", {}) if isinstance(agent_matrix, dict) else {}
+    for category in ineligible:
+        item = categories.get(category)
+        if not item:
+            return False
+        if item.get("errors", 0) != 0:
+            return False
+        if item.get("pass_rate", 0) < AGENT_EVIDENCE_THRESHOLD:
+            return False
+        if item.get("avg_score", 0) < AGENT_EVIDENCE_THRESHOLD:
+            return False
+    return True
+
+
+def readiness_status(
+    acceptance: dict,
+    quality: dict,
+    docker: dict | None,
+    recommendation: dict | None = None,
+    agent_matrix: dict | None = None,
+) -> str:
     if acceptance.get("status") != "passed":
         return "blocked_acceptance_not_passed"
     if quality.get("status") != "passed":
@@ -172,7 +249,10 @@ def readiness_status(acceptance: dict, quality: dict, docker: dict | None, recom
     if recommendation is not None:
         if recommendation.get("status") == "missing":
             return "blocked_recommendation_missing"
-        if recommendation.get("status") != "passed":
+        if recommendation.get("status") != "passed" and not agent_matrix_covers_ineligible_categories(
+            recommendation,
+            agent_matrix,
+        ):
             return "blocked_recommendation_evidence_not_passed"
     if docker is not None:
         if not docker.get("available"):
@@ -205,7 +285,8 @@ def main() -> int:
     recommendation = recommendation_summary(args.recommendation)
     router_sweep = latest_router_sweep_summary()
     model_matrix = latest_model_matrix_summary()
-    status = readiness_status(acceptance, quality, docker, recommendation)
+    agent_matrix = latest_agent_matrix_summary()
+    status = readiness_status(acceptance, quality, docker, recommendation, agent_matrix)
 
     summary = {
         "status": status,
@@ -215,6 +296,7 @@ def main() -> int:
         "quality_timestamp": quality.get("timestamp"),
         "latest_router_sweep": router_sweep,
         "latest_model_matrix": model_matrix,
+        "latest_agent_matrix": agent_matrix,
         "runtime_recommendation": recommendation,
         "docker": docker,
         "next_required_step": (

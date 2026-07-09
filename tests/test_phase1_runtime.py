@@ -259,9 +259,22 @@ class Phase1RuntimeTests(unittest.TestCase):
             )
             matrix_path.with_suffix(".md").write_text("Mode: mock\n", encoding="utf-8")
 
+            agent_path = eval_runs / "agent_matrix_20260708_010101.jsonl"
+            agent_path.write_text(
+                json.dumps({
+                    "category": "code_generation",
+                    "passed": True,
+                    "score": 1.0,
+                    "total_tokens": 0,
+                }) + "\n",
+                encoding="utf-8",
+            )
+            agent_path.with_suffix(".md").write_text("Mode: local/runtime\n", encoding="utf-8")
+
             with patch.object(submission_readiness_report, "EVAL_RUNS", eval_runs):
                 router = submission_readiness_report.latest_router_sweep_summary()
                 matrix = submission_readiness_report.latest_model_matrix_summary()
+                agent = submission_readiness_report.latest_agent_matrix_summary()
 
         self.assertEqual(router["recommended_config"], "strict_hybrid")
         self.assertEqual(router["rows"], 1)
@@ -269,6 +282,8 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(matrix["mode"], "mock")
         self.assertEqual(matrix["errors"], 1)
         self.assertEqual(matrix["models"], ["minimax-m3"])
+        self.assertEqual(agent["mode"], "local/runtime")
+        self.assertEqual(agent["categories"]["code_generation"]["pass_rate"], 1.0)
 
     def test_readiness_report_blocks_bad_recommendation_evidence(self):
         acceptance = {"status": "passed"}
@@ -283,6 +298,32 @@ class Phase1RuntimeTests(unittest.TestCase):
         )
 
         self.assertEqual(status, "blocked_recommendation_evidence_not_passed")
+
+    def test_readiness_report_accepts_agent_matrix_for_ineligible_categories(self):
+        acceptance = {"status": "passed"}
+        quality = {"status": "passed"}
+        recommendation = {
+            "status": "needs_more_evidence",
+            "missing_categories": [],
+            "ineligible_categories": ["code_generation", "text_summarisation"],
+        }
+        agent_matrix = {
+            "status": "present",
+            "categories": {
+                "code_generation": {"pass_rate": 1.0, "avg_score": 1.0, "errors": 0},
+                "text_summarisation": {"pass_rate": 0.80, "avg_score": 0.80, "errors": 0},
+            },
+        }
+
+        status = submission_readiness_report.readiness_status(
+            acceptance,
+            quality,
+            docker=None,
+            recommendation=recommendation,
+            agent_matrix=agent_matrix,
+        )
+
+        self.assertEqual(status, "ready_for_live_eval_or_final_submission_prep")
 
     def test_readiness_report_summarizes_recommendation_evidence(self):
         with tempfile.TemporaryDirectory() as tmpdir:
