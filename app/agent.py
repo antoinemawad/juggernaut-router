@@ -97,6 +97,9 @@ def answer_task(
         )
         timings.local_model_elapsed_ms = local_model.elapsed_ms
         if local_model.error is None:
+            raw_local_model_answer = local_model.answer if isinstance(local_model.answer, str) else str(local_model.answer)
+            local_model_validation = validate_remote_answer(prompt, raw_local_model_answer, classification)
+        if local_model.error is None and local_model_validation is not None and local_model_validation.accepted:
             normalize_timer = StageTimer()
             local_model_answer = _normalize_for_classification(local_model.answer, prompt, classification)
             timings.normalization_elapsed_ms += normalize_timer.elapsed_ms()
@@ -176,6 +179,9 @@ def answer_task(
                 "local_model_validation_failed": (
                     list(local_model_validation.failed_layers) if local_model_validation is not None else []
                 ),
+                "local_model_validation_notes": (
+                    list(local_model_validation.notes) if local_model_validation is not None else []
+                ),
             },
         )
 
@@ -217,6 +223,9 @@ def answer_task(
                 "local_model_runtime": local_model.runtime if local_model is not None else None,
                 "local_model_validation_failed": (
                     list(local_model_validation.failed_layers) if local_model_validation is not None else []
+                ),
+                "local_model_validation_notes": (
+                    list(local_model_validation.notes) if local_model_validation is not None else []
                 ),
                 "final_answer_type": _answer_type(SAFE_FALLBACK_ANSWER),
             },
@@ -304,6 +313,9 @@ def answer_task(
             "local_model_output_tokens_estimate": local_model.output_tokens_estimate if local_model is not None else None,
             "local_model_validation_failed": (
                 list(local_model_validation.failed_layers) if local_model_validation is not None else []
+            ),
+            "local_model_validation_notes": (
+                list(local_model_validation.notes) if local_model_validation is not None else []
             ),
             "validation_result": "accepted" if remote_validation.accepted else "rejected",
             "remote_escalated_after_validation": escalation is not None,

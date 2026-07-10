@@ -12,7 +12,7 @@ from app.classifier import classify_prompt
 from app.config import RuntimeConfig
 from app.deadline import DeadlineManager
 from app.solvers.basic import LocalSolverResult
-from app.validators import validate_local_answer
+from app.validators import validate_local_answer, validate_remote_answer
 from eval.model_matrix import (
     DEFAULT_SCENARIOS,
     estimate_tokens,
@@ -443,6 +443,121 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertTrue(result.metadata["local_model_attempted"])
         self.assertEqual(result.metadata["local_model_error"], "local_model_empty")
         self.assertEqual(result.route_reason, "fireworks_unavailable_after_local_model")
+
+    def test_repeated_markdown_fence_local_factual_is_rejected(self):
+        from app.local_model_client import LocalModelResult
+
+        bad_answer = (
+            "A Track 1 router must call Fireworks through FIREWORKS_BASE_URL so token usage is recorded. "
+            "``` ``` ``` ``` ``` ``` ``` ``` ``` ```"
+        )
+        with patch.dict(
+            os.environ,
+            {
+                "ROUTER_PROFILE": "accuracy_gate",
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(answer=bad_answer, elapsed_ms=3),
+        ) as local_model, patch("app.agent.ask_fireworks_structured") as fireworks:
+            result = answer_task(
+                "bad_factual_local",
+                "Explain why Track 1 routers must use FIREWORKS_BASE_URL instead of a hardcoded public API URL.",
+            )
+
+        local_model.assert_called_once()
+        fireworks.assert_not_called()
+        self.assertEqual(result.route, "fallback")
+        self.assertTrue(result.metadata["local_model_attempted"])
+        self.assertIn("artifact_guard", result.metadata["local_model_validation_failed"])
+        self.assertIn("repeated_markdown_fence", result.metadata["local_model_validation_notes"])
+
+    def test_rejected_repetition_local_answer_escalates_to_fireworks_when_available(self):
+        from app.fireworks_client import FireworksResult
+        from app.local_model_client import LocalModelResult
+
+        bad_answer = "OK OK OK OK OK OK OK OK OK OK OK OK"
+        with patch.dict(
+            os.environ,
+            {
+                "ROUTER_PROFILE": "accuracy_gate",
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(answer=bad_answer, elapsed_ms=3),
+        ) as local_model, patch(
+            "app.agent.ask_fireworks_structured",
+            return_value=FireworksResult(
+                answer="Use FIREWORKS_BASE_URL so the judging proxy can record token usage.",
+                model="minimax-m3",
+                total_tokens=11,
+            ),
+        ) as fireworks:
+            result = answer_task(
+                "bad_factual_escalates",
+                "Explain why Track 1 routers must use FIREWORKS_BASE_URL instead of a hardcoded public API URL.",
+            )
+
+        local_model.assert_called_once()
+        fireworks.assert_called_once()
+        self.assertEqual(result.route, "fireworks")
+        self.assertIn("runaway_repetition", result.metadata["local_model_validation_notes"])
+
+    def test_valid_short_factual_answer_passes_artifact_validation(self):
+        classification = classify_prompt(
+            "Explain why Track 1 routers must use FIREWORKS_BASE_URL instead of a hardcoded public API URL."
+        )
+        result = validate_remote_answer(
+            "Explain why Track 1 routers must use FIREWORKS_BASE_URL instead of a hardcoded public API URL.",
+            "FIREWORKS_BASE_URL sends requests through the judging proxy so token usage is recorded.",
+            classification,
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertIn("artifact_guard", result.passed_layers)
+
+    def test_short_text_runaway_output_is_rejected(self):
+        classification = classify_prompt("Explain briefly how a GPU differs from a CPU.")
+        result = validate_remote_answer(
+            "Explain briefly how a GPU differs from a CPU.",
+            "parallel cores " * 20,
+            classification,
+        )
+
+        self.assertFalse(result.accepted)
+        self.assertIn("artifact_guard", result.failed_layers)
+        self.assertIn("runaway_repetition", result.notes)
+
+    def test_valid_code_without_markdown_is_accepted(self):
+        classification = classify_prompt("Write a Python function clamp(x, low, high). Return only code.")
+        result = validate_remote_answer(
+            "Write a Python function clamp(x, low, high). Return only code.",
+            "def clamp(x, low, high):\n    return low if x < low else high if x > high else x",
+            classification,
+        )
+
+        self.assertTrue(result.accepted)
+
+    def test_code_fenced_answer_rejected_when_code_only_required(self):
+        classification = classify_prompt("Write a Python function clamp(x, low, high). Return only code.")
+        result = validate_remote_answer(
+            "Write a Python function clamp(x, low, high). Return only code.",
+            "```python\ndef clamp(x, low, high):\n    return low if x < low else high if x > high else x\n```",
+            classification,
+        )
+
+        self.assertFalse(result.accepted)
+        self.assertIn("artifact_guard", result.failed_layers)
+        self.assertIn("markdown_fence_in_code_answer", result.notes)
 
     def test_accuracy_gate_math_still_uses_local_model_when_no_deterministic_solver_matches(self):
         from app.local_model_client import LocalModelResult

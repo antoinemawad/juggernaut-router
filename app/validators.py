@@ -1,4 +1,5 @@
 import ast
+from collections import Counter
 import operator
 import re
 from dataclasses import dataclass
@@ -103,6 +104,13 @@ def validate_remote_answer(
         failed.append("reasoning_leakage")
         notes.append("remote_answer_contains_reasoning_leakage")
 
+    artifact_notes = _answer_artifact_notes(prompt, stripped, classification)
+    if not artifact_notes:
+        passed.append("artifact_guard")
+    else:
+        failed.append("artifact_guard")
+        notes.extend(artifact_notes)
+
     if _remote_shape_is_valid(prompt, stripped, classification):
         passed.append("answer_shape")
     else:
@@ -171,6 +179,82 @@ def _remote_shape_is_valid(prompt: str, answer: str, classification: Classificat
     if category == "logical_deductive_reasoning" or "answer_only" in constraints:
         return len(answer.split()) <= 12
     return True
+
+
+def _answer_artifact_notes(prompt: str, answer: str, classification: ClassificationResult) -> list[str]:
+    notes: list[str] = []
+    if not answer:
+        return notes
+    if _has_repeated_markdown_fence(answer):
+        notes.append("repeated_markdown_fence")
+    if _has_runaway_repetition(answer):
+        notes.append("runaway_repetition")
+
+    constraints = set(classification.constraints)
+    prompt_allows_markdown = _prompt_allows_markdown(prompt)
+    if (classification.answer_shape in {"code", "corrected_code"} or "code_only" in constraints) and "```" in answer:
+        if not prompt_allows_markdown:
+            notes.append("markdown_fence_in_code_answer")
+
+    if classification.answer_shape == "short_text":
+        if len(answer) > 300 and not _prompt_requests_long_explanation(prompt):
+            notes.append("short_text_too_long")
+        if _has_unrequested_multiline_markdown(prompt, answer):
+            notes.append("unrequested_multiline_markdown")
+    return notes
+
+
+def _has_repeated_markdown_fence(answer: str) -> bool:
+    fence_count = answer.count("```")
+    if fence_count > 1:
+        return True
+    return bool(re.search(r"(```\s*){2,}", answer))
+
+
+def _has_runaway_repetition(answer: str) -> bool:
+    compact = re.sub(r"\s+", " ", answer.strip())
+    if re.search(r"(.{2,5})\1{5,}", compact):
+        return True
+    if re.search(r"\b([A-Za-z]{2,})\b(?:[\s,.;:!?`'\"]+\1\b){5,}", compact, flags=re.IGNORECASE):
+        return True
+    tokens = re.findall(r"[A-Za-z0-9_`$]+|[^\sA-Za-z0-9_]", compact.lower())
+    return _has_high_repeated_ngram_ratio(tokens)
+
+
+def _has_high_repeated_ngram_ratio(tokens: list[str]) -> bool:
+    if len(tokens) < 18:
+        return False
+    for n in (2, 3, 4, 5):
+        if len(tokens) < n * 4:
+            continue
+        ngrams = [tuple(tokens[index : index + n]) for index in range(0, len(tokens) - n + 1)]
+        if not ngrams:
+            continue
+        most_common = Counter(ngrams).most_common(1)[0][1]
+        if most_common >= 5 and most_common / len(ngrams) >= 0.25:
+            return True
+    return False
+
+
+def _prompt_allows_markdown(prompt: str) -> bool:
+    lower = prompt.lower()
+    return "markdown" in lower or "fenced" in lower or "code block" in lower or "```" in lower
+
+
+def _prompt_requests_long_explanation(prompt: str) -> bool:
+    lower = prompt.lower()
+    return any(marker in lower for marker in ("explain", "describe", "why", "two sentences", "paragraph"))
+
+
+def _has_unrequested_multiline_markdown(prompt: str, answer: str) -> bool:
+    if "\n" not in answer or _prompt_allows_markdown(prompt):
+        return False
+    markdown_lines = 0
+    for line in answer.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(("#", "-", "*", ">", "|", "```")):
+            markdown_lines += 1
+    return markdown_lines >= 1
 
 
 def _has_reasoning_leakage(answer: str) -> bool:
