@@ -60,8 +60,10 @@ ENV ROUTER_PROFILE=accuracy_gate \
     LOCAL_MODEL_THREADS=2 \
     LOCAL_MODEL_TEMPERATURE=0 \
     LOCAL_MODEL_TIMEOUT_SECONDS=20 \
-    FIREWORKS_MAX_TOKENS=256 \
-    FIREWORKS_MAX_RETRIES=1 \
+    FIREWORKS_TIMEOUT_SECONDS=29 \
+    FIREWORKS_MAX_TOKENS=512 \
+    FIREWORKS_MAX_TOKENS_BY_CATEGORY=sentiment_classification=192,named_entity_recognition=256,mathematical_reasoning=256,logical_deductive_reasoning=256,factual_knowledge=768,text_summarisation=768,code_generation=768,code_debugging=768 \
+    FIREWORKS_MAX_RETRIES=2 \
     ROUTER_PROMPT_POLICY_REMOTE_ACCURACY=original \
     ROUTER_PROMPT_POLICY_REMOTE_CODE=original \
     ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT=original \
