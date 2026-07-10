@@ -36,6 +36,7 @@ RECOMMENDATION_EXPORT_NAMES = {
     "LOCAL_MODEL_MAX_CHARS",
     "LOCAL_MODEL_MAX_TOKENS",
     "LOCAL_MODEL_BATCH_LIMIT",
+    "LOCAL_MODEL_CATEGORIES",
     "LOCAL_MODEL_PATH",
     "LOCAL_MODEL_TEMPERATURE",
     "LOCAL_MODEL_THREADS",
@@ -267,6 +268,7 @@ class RuntimeConfig:
     local_model_timeout_seconds: int = 20
     local_model_max_chars: int = 4096
     local_model_batch_limit: int = 12
+    local_model_categories: tuple[str, ...] = ()
     prompt_policy_remote_accuracy: str = "compact"
     prompt_policy_remote_code: str = "answer_only"
     prompt_policy_remote_format_strict: str = "answer_only"
@@ -319,6 +321,7 @@ class RuntimeConfig:
             local_model_timeout_seconds=_get_int_from(env, "LOCAL_MODEL_TIMEOUT_SECONDS", 20, 1, 120),
             local_model_max_chars=_get_int_from(env, "LOCAL_MODEL_MAX_CHARS", 4096, 128, 20000),
             local_model_batch_limit=_get_int_from(env, "LOCAL_MODEL_BATCH_LIMIT", 12, 0, 10000),
+            local_model_categories=tuple(parse_allowed_models(env.get("LOCAL_MODEL_CATEGORIES"))),
             router_log_path=Path(router_log_path) if router_log_path else None,
             fireworks_api_key=env.get("FIREWORKS_API_KEY"),
             fireworks_base_url=env.get("FIREWORKS_BASE_URL"),
