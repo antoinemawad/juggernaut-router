@@ -424,6 +424,8 @@ def _preferred_models_for_remote_mode(
 
 
 def _max_tokens_for_category(config: RuntimeConfig, category: str | None) -> int:
+    if config.fireworks_disable_max_tokens:
+        return config.fireworks_max_tokens
     if category and config.fireworks_max_tokens_by_category:
         return config.fireworks_max_tokens_by_category.get(category, config.fireworks_max_tokens)
     return config.fireworks_max_tokens

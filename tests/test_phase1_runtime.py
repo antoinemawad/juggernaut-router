@@ -478,6 +478,22 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(config.fireworks_max_tokens_by_category["text_summarisation"], 4096)
         self.assertNotIn("bad", config.fireworks_max_tokens_by_category)
 
+    def test_config_can_disable_fireworks_max_tokens(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_DISABLE_MAX_TOKENS": "true",
+                "FIREWORKS_MAX_TOKENS": "4096",
+                "FIREWORKS_MAX_TOKENS_BY_CATEGORY": "code_generation=512",
+            },
+            clear=True,
+        ):
+            config = RuntimeConfig.from_env()
+
+        self.assertTrue(config.fireworks_disable_max_tokens)
+        self.assertEqual(config.fireworks_max_tokens, 4096)
+        self.assertEqual(config.fireworks_max_tokens_by_category["code_generation"], 512)
+
     def test_config_loads_runtime_recommendation_path(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             recommendation = Path(tmpdir) / "recommendation.json"

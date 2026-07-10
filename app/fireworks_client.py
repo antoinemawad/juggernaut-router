@@ -69,8 +69,9 @@ def ask_fireworks_structured(
             }
         ],
         "temperature": 0,
-        "max_tokens": config.fireworks_max_tokens,
     }
+    if not config.fireworks_disable_max_tokens:
+        payload["max_tokens"] = config.fireworks_max_tokens
 
     url = config.fireworks_base_url.rstrip("/") + "/chat/completions"
 

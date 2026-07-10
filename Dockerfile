@@ -66,6 +66,7 @@ ENV ROUTER_PROFILE=accuracy_gate \
     DEADLINE_SAFETY_MARGIN_SECONDS=5 \
     REMOTE_WORKER_COUNT=8 \
     FIREWORKS_TIMEOUT_SECONDS=29 \
+    FIREWORKS_DISABLE_MAX_TOKENS=true \
     FIREWORKS_MAX_TOKENS=4096 \
     FIREWORKS_MAX_TOKENS_BY_CATEGORY=sentiment_classification=4096,named_entity_recognition=4096,mathematical_reasoning=4096,logical_deductive_reasoning=4096,factual_knowledge=4096,text_summarisation=4096,code_generation=4096,code_debugging=4096 \
     FIREWORKS_MAX_RETRIES=3 \
