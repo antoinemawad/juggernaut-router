@@ -291,66 +291,6 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.total_tokens, 0)
         self.assertEqual(result.timings.local_model_elapsed_ms, 3)
 
-    def test_local_model_category_allowlist_skips_unlisted_category(self):
-        from app.fireworks_client import FireworksResult
-
-        with patch.dict(
-            os.environ,
-            {
-                "LOCAL_MODEL_ENABLED": "true",
-                "LOCAL_MODEL_COMMAND": "mock-local-model",
-                "LOCAL_MODEL_CATEGORIES": "sentiment_classification,text_summarisation",
-                "FIREWORKS_API_KEY": "secret",
-                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
-                "ALLOWED_MODELS": "minimax-m3",
-            },
-            clear=True,
-        ), patch("app.agent.ask_local_model_structured") as local_model, patch(
-            "app.agent.ask_fireworks_structured",
-            return_value=FireworksResult(
-                answer="Track 1 routers should use FIREWORKS_BASE_URL because it points to the judging proxy that records token usage.",
-                model="minimax-m3",
-                completion_tokens=12,
-                total_tokens=40,
-            ),
-        ) as fireworks:
-            result = answer_task(
-                "remote_factual_when_local_category_disabled",
-                "Explain why Track 1 routers should use FIREWORKS_BASE_URL instead of a hardcoded public API URL.",
-            )
-
-        local_model.assert_not_called()
-        fireworks.assert_called_once()
-        self.assertEqual(result.route, "fireworks")
-        self.assertEqual(result.metadata["local_model_skip_reason"], "category_not_local_model_safe")
-
-    def test_local_model_category_allowlist_keeps_listed_category_local(self):
-        from app.local_model_client import LocalModelResult
-
-        with patch.dict(
-            os.environ,
-            {
-                "LOCAL_MODEL_ENABLED": "true",
-                "LOCAL_MODEL_COMMAND": "mock-local-model",
-                "LOCAL_MODEL_CATEGORIES": "sentiment_classification,text_summarisation",
-                "FIREWORKS_API_KEY": "secret",
-                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
-                "ALLOWED_MODELS": "minimax-m3",
-            },
-            clear=True,
-        ), patch(
-            "app.agent.ask_local_model_structured",
-            return_value=LocalModelResult(answer="negative", elapsed_ms=3),
-        ) as local_model, patch("app.agent.ask_fireworks_structured") as fireworks:
-            result = answer_task(
-                "local_sentiment_when_category_enabled",
-                "Classify the sentiment as positive, negative, or neutral. Return only the label: Yeah right, the outage was just perfect.",
-            )
-
-        local_model.assert_called_once()
-        fireworks.assert_not_called()
-        self.assertEqual(result.route, "local_model")
-
     def test_invalid_local_model_answer_falls_through_to_fireworks(self):
         from app.fireworks_client import FireworksResult
         from app.local_model_client import LocalModelResult

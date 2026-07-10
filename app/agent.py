@@ -496,8 +496,6 @@ def _local_model_skip_reason(
 
 
 def _local_model_safe_categories(config: RuntimeConfig) -> set[str]:
-    if config.local_model_categories:
-        return set(config.local_model_categories)
     safe = {
         "sentiment_classification",
         "named_entity_recognition",

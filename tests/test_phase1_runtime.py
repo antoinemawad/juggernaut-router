@@ -161,7 +161,6 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertIn("LOCAL_MODEL_TEMPERATURE=0", dockerfile)
         self.assertIn("LOCAL_MODEL_TIMEOUT_SECONDS=20", dockerfile)
         self.assertIn("LOCAL_MODEL_MAX_CHARS=4096", dockerfile)
-        self.assertIn("LOCAL_MODEL_CATEGORIES=sentiment_classification,text_summarisation", dockerfile)
 
     def test_dockerfile_local_model_selection_is_deterministic_and_hardened(self):
         dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
@@ -258,19 +257,6 @@ class Phase1RuntimeTests(unittest.TestCase):
             self.assertFalse(RuntimeConfig.from_env().local_model_enabled)
         with patch.dict(os.environ, {"LOCAL_MODEL_ENABLED": "true"}, clear=True):
             self.assertTrue(RuntimeConfig.from_env().local_model_enabled)
-
-    def test_runtime_local_model_categories_are_configurable(self):
-        with patch.dict(
-            os.environ,
-            {
-                "LOCAL_MODEL_CATEGORIES": "sentiment_classification,text_summarisation",
-            },
-            clear=True,
-        ):
-            self.assertEqual(
-                RuntimeConfig.from_env().local_model_categories,
-                ("sentiment_classification", "text_summarisation"),
-            )
 
     def test_download_local_model_rejects_empty_file_url(self):
         from scripts.download_local_model import main as download_main
