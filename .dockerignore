@@ -21,7 +21,6 @@ logs/
 models/*
 !models/
 !models/.gitkeep
-!models/*.gguf
 checkpoints/
 *.safetensors
 *.bin

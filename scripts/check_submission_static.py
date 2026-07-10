@@ -115,6 +115,10 @@ def check_dockerfile_is_submission_scoped() -> list[str]:
         errors.append("Dockerfile should copy app/ into the runtime image")
     if 'CMD ["python", "-m", "app.main"]' not in dockerfile:
         errors.append("Dockerfile should run app.main as the submission entrypoint")
+    if "LOCAL_MODEL_ENABLED=false" not in dockerfile:
+        errors.append("Dockerfile scoring defaults should not enable local GGUF inference")
+    if "LOCAL_MODEL_BATCH_LIMIT=0" not in dockerfile:
+        errors.append("Dockerfile scoring defaults should route non-deterministic tasks to Fireworks")
     return errors
 
 
