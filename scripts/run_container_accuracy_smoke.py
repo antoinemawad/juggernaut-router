@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -38,7 +39,9 @@ def main() -> int:
             f"{output_dir}:/output",
             args.image,
         ]
+        started = time.monotonic()
         proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
+        container_elapsed_seconds = time.monotonic() - started
         if proc.stdout:
             print(proc.stdout, end="")
         if proc.stderr:
@@ -63,9 +66,14 @@ def main() -> int:
         telemetry = load_jsonl(output_dir / "router_log.jsonl")
         remote_calls = sum(1 for row in telemetry if row.get("route") == "fireworks")
         fallbacks = sum(1 for row in telemetry if row.get("route") == "fallback")
+        finish_rows = [row for row in telemetry if row.get("event") == "finish"]
+        batch_elapsed_ms = finish_rows[-1].get("batch_elapsed_ms") if finish_rows else None
 
         print(f"tasks_read: {expected_count}")
         print(f"answers_written: {len(results)}")
+        print(f"container_elapsed_seconds: {container_elapsed_seconds:.3f}")
+        if batch_elapsed_ms is not None:
+            print(f"app_batch_elapsed_seconds: {batch_elapsed_ms / 1000:.3f}")
         print(f"remote_calls: {remote_calls}")
         print(f"fallbacks: {fallbacks}")
         print("first_5_answers:")

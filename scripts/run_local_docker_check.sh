@@ -8,6 +8,7 @@ OUTPUT_DIR="${OUTPUT_DIR:-$(pwd)/local_test/output/local_model_check}"
 mkdir -p "$OUTPUT_DIR"
 rm -f "$OUTPUT_DIR/results.json" "$OUTPUT_DIR/router_log.jsonl"
 
+started_at="$(date +%s)"
 docker run --rm \
   --platform linux/amd64 \
   --memory=4g \
@@ -19,8 +20,10 @@ docker run --rm \
   -v "$INPUT_DIR:/input:ro" \
   -v "$OUTPUT_DIR:/output" \
   "$IMAGE"
+finished_at="$(date +%s)"
+elapsed_seconds=$((finished_at - started_at))
 
-python3 - "$INPUT_DIR/tasks.json" "$OUTPUT_DIR/results.json" "$OUTPUT_DIR/router_log.jsonl" <<'PY'
+python3 - "$INPUT_DIR/tasks.json" "$OUTPUT_DIR/results.json" "$OUTPUT_DIR/router_log.jsonl" "$elapsed_seconds" <<'PY'
 import json
 import sys
 from collections import Counter
@@ -29,6 +32,7 @@ from pathlib import Path
 input_path = Path(sys.argv[1])
 output_path = Path(sys.argv[2])
 log_path = Path(sys.argv[3])
+container_elapsed_seconds = int(sys.argv[4])
 
 payload = json.loads(input_path.read_text())
 tasks = payload["tasks"] if isinstance(payload, dict) and isinstance(payload.get("tasks"), list) else payload
@@ -50,9 +54,14 @@ remote_calls = sum(1 for record in records if record.get("fireworks_called"))
 fallbacks = routes.get("fallback", 0)
 local_model = routes.get("local_model", 0)
 deterministic = routes.get("local", 0)
+finish_records = [record for record in records if record.get("event") == "finish"]
+batch_elapsed_ms = finish_records[-1].get("batch_elapsed_ms") if finish_records else None
 
 print(f"tasks_read: {len(tasks)}")
 print(f"answers_written: {len(results)}")
+print(f"container_elapsed_seconds: {container_elapsed_seconds}")
+if batch_elapsed_ms is not None:
+    print(f"app_batch_elapsed_seconds: {batch_elapsed_ms / 1000:.3f}")
 print(f"deterministic_count: {deterministic}")
 print(f"local_llm_count: {local_model}")
 print(f"remote_calls: {remote_calls}")
