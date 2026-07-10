@@ -45,7 +45,7 @@ These runtime variables control use of a model that already exists inside the im
 This is the default. It does not build `llama-cpp-python`, does not install local-model runtime dependencies, and does not download a model.
 
 ```bash
-DOCKER_BUILDKIT=1 docker build \
+docker build \
   --build-arg ENABLE_LOCAL_MODEL=false \
   -t juggernaut-router:no-local .
 ```
@@ -61,7 +61,7 @@ LOCAL_MODEL_ENABLED=false
 This downloads the historical Qwen2.5 GGUF at build time and stores it at `/app/models/local-model.gguf`.
 
 ```bash
-DOCKER_BUILDKIT=1 docker build \
+docker build \
   --build-arg ENABLE_LOCAL_MODEL=true \
   -t juggernaut-router:qwen25-3b .
 ```
@@ -85,16 +85,16 @@ LOCAL_MODEL_MAX_CHARS=4096
 Place the GGUF under `models/` on the build machine. The file remains ignored by git, but Docker can use it during an explicit local-model build.
 
 ```bash
-DOCKER_BUILDKIT=1 docker build \
+docker build \
   --build-arg ENABLE_LOCAL_MODEL=true \
   --build-arg LOCAL_MODEL_URL= \
   --build-arg LOCAL_MODEL_FILENAME=qwen3-1.7b-q4_k_m.gguf \
   -t juggernaut-router:qwen3-1.7b .
 ```
 
-The build selects in this order:
+The Dockerfile remains compatible with the legacy Docker builder on the current droplet. The build selects in this order:
 
-1. Exact file matching `/build-models/${LOCAL_MODEL_FILENAME}`
+1. Exact file matching `/app/models/${LOCAL_MODEL_FILENAME}` after `COPY models ./models`
 2. Download from `LOCAL_MODEL_URL` into `/app/models/${LOCAL_MODEL_FILENAME}`
 3. Deterministic sorted fallback to the first `models/*.gguf`, only when no URL is provided
 4. Clear build failure
@@ -102,7 +102,7 @@ The build selects in this order:
 ## Custom URL Build
 
 ```bash
-DOCKER_BUILDKIT=1 docker build \
+docker build \
   --build-arg ENABLE_LOCAL_MODEL=true \
   --build-arg LOCAL_MODEL_URL="https://example.com/path/model.gguf" \
   --build-arg LOCAL_MODEL_FILENAME=model.gguf \

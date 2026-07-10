@@ -164,10 +164,11 @@ class Phase1RuntimeTests(unittest.TestCase):
 
     def test_dockerfile_local_model_selection_is_deterministic_and_hardened(self):
         dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
-        self.assertIn('exact="/build-models/${LOCAL_MODEL_FILENAME}"', dockerfile)
+        self.assertIn("COPY models ./models", dockerfile)
+        self.assertIn('target="/app/models/${LOCAL_MODEL_FILENAME}"', dockerfile)
         self.assertIn("Using exact bundled model:", dockerfile)
         self.assertIn("Downloading local model from configured LOCAL_MODEL_URL", dockerfile)
-        self.assertIn("find /build-models -maxdepth 1 -type f -name '*.gguf' | sort | head -n 1", dockerfile)
+        self.assertIn("find /app/models -maxdepth 1 -type f -name '*.gguf' | sort | head -n 1", dockerfile)
         self.assertIn("No local GGUF model was found.", dockerfile)
         self.assertIn("test -s", dockerfile)
 

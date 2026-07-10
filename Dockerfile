@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.6
-
 FROM python:3.11-slim AS local-model-deps
 
 WORKDIR /app
@@ -38,19 +36,18 @@ RUN mkdir -p /app/models && \
       rm -rf /wheels; \
     fi
 
-RUN --mount=type=bind,source=models,target=/build-models,ro \
-    mkdir -p /app/models && \
+COPY models ./models
+
+RUN mkdir -p /app/models && \
     if [ "${ENABLE_LOCAL_MODEL}" = "true" ]; then \
-      exact="/build-models/${LOCAL_MODEL_FILENAME}"; \
       target="/app/models/${LOCAL_MODEL_FILENAME}"; \
-      if [ -f "${exact}" ]; then \
-        echo "Using exact bundled model: ${exact}"; \
-        cp "${exact}" "${target}"; \
+      if [ -s "${target}" ]; then \
+        echo "Using exact bundled model: ${target}"; \
       elif [ -n "${LOCAL_MODEL_URL}" ]; then \
         echo "Downloading local model from configured LOCAL_MODEL_URL into ${target}"; \
         LOCAL_MODEL_URL="${LOCAL_MODEL_URL}" LOCAL_MODEL_TARGET="${target}" python /tmp/download_local_model.py; \
       else \
-        fallback="$(find /build-models -maxdepth 1 -type f -name '*.gguf' | sort | head -n 1)"; \
+        fallback="$(find /app/models -maxdepth 1 -type f -name '*.gguf' | sort | head -n 1)"; \
         if [ -n "${fallback}" ]; then \
           echo "Using deterministic fallback model: ${fallback}"; \
           cp "${fallback}" "${target}"; \
