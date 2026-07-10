@@ -54,7 +54,7 @@ ENV ROUTER_PROFILE=accuracy_gate \
     LOCAL_CONFIDENCE_THRESHOLD=1.0 \
     LOCAL_CROSS_CHECK_ENABLED=false \
     LOCAL_MODEL_ENABLED=false \
-    REMOTE_VALIDATION_ESCALATION_ENABLED=true \
+    REMOTE_VALIDATION_ESCALATION_ENABLED=false \
     LOCAL_MODEL_PATH=/app/models/${LOCAL_MODEL_FILENAME} \
     LOCAL_MODEL_MAX_TOKENS=128 \
     LOCAL_MODEL_BATCH_LIMIT=0 \
@@ -66,7 +66,7 @@ ENV ROUTER_PROFILE=accuracy_gate \
     DEADLINE_SAFETY_MARGIN_SECONDS=5 \
     REMOTE_WORKER_COUNT=8 \
     FIREWORKS_TIMEOUT_SECONDS=29 \
-    FIREWORKS_DISABLE_MAX_TOKENS=true \
+    FIREWORKS_DISABLE_MAX_TOKENS=false \
     FIREWORKS_MAX_TOKENS=4096 \
     FIREWORKS_MAX_TOKENS_BY_CATEGORY=sentiment_classification=4096,named_entity_recognition=4096,mathematical_reasoning=4096,logical_deductive_reasoning=4096,factual_knowledge=4096,text_summarisation=4096,code_generation=4096,code_debugging=4096 \
     FIREWORKS_MAX_RETRIES=3 \
@@ -74,6 +74,7 @@ ENV ROUTER_PROFILE=accuracy_gate \
     ROUTER_PROMPT_POLICY_REMOTE_CODE=original \
     ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT=original \
     ROUTER_PROMPT_POLICY_REMOTE_CONCISE=original \
+    ROUTER_PROMPT_POLICY_BY_CATEGORY=code_generation=compact,factual_knowledge=compact \
     ROUTER_MODELS_REMOTE_ACCURACY=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,gemma-4-31b-it-nvfp4 \
     ROUTER_MODELS_REMOTE_CODE=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,gemma-4-31b-it-nvfp4 \
     ROUTER_MODELS_REMOTE_FORMAT_STRICT=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,gemma-4-31b-it-nvfp4 \

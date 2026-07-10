@@ -26,6 +26,7 @@ DEFAULT_ACCURACY_FIRST_MODELS = (
     "gemma-4-31b-it-nvfp4",
 )
 RECOMMENDATION_EXPORT_NAMES = {
+    "FIREWORKS_DISABLE_MAX_TOKENS",
     "FIREWORKS_MAX_TOKENS",
     "FIREWORKS_MAX_TOKENS_BY_CATEGORY",
     "LOCAL_CONFIDENCE_THRESHOLD",
@@ -253,6 +254,7 @@ class RuntimeConfig:
     fireworks_base_url: str | None
     allowed_models: tuple[str, ...]
     fireworks_max_tokens: int
+    fireworks_disable_max_tokens: bool = False
     fireworks_max_tokens_by_category: dict[str, int] | None = None
     router_profile: str = "accuracy_gate"
     local_model_enabled: bool = False
@@ -322,6 +324,7 @@ class RuntimeConfig:
             fireworks_base_url=env.get("FIREWORKS_BASE_URL"),
             allowed_models=tuple(parse_allowed_models(env.get("ALLOWED_MODELS"))),
             fireworks_max_tokens=_get_int_from(env, "FIREWORKS_MAX_TOKENS", 256, 1, 4096),
+            fireworks_disable_max_tokens=_get_bool_from(env, "FIREWORKS_DISABLE_MAX_TOKENS", False),
             fireworks_max_tokens_by_category=_get_int_map_from(
                 env,
                 "FIREWORKS_MAX_TOKENS_BY_CATEGORY",
