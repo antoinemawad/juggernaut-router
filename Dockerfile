@@ -54,7 +54,7 @@ ENV ROUTER_PROFILE=accuracy_gate \
     LOCAL_CONFIDENCE_THRESHOLD=1.0 \
     LOCAL_CROSS_CHECK_ENABLED=false \
     LOCAL_MODEL_ENABLED=false \
-    REMOTE_VALIDATION_ESCALATION_ENABLED=false \
+    REMOTE_VALIDATION_ESCALATION_ENABLED=true \
     LOCAL_MODEL_PATH=/app/models/${LOCAL_MODEL_FILENAME} \
     LOCAL_MODEL_MAX_TOKENS=128 \
     LOCAL_MODEL_BATCH_LIMIT=0 \
@@ -73,7 +73,6 @@ ENV ROUTER_PROFILE=accuracy_gate \
     ROUTER_PROMPT_POLICY_REMOTE_CODE=original \
     ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT=original \
     ROUTER_PROMPT_POLICY_REMOTE_CONCISE=original \
-    ROUTER_PROMPT_POLICY_BY_CATEGORY=code_generation=compact,factual_knowledge=compact \
     ROUTER_MODELS_REMOTE_ACCURACY=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,gemma-4-31b-it-nvfp4 \
     ROUTER_MODELS_REMOTE_CODE=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,gemma-4-31b-it-nvfp4 \
     ROUTER_MODELS_REMOTE_FORMAT_STRICT=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,gemma-4-31b-it-nvfp4 \
