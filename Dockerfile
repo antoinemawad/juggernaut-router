@@ -51,7 +51,7 @@ COPY app ./app
 
 ENV ROUTER_PROFILE=accuracy_gate \
     ROUTER_MODE=conservative \
-    LOCAL_CONFIDENCE_THRESHOLD=0.95 \
+    LOCAL_CONFIDENCE_THRESHOLD=1.0 \
     LOCAL_MODEL_ENABLED=false \
     LOCAL_MODEL_PATH=/app/models/${LOCAL_MODEL_FILENAME} \
     LOCAL_MODEL_MAX_TOKENS=128 \
@@ -60,8 +60,7 @@ ENV ROUTER_PROFILE=accuracy_gate \
     LOCAL_MODEL_THREADS=2 \
     LOCAL_MODEL_TEMPERATURE=0 \
     LOCAL_MODEL_TIMEOUT_SECONDS=20 \
-    FIREWORKS_MAX_TOKENS=192 \
-    FIREWORKS_MAX_TOKENS_BY_CATEGORY=sentiment_classification=96,named_entity_recognition=192,mathematical_reasoning=96,logical_deductive_reasoning=96,factual_knowledge=384,text_summarisation=512,code_generation=512,code_debugging=512 \
+    FIREWORKS_MAX_TOKENS=256 \
     FIREWORKS_MAX_RETRIES=1 \
     ROUTER_PROMPT_POLICY_REMOTE_ACCURACY=original \
     ROUTER_PROMPT_POLICY_REMOTE_CODE=original \
