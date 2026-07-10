@@ -552,7 +552,7 @@ def _answer_type(answer: str) -> str:
 
 
 def _escalation_models(current_model: str | None, config: RuntimeConfig) -> tuple[str, ...]:
-    models = DEFAULT_ACCURACY_FIRST_MODELS if config.router_mode == "accuracy_first" else config.models_remote_escalation
+    models = config.models_remote_escalation or DEFAULT_ACCURACY_FIRST_MODELS
     return tuple(model for model in models if model != current_model)
 
 
