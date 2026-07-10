@@ -179,6 +179,49 @@ def answer_task(
             },
         )
 
+    if config.local_model_enabled and not _fireworks_available(config):
+        _finish_timings(timings, task_timer, deadline)
+        return AgentResult(
+            answer=SAFE_FALLBACK_ANSWER,
+            route="fallback",
+            route_reason="fireworks_unavailable_after_local_model",
+            category=classification.category,
+            router_mode=config.router_mode,
+            remote_mode=remote_mode,
+            prompt_policy=prompt_policy,
+            max_tokens=config.fireworks_max_tokens,
+            prompt_char_count=prompt_char_count,
+            prompt_token_estimate=prompt_token_estimate,
+            remote_prompt_token_estimate=remote_prompt_token_estimate,
+            deadline_decision=_deadline_decision(deadline, config),
+            error="fireworks_unavailable",
+            timings=timings,
+            metadata={
+                "answer_shape": classification.answer_shape,
+                "constraints": list(classification.constraints),
+                "classification_confidence": classification.confidence,
+                "risk_score": classification.risk_score,
+                "risk_components": classification.risk_components,
+                "solver_confidence": local_result.confidence if local_result is not None else None,
+                "local_evidence": list(local_result.evidence) if local_result is not None else [],
+                "local_proof_layers_passed": list(validation.passed_layers),
+                "local_proof_layers_failed": list(validation.failed_layers),
+                "validator_notes": list(validation.notes),
+                "fireworks_called": False,
+                "fireworks_http_status": None,
+                "fireworks_error": "fireworks_unavailable",
+                "local_model_attempted": local_model is not None,
+                "local_model_skip_reason": local_model_skip_reason,
+                "local_model_error": local_model.error if local_model is not None else None,
+                "local_model_path": local_model.model_path if local_model is not None else None,
+                "local_model_runtime": local_model.runtime if local_model is not None else None,
+                "local_model_validation_failed": (
+                    list(local_model_validation.failed_layers) if local_model_validation is not None else []
+                ),
+                "final_answer_type": _answer_type(SAFE_FALLBACK_ANSWER),
+            },
+        )
+
     remote = ask_fireworks_structured(
         remote_prompt,
         config=config,
@@ -375,6 +418,10 @@ def _should_escalate_remote_answer(remote, remote_validation, config: RuntimeCon
     return True
 
 
+def _fireworks_available(config: RuntimeConfig) -> bool:
+    return bool(config.fireworks_api_key and config.fireworks_base_url and config.allowed_models)
+
+
 def _local_model_skip_reason(config: RuntimeConfig, deadline: DeadlineManager | None, classification, prompt: str) -> str | None:
     if not config.local_model_enabled:
         return "local_model_disabled"
@@ -395,7 +442,10 @@ def _local_model_skip_reason(config: RuntimeConfig, deadline: DeadlineManager | 
         return "fresh_factual_task"
     if classification.risk_components.get("reasoning_depth", 0) >= 0.75:
         return "deep_reasoning_task"
-    if classification.category in {"code_generation", "code_debugging"} and "code_only" not in set(classification.constraints):
+    if classification.category in {"code_generation", "code_debugging"} and not _code_task_is_local_model_eligible(
+        prompt,
+        classification,
+    ):
         return "code_task_requires_fireworks"
     return None
 
@@ -407,9 +457,38 @@ def _local_model_safe_categories(config: RuntimeConfig) -> set[str]:
         "mathematical_reasoning",
         "logical_deductive_reasoning",
     }
+    if config.router_profile == "accuracy_gate":
+        safe.update(
+            {
+                "factual_knowledge",
+                "text_summarisation",
+                "code_generation",
+                "code_debugging",
+            }
+        )
     if config.router_profile == "token_competitive":
-        safe.update({"factual_knowledge", "text_summarisation", "code_generation"})
+        safe.update({"factual_knowledge", "text_summarisation", "code_generation", "code_debugging"})
     return safe
+
+
+def _code_task_is_local_model_eligible(prompt: str, classification) -> bool:
+    constraints = set(classification.constraints)
+    if "code_only" in constraints:
+        return True
+    if classification.answer_shape in {"code", "corrected_code"}:
+        return True
+    lower = prompt.lower()
+    code_markers = (
+        "write code",
+        "write python",
+        "python function",
+        "return code",
+        "return only code",
+        "corrected code",
+        "debug this",
+        "def ",
+    )
+    return any(marker in lower for marker in code_markers)
 
 
 def _local_model_max_prompt_chars(config: RuntimeConfig) -> int:

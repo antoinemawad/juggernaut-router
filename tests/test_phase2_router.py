@@ -323,6 +323,165 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.total_tokens, 8)
         self.assertIn("reasoning_leakage", result.metadata["local_model_validation_failed"])
 
+    def test_accuracy_gate_factual_attempts_local_model(self):
+        from app.local_model_client import LocalModelResult
+
+        with patch.dict(
+            os.environ,
+            {
+                "ROUTER_PROFILE": "accuracy_gate",
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(
+                answer="FIREWORKS_BASE_URL is the injected judging proxy used to record Fireworks token usage.",
+                elapsed_ms=3,
+            ),
+        ) as local_model, patch("app.agent.ask_fireworks_structured") as fireworks:
+            result = answer_task(
+                "local_factual",
+                "Explain why Track 1 routers must use FIREWORKS_BASE_URL instead of a hardcoded public API URL.",
+            )
+
+        local_model.assert_called_once()
+        fireworks.assert_not_called()
+        self.assertEqual(result.route, "local_model")
+        self.assertTrue(result.metadata["local_model_validation_passed"])
+
+    def test_accuracy_gate_code_generation_attempts_local_model_when_code_shape(self):
+        from app.local_model_client import LocalModelResult
+
+        with patch.dict(
+            os.environ,
+            {
+                "ROUTER_PROFILE": "accuracy_gate",
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(
+                answer="def parse_ints(text):\n    return []",
+                elapsed_ms=3,
+            ),
+        ) as local_model, patch("app.agent.ask_fireworks_structured") as fireworks:
+            result = answer_task(
+                "local_code",
+                "Write a Python function parse_ints(text) that returns all integers in the string. Return only code.",
+            )
+
+        local_model.assert_called_once()
+        fireworks.assert_not_called()
+        self.assertEqual(result.route, "local_model")
+        self.assertEqual(result.answer, "def parse_ints(text):\n    return []")
+
+    def test_rejected_local_code_escalates_to_fireworks_when_available(self):
+        from app.fireworks_client import FireworksResult
+        from app.local_model_client import LocalModelResult
+
+        with patch.dict(
+            os.environ,
+            {
+                "ROUTER_PROFILE": "accuracy_gate",
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(answer="Here is code later.", elapsed_ms=3),
+        ) as local_model, patch(
+            "app.agent.ask_fireworks_structured",
+            return_value=FireworksResult(
+                answer="def parse_ints(text):\n    return []",
+                model="minimax-m3",
+                total_tokens=11,
+            ),
+        ) as fireworks:
+            result = answer_task(
+                "bad_local_code_remote",
+                "Write a Python function parse_ints(text) that returns all integers in the string. Return only code.",
+            )
+
+        local_model.assert_called_once()
+        fireworks.assert_called_once()
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.answer, "def parse_ints(text):\n    return []")
+        self.assertTrue(result.metadata["local_model_attempted"])
+        self.assertIn("answer_shape", result.metadata["local_model_validation_failed"])
+
+    def test_rejected_local_output_falls_back_when_fireworks_unavailable(self):
+        from app.local_model_client import LocalModelResult
+
+        with patch.dict(
+            os.environ,
+            {
+                "ROUTER_PROFILE": "accuracy_gate",
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(answer="", elapsed_ms=3, error="local_model_empty"),
+        ) as local_model, patch("app.agent.ask_fireworks_structured") as fireworks:
+            result = answer_task(
+                "bad_local_no_fireworks",
+                "Explain why Track 1 routers must use FIREWORKS_BASE_URL instead of a hardcoded public API URL.",
+            )
+
+        local_model.assert_called_once()
+        fireworks.assert_not_called()
+        self.assertEqual(result.route, "fallback")
+        self.assertTrue(result.metadata["local_model_attempted"])
+        self.assertEqual(result.metadata["local_model_error"], "local_model_empty")
+        self.assertEqual(result.route_reason, "fireworks_unavailable_after_local_model")
+
+    def test_accuracy_gate_math_still_uses_local_model_when_no_deterministic_solver_matches(self):
+        from app.local_model_client import LocalModelResult
+
+        with patch.dict(
+            os.environ,
+            {
+                "ROUTER_PROFILE": "accuracy_gate",
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(answer="42", elapsed_ms=3),
+        ) as local_model:
+            result = answer_task("local_math", "Calculate the answer to life plus zero. Return only the number.")
+
+        local_model.assert_called_once()
+        self.assertEqual(result.route, "local_model")
+        self.assertEqual(result.answer, "42")
+
+    def test_deterministic_solver_bypasses_local_model(self):
+        with patch.dict(
+            os.environ,
+            {
+                "ROUTER_PROFILE": "accuracy_gate",
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+            },
+            clear=True,
+        ), patch("app.agent.ask_local_model_structured") as local_model, patch("app.agent.ask_fireworks_structured") as fireworks:
+            result = answer_task("deterministic_math", "A product costs $80 and is discounted by 25%. What is the final price?")
+
+        local_model.assert_not_called()
+        fireworks.assert_not_called()
+        self.assertEqual(result.route, "local")
+        self.assertEqual(result.answer, "$60")
+
     def test_remote_accuracy_prompt_policy_can_be_overridden(self):
         captured = {}
 
