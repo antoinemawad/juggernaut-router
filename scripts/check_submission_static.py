@@ -87,7 +87,7 @@ def check_ignore_files() -> list[str]:
             errors.append(f".gitignore missing {required}")
         if required not in dockerignore:
             errors.append(f".dockerignore missing {required}")
-    for required in ("checkpoints/", "*.safetensors", "*.bin", "*.pt", "*.pth"):
+    for required in ("models/*", "!models/local-model.gguf", "checkpoints/", "*.safetensors", "*.bin", "*.pt", "*.pth"):
         if required not in dockerignore:
             errors.append(f".dockerignore missing model artifact guard {required}")
     for required in (
