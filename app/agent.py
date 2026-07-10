@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from app.classifier import classify_prompt
 from app.config import DEFAULT_ACCURACY_FIRST_MODELS, RuntimeConfig
 from app.deadline import DeadlineManager, StageTimer
@@ -84,6 +86,8 @@ def answer_task(
     remote_prompt = _apply_prompt_policy(prompt, prompt_policy)
     remote_prompt_token_estimate = estimate_tokens(remote_prompt)
     system_prompt = _system_prompt_for_remote_mode(remote_mode)
+    remote_max_tokens = _max_tokens_for_category(config, classification.category)
+    remote_config = _config_with_max_tokens(config, remote_max_tokens)
 
     local_model = None
     local_model_validation = None
@@ -116,7 +120,7 @@ def answer_task(
                     selected_model="local_model",
                     remote_mode=remote_mode,
                     prompt_policy=prompt_policy,
-                    max_tokens=config.fireworks_max_tokens,
+                    max_tokens=remote_max_tokens,
                     prompt_char_count=prompt_char_count,
                     prompt_token_estimate=prompt_token_estimate,
                     remote_prompt_token_estimate=remote_prompt_token_estimate,
@@ -155,7 +159,7 @@ def answer_task(
             router_mode=config.router_mode,
             remote_mode=remote_mode,
             prompt_policy=prompt_policy,
-            max_tokens=config.fireworks_max_tokens,
+            max_tokens=remote_max_tokens,
             prompt_char_count=prompt_char_count,
             prompt_token_estimate=prompt_token_estimate,
             remote_prompt_token_estimate=remote_prompt_token_estimate,
@@ -196,7 +200,7 @@ def answer_task(
             router_mode=config.router_mode,
             remote_mode=remote_mode,
             prompt_policy=prompt_policy,
-            max_tokens=config.fireworks_max_tokens,
+            max_tokens=remote_max_tokens,
             prompt_char_count=prompt_char_count,
             prompt_token_estimate=prompt_token_estimate,
             remote_prompt_token_estimate=remote_prompt_token_estimate,
@@ -234,7 +238,7 @@ def answer_task(
 
     remote = ask_fireworks_structured(
         remote_prompt,
-        config=config,
+        config=remote_config,
         deadline=deadline,
         preferred_models=_preferred_models_for_remote_mode(remote_mode, config, classification.category),
         system_prompt=system_prompt,
@@ -251,7 +255,7 @@ def answer_task(
         escalation_prompt = _apply_prompt_policy(prompt, escalation_prompt_policy)
         escalation = ask_fireworks_structured(
             escalation_prompt,
-            config=config,
+            config=_config_with_max_tokens(config, _escalation_max_tokens(remote_max_tokens, classification.category)),
             deadline=deadline,
             preferred_models=_escalation_models(remote.model, config),
             system_prompt=_system_prompt_for_remote_mode(remote_mode),
@@ -277,7 +281,7 @@ def answer_task(
         selected_model=remote.model,
         remote_mode=remote_mode,
         prompt_policy=prompt_policy,
-        max_tokens=config.fireworks_max_tokens,
+        max_tokens=remote_max_tokens,
         prompt_char_count=prompt_char_count,
         prompt_token_estimate=prompt_token_estimate,
         remote_prompt_token_estimate=remote_prompt_token_estimate,
@@ -417,6 +421,24 @@ def _preferred_models_for_remote_mode(
     if remote_mode == "remote_format_strict":
         return config.models_remote_format_strict
     return config.models_remote_concise
+
+
+def _max_tokens_for_category(config: RuntimeConfig, category: str | None) -> int:
+    if category and config.fireworks_max_tokens_by_category:
+        return config.fireworks_max_tokens_by_category.get(category, config.fireworks_max_tokens)
+    return config.fireworks_max_tokens
+
+
+def _escalation_max_tokens(base_max_tokens: int, category: str | None) -> int:
+    if category in {"code_generation", "code_debugging", "text_summarisation", "factual_knowledge"}:
+        return max(base_max_tokens, 384)
+    return base_max_tokens
+
+
+def _config_with_max_tokens(config: RuntimeConfig, max_tokens: int) -> RuntimeConfig:
+    if max_tokens == config.fireworks_max_tokens:
+        return config
+    return replace(config, fireworks_max_tokens=max_tokens)
 
 
 def _should_escalate_remote_answer(remote, remote_validation, config: RuntimeConfig, deadline: DeadlineManager | None) -> bool:

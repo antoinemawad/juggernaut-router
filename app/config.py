@@ -27,6 +27,7 @@ DEFAULT_ACCURACY_FIRST_MODELS = (
 )
 RECOMMENDATION_EXPORT_NAMES = {
     "FIREWORKS_MAX_TOKENS",
+    "FIREWORKS_MAX_TOKENS_BY_CATEGORY",
     "LOCAL_CONFIDENCE_THRESHOLD",
     "LOCAL_MODEL_COMMAND",
     "LOCAL_MODEL_ENABLED",
@@ -167,6 +168,33 @@ def _get_model_preference_map_from(env: dict[str, str], name: str) -> dict[str, 
     return mapping
 
 
+def _get_int_map_from(
+    env: dict[str, str],
+    name: str,
+    minimum: int | None = None,
+    maximum: int | None = None,
+) -> dict[str, int]:
+    raw = env.get(name, "")
+    mapping = {}
+    for item in raw.split(","):
+        item = item.strip()
+        if not item or "=" not in item:
+            continue
+        category, value_raw = item.split("=", 1)
+        category = category.strip()
+        try:
+            value = int(value_raw.strip())
+        except ValueError:
+            continue
+        if minimum is not None:
+            value = max(minimum, value)
+        if maximum is not None:
+            value = min(maximum, value)
+        if category:
+            mapping[category] = value
+    return mapping
+
+
 def parse_allowed_models(raw: str | None) -> list[str]:
     if not raw:
         return []
@@ -225,6 +253,7 @@ class RuntimeConfig:
     fireworks_base_url: str | None
     allowed_models: tuple[str, ...]
     fireworks_max_tokens: int
+    fireworks_max_tokens_by_category: dict[str, int] | None = None
     router_profile: str = "accuracy_gate"
     local_model_enabled: bool = False
     local_model_command: str | None = None
@@ -293,6 +322,12 @@ class RuntimeConfig:
             fireworks_base_url=env.get("FIREWORKS_BASE_URL"),
             allowed_models=tuple(parse_allowed_models(env.get("ALLOWED_MODELS"))),
             fireworks_max_tokens=_get_int_from(env, "FIREWORKS_MAX_TOKENS", 256, 1, 4096),
+            fireworks_max_tokens_by_category=_get_int_map_from(
+                env,
+                "FIREWORKS_MAX_TOKENS_BY_CATEGORY",
+                1,
+                4096,
+            ),
             router_profile=profile,
             prompt_policy_remote_accuracy=_get_prompt_policy_from(env, "ROUTER_PROMPT_POLICY_REMOTE_ACCURACY", "compact"),
             prompt_policy_remote_code=_get_prompt_policy_from(env, "ROUTER_PROMPT_POLICY_REMOTE_CODE", "answer_only"),

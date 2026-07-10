@@ -459,6 +459,25 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(config.models_remote_format_strict, ("gemma-4-26b-a4b-it", "kimi-k2p7-code"))
         self.assertEqual(config.models_remote_concise, ("minimax-m3", "gemma-4-26b-a4b-it", "gemma-4-31b-it"))
 
+    def test_config_parses_category_token_budgets(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_MAX_TOKENS": "192",
+                "FIREWORKS_MAX_TOKENS_BY_CATEGORY": (
+                    "sentiment_classification=64,code_generation=512,bad=not-int,text_summarisation=99999"
+                ),
+            },
+            clear=True,
+        ):
+            config = RuntimeConfig.from_env()
+
+        self.assertEqual(config.fireworks_max_tokens, 192)
+        self.assertEqual(config.fireworks_max_tokens_by_category["sentiment_classification"], 64)
+        self.assertEqual(config.fireworks_max_tokens_by_category["code_generation"], 512)
+        self.assertEqual(config.fireworks_max_tokens_by_category["text_summarisation"], 4096)
+        self.assertNotIn("bad", config.fireworks_max_tokens_by_category)
+
     def test_config_loads_runtime_recommendation_path(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             recommendation = Path(tmpdir) / "recommendation.json"

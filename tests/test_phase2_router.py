@@ -653,6 +653,33 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertIn("Answer accurately and concisely", captured["payload"]["messages"][1]["content"])
         self.assertNotIn("Final answer only:", captured["payload"]["messages"][1]["content"])
 
+    def test_category_token_budget_override_reaches_fireworks_payload(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse("def parse_ints(text):\n    return []")
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "gemma-4-31b-it",
+                "FIREWORKS_MAX_TOKENS": "192",
+                "FIREWORKS_MAX_TOKENS_BY_CATEGORY": "code_generation=512,sentiment_classification=64",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", fake_urlopen):
+            result = answer_task(
+                "codegen",
+                "Write a Python function parse_ints(text) that returns all integers in the string. Return only code.",
+            )
+
+        self.assertEqual(result.category, "code_generation")
+        self.assertEqual(result.max_tokens, 512)
+        self.assertEqual(captured["payload"]["max_tokens"], 512)
+
     def test_remote_accuracy_model_preference_can_be_overridden(self):
         captured = {}
 
