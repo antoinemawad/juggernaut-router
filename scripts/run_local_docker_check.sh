@@ -4,6 +4,7 @@ set -euo pipefail
 IMAGE="${IMAGE:-juggernaut-router:local-model}"
 INPUT_DIR="${INPUT_DIR:-$(pwd)/local_test/accuracy_gate_input}"
 OUTPUT_DIR="${OUTPUT_DIR:-$(pwd)/local_test/output/local_model_check}"
+MIN_FIXTURE_PASS_RATE="${MIN_FIXTURE_PASS_RATE:-0}"
 
 mkdir -p "$OUTPUT_DIR"
 rm -f "$OUTPUT_DIR/results.json" "$OUTPUT_DIR/router_log.jsonl"
@@ -70,3 +71,8 @@ print("first_5_answers:")
 for row in results[:5]:
     print(json.dumps(row, ensure_ascii=False))
 PY
+
+python3 scripts/score_submission_fixture.py \
+  "$INPUT_DIR/tasks.json" \
+  "$OUTPUT_DIR/results.json" \
+  --min-pass-rate "$MIN_FIXTURE_PASS_RATE"

@@ -1,16 +1,395 @@
 {
   "tasks": [
     {
-      "id": "official_like_factual",
-      "question": "In two sentences, explain why a Track 1 router must call Fireworks through FIREWORKS_BASE_URL instead of a hardcoded public API URL."
+      "id": "factual_hackathon_proxy",
+      "question": "Explain why a Track 1 router must call Fireworks through the injected base URL instead of a hardcoded public API URL. Answer in two sentences.",
+      "category": "factual_knowledge",
+      "difficulty": "hard",
+      "answer_shape": "short_text",
+      "constraints": [
+        "two_sentences"
+      ],
+      "output_constraints": [
+        "two_sentences"
+      ],
+      "verifier": "keyword_coverage",
+      "expected_keywords": [
+        "FIREWORKS_BASE_URL",
+        "proxy",
+        "token",
+        "usage",
+        "hardcoded"
+      ],
+      "expected_answer": "The router must use FIREWORKS_BASE_URL so the judging proxy can record Fireworks token usage. Hardcoding the public API URL would bypass the proxy and violate the evaluation contract."
     },
     {
-      "id": "official_like_math",
-      "question": "A product costs $80 and is discounted by 25%. What is the final price? Return only the number with a dollar sign."
+      "id": "factual_local_tokens_zero",
+      "question": "In one sentence, explain why local deterministic logic can help a Track 1 router reduce scored token usage.",
+      "category": "factual_knowledge",
+      "difficulty": "medium",
+      "answer_shape": "short_text",
+      "constraints": [
+        "one_sentence"
+      ],
+      "output_constraints": [
+        "one_sentence"
+      ],
+      "verifier": "keyword_coverage",
+      "expected_keywords": [
+        "local",
+        "zero",
+        "Fireworks",
+        "tokens",
+        "deterministic"
+      ],
+      "expected_answer": "Local deterministic logic can answer safe tasks with zero scored Fireworks tokens while preserving remote calls for risky cases."
     },
     {
-      "id": "official_like_code",
-      "question": "Write a Python function named clamp(x, low, high) that returns low when x is below low, high when x is above high, and x otherwise. Return only code."
+      "id": "factual_rocm",
+      "question": "What is ROCm and why is it relevant for AI workloads on AMD GPUs? Answer in two sentences.",
+      "category": "factual_knowledge",
+      "difficulty": "medium",
+      "answer_shape": "short_text",
+      "constraints": [
+        "one_sentence"
+      ],
+      "output_constraints": [
+        "two_sentences"
+      ],
+      "verifier": "keyword_coverage",
+      "expected_keywords": [
+        "ROCm",
+        "AMD",
+        "GPU",
+        "AI"
+      ],
+      "expected_answer": "ROCm is AMD's open-source software platform for GPU computing. It matters for AI because it enables frameworks and inference/training workloads to run on AMD GPUs."
+    },
+    {
+      "id": "math_discount_tax",
+      "question": "A product costs $80 and is discounted by 25%, then taxed at 10%. What is the final price? Return only the dollar amount.",
+      "category": "mathematical_reasoning",
+      "difficulty": "medium",
+      "answer_shape": "number",
+      "constraints": [
+        "exact_numeric",
+        "rounding_required"
+      ],
+      "output_constraints": [
+        "exact_numeric",
+        "answer_only"
+      ],
+      "verifier": "numeric_exact",
+      "expected_keywords": [
+        "66"
+      ],
+      "expected_answer": "$66"
+    },
+    {
+      "id": "math_budget_remaining",
+      "question": "A team has $50.00 in credits and spends $7.25, $3.75, and $12.00. How many dollars remain? Return only the dollar amount.",
+      "category": "mathematical_reasoning",
+      "difficulty": "medium",
+      "answer_shape": "number",
+      "constraints": [
+        "answer_only",
+        "exact_numeric"
+      ],
+      "output_constraints": [
+        "answer_only",
+        "exact_numeric"
+      ],
+      "verifier": "numeric_exact",
+      "expected_keywords": [
+        "27"
+      ],
+      "expected_answer": "$27.00"
+    },
+    {
+      "id": "sentiment_sarcasm_outage",
+      "question": "Classify the sentiment as positive, negative, or neutral. Return only the label: Yeah right, the outage was just perfect.",
+      "category": "sentiment_classification",
+      "difficulty": "medium",
+      "answer_shape": "label",
+      "constraints": [
+        "answer_only"
+      ],
+      "output_constraints": [
+        "answer_only"
+      ],
+      "verifier": "label_set",
+      "expected_keywords": [
+        "negative"
+      ],
+      "expected_answer": "negative"
+    },
+    {
+      "id": "sentiment_neutral_tradeoff",
+      "question": "Classify the sentiment as positive, negative, or neutral. Return only the label: The tool is fast, but the documentation is incomplete.",
+      "category": "sentiment_classification",
+      "difficulty": "medium",
+      "answer_shape": "label",
+      "constraints": [
+        "answer_only"
+      ],
+      "output_constraints": [
+        "answer_only"
+      ],
+      "verifier": "label_set",
+      "expected_keywords": [
+        "neutral"
+      ],
+      "expected_answer": "neutral"
+    },
+    {
+      "id": "summary_remove_noise",
+      "question": "Summarise in one sentence, ignoring irrelevant chatter: Note: coffee is cold. Important: The router should classify locally, answer safe tasks locally, and escalate uncertain tasks to Fireworks. Random: blue chairs are nice.",
+      "category": "text_summarisation",
+      "difficulty": "medium",
+      "answer_shape": "summary",
+      "constraints": [
+        "one_sentence"
+      ],
+      "output_constraints": [
+        "one_sentence"
+      ],
+      "verifier": "summary_constraints",
+      "expected_keywords": [
+        "classify locally",
+        "safe tasks",
+        "escalate",
+        "Fireworks"
+      ],
+      "expected_answer": "The router classifies locally, handles safe tasks locally, and escalates uncertain tasks to Fireworks."
+    },
+    {
+      "id": "summary_exact_7",
+      "question": "Summarise in exactly 7 words: Gemma may be cost-effective for concise routing tasks after deployment readiness is confirmed.",
+      "category": "text_summarisation",
+      "difficulty": "hard",
+      "answer_shape": "summary",
+      "constraints": [
+        "exact_word_count",
+        "one_sentence",
+        "no_explanation"
+      ],
+      "output_constraints": [
+        "exact_word_count",
+        "one_sentence"
+      ],
+      "verifier": "word_count",
+      "expected_keywords": [
+        "Gemma",
+        "cost-effective",
+        "routing",
+        "deployment"
+      ],
+      "expected_answer": "Gemma supports cost-effective routing after deployment readiness."
+    },
+    {
+      "id": "summary_cloud",
+      "question": "Summarise the following text in one sentence: AMD Developer Cloud gives developers access to AMD GPUs for AI workloads. It supports ROCm, PyTorch, and vLLM environments for building and testing AI applications.",
+      "category": "text_summarisation",
+      "difficulty": "easy",
+      "answer_shape": "summary",
+      "constraints": [
+        "one_sentence"
+      ],
+      "output_constraints": [
+        "one_sentence"
+      ],
+      "verifier": "summary_constraints",
+      "expected_keywords": [
+        "AMD Developer Cloud",
+        "AMD GPUs",
+        "AI"
+      ],
+      "expected_answer": "AMD Developer Cloud provides AMD GPU access and software environments for building and testing AI workloads."
+    },
+    {
+      "id": "ner_table_style",
+      "question": "Extract named entities and label them from this note: Speaker=Lisa Su; Company=AMD; Location=San Jose; Date=July 10, 2026.",
+      "category": "named_entity_recognition",
+      "difficulty": "medium",
+      "answer_shape": "entity_list",
+      "constraints": [
+        "entity_labels"
+      ],
+      "output_constraints": [
+        "entity_labels"
+      ],
+      "verifier": "entity_labels",
+      "expected_keywords": [
+        "Lisa Su",
+        "PERSON",
+        "AMD",
+        "ORG",
+        "San Jose",
+        "LOCATION",
+        "July 10, 2026",
+        "DATE"
+      ],
+      "expected_answer": "Lisa Su: PERSON; AMD: ORG; San Jose: LOCATION; July 10, 2026: DATE"
+    },
+    {
+      "id": "ner_no_entities",
+      "question": "Extract named entities and label them. Return 'None' if there are no named entities: the router handled several tasks quickly yesterday.",
+      "category": "named_entity_recognition",
+      "difficulty": "medium",
+      "answer_shape": "entity_list",
+      "constraints": [
+        "answer_only"
+      ],
+      "output_constraints": [
+        "answer_only"
+      ],
+      "verifier": "keyword_coverage",
+      "expected_keywords": [
+        "None"
+      ],
+      "expected_answer": "None"
+    },
+    {
+      "id": "debug_mutable_default",
+      "question": "Return only corrected code:\n\ndef append_item(item, items=[]):\n    items.append(item)\n    return items\n\nFix the shared-list bug.",
+      "category": "code_debugging",
+      "difficulty": "hard",
+      "answer_shape": "corrected_code",
+      "constraints": [
+        "code_only",
+        "include_corrected_code"
+      ],
+      "output_constraints": [
+        "code_only"
+      ],
+      "verifier": "python_syntax",
+      "expected_keywords": [
+        "def append_item",
+        "items=None",
+        "if items is None",
+        "items.append",
+        "return items"
+      ],
+      "expected_answer": "def append_item(item, items=None):\n    if items is None:\n        items = []\n    items.append(item)\n    return items"
+    },
+    {
+      "id": "debug_boolean_condition",
+      "question": "Return only corrected code:\n\ndef is_valid_score(score):\n    return score >= 0 or score <= 100\n\nIt should be True only for scores from 0 through 100 inclusive.",
+      "category": "code_debugging",
+      "difficulty": "medium",
+      "answer_shape": "corrected_code",
+      "constraints": [
+        "code_only"
+      ],
+      "output_constraints": [
+        "code_only"
+      ],
+      "verifier": "python_syntax",
+      "expected_keywords": [
+        "def is_valid_score",
+        "0 <= score <= 100",
+        "return"
+      ],
+      "expected_answer": "def is_valid_score(score):\n    return 0 <= score <= 100"
+    },
+    {
+      "id": "logic_insufficient_order",
+      "question": "A is older than B. C is older than D. Who is oldest among A, B, C, and D? Return only the answer.",
+      "category": "logical_deductive_reasoning",
+      "difficulty": "hard",
+      "answer_shape": "short_text",
+      "constraints": [
+        "answer_only"
+      ],
+      "output_constraints": [
+        "answer_only"
+      ],
+      "verifier": "keyword_coverage",
+      "expected_keywords": [
+        "cannot determine"
+      ],
+      "expected_answer": "Cannot determine"
+    },
+    {
+      "id": "logic_double_negative",
+      "question": "It is false that the build did not pass. Did the build pass? Return only yes or no.",
+      "category": "logical_deductive_reasoning",
+      "difficulty": "hard",
+      "answer_shape": "label",
+      "constraints": [
+        "answer_only"
+      ],
+      "output_constraints": [
+        "one_word"
+      ],
+      "verifier": "label_set",
+      "expected_keywords": [
+        "yes"
+      ],
+      "expected_answer": "yes"
+    },
+    {
+      "id": "logic_seating_left",
+      "question": "Three people sit in a row. Maya is left of Noah. Omar is right of Noah. Who sits in the middle? Return only the name.",
+      "category": "logical_deductive_reasoning",
+      "difficulty": "medium",
+      "answer_shape": "label",
+      "constraints": [
+        "answer_only",
+        "no_explanation"
+      ],
+      "output_constraints": [
+        "one_word"
+      ],
+      "verifier": "label_set",
+      "expected_keywords": [
+        "Noah"
+      ],
+      "expected_answer": "Noah"
+    },
+    {
+      "id": "codegen_parse_csv_ints",
+      "question": "Write Python code only: define parse_ints(text) that splits a comma-separated string and returns a list of integers, ignoring empty parts.",
+      "category": "code_generation",
+      "difficulty": "medium",
+      "answer_shape": "code",
+      "constraints": [
+        "code_only"
+      ],
+      "output_constraints": [
+        "code_only"
+      ],
+      "verifier": "python_syntax",
+      "expected_keywords": [
+        "def parse_ints",
+        "split",
+        "int",
+        "if",
+        "return"
+      ],
+      "expected_answer": "def parse_ints(text):\n    return [int(part.strip()) for part in text.split(',') if part.strip()]"
+    },
+    {
+      "id": "codegen_top_n",
+      "question": "Write a Python function top_n(values, n) that returns the n largest values in descending order. Return only code.",
+      "category": "code_generation",
+      "difficulty": "medium",
+      "answer_shape": "code",
+      "constraints": [
+        "code_only"
+      ],
+      "output_constraints": [
+        "code_only"
+      ],
+      "verifier": "python_syntax",
+      "expected_keywords": [
+        "def top_n",
+        "sorted",
+        "reverse=True",
+        "[:n]",
+        "return"
+      ],
+      "expected_answer": "def top_n(values, n):\n    return sorted(values, reverse=True)[:n]"
     }
   ]
 }

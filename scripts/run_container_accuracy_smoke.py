@@ -13,6 +13,7 @@ def main() -> int:
     parser.add_argument("--image", default="juggernaut-router:local")
     parser.add_argument("--input-dir", default="local_test/accuracy_gate_input")
     parser.add_argument("--platform", default="linux/amd64")
+    parser.add_argument("--min-pass-rate", type=float, default=0.0)
     args = parser.parse_args()
 
     repo = Path.cwd()
@@ -89,6 +90,22 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 7
+
+        score_cmd = [
+            sys.executable,
+            str(repo / "scripts" / "score_submission_fixture.py"),
+            str(tasks_path),
+            str(results_path),
+            "--min-pass-rate",
+            str(args.min_pass_rate),
+        ]
+        score_proc = subprocess.run(score_cmd, text=True, capture_output=True, check=False)
+        if score_proc.stdout:
+            print(score_proc.stdout, end="")
+        if score_proc.stderr:
+            print(score_proc.stderr, end="", file=sys.stderr)
+        if score_proc.returncode != 0:
+            return score_proc.returncode
     return 0
 
 
