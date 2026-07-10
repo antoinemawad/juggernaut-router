@@ -195,6 +195,7 @@ def startup_diagnostics(
         "fireworks_api_key_present": bool(config.fireworks_api_key),
         "local_model_enabled": config.local_model_enabled,
         "local_model_path": str(config.local_model_path) if config.local_model_path else None,
+        "local_model_batch_limit": config.local_model_batch_limit,
         "tasks_parsed": tasks_parsed,
         "input_error": input_error,
         **input_diagnostics,
@@ -326,7 +327,13 @@ def process_task(
                 "remaining_budget_ms": deadline.remaining_budget_ms(),
             }
         else:
-            agent_result = answer_task(task_id, prompt, config=config, deadline=deadline)
+            agent_result = answer_task(
+                task_id,
+                prompt,
+                config=config,
+                deadline=deadline,
+                local_model_allowed=index < config.local_model_batch_limit,
+            )
             answer = agent_result.answer
             telemetry_record = agent_result.telemetry_record(task_id)
     except Exception as exc:

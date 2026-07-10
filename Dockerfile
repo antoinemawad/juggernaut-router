@@ -33,7 +33,6 @@ RUN mkdir -p /app/models && \
       rm -rf /wheels /var/lib/apt/lists/*; \
     fi
 
-COPY app ./app
 COPY models ./models
 
 RUN mkdir -p /app/models && \
@@ -48,12 +47,15 @@ RUN mkdir -p /app/models && \
       test -f "/app/models/${LOCAL_MODEL_FILENAME}"; \
     fi
 
+COPY app ./app
+
 ENV ROUTER_PROFILE=accuracy_gate \
     ROUTER_MODE=accuracy_first \
     LOCAL_CONFIDENCE_THRESHOLD=0.95 \
     LOCAL_MODEL_ENABLED=${ENABLE_LOCAL_MODEL} \
     LOCAL_MODEL_PATH=/app/models/${LOCAL_MODEL_FILENAME} \
     LOCAL_MODEL_MAX_TOKENS=128 \
+    LOCAL_MODEL_BATCH_LIMIT=12 \
     LOCAL_MODEL_CONTEXT=1024 \
     LOCAL_MODEL_THREADS=2 \
     LOCAL_MODEL_TEMPERATURE=0 \

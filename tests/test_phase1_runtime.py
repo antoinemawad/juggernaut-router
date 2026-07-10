@@ -231,6 +231,7 @@ class Phase1RuntimeTests(unittest.TestCase):
                 "LOCAL_MODEL_ENABLED": "true",
                 "LOCAL_MODEL_PATH": "/app/models/qwen.gguf",
                 "LOCAL_MODEL_MAX_TOKENS": "96",
+                "LOCAL_MODEL_BATCH_LIMIT": "7",
                 "LOCAL_MODEL_CONTEXT": "2048",
                 "LOCAL_MODEL_THREADS": "2",
                 "LOCAL_MODEL_TEMPERATURE": "0",
@@ -242,6 +243,7 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertTrue(config.local_model_enabled)
         self.assertEqual(str(config.local_model_path), "/app/models/qwen.gguf")
         self.assertEqual(config.local_model_max_tokens, 96)
+        self.assertEqual(config.local_model_batch_limit, 7)
         self.assertEqual(config.local_model_context, 2048)
         self.assertEqual(config.local_model_threads, 2)
         self.assertEqual(config.local_model_temperature, 0)
@@ -329,6 +331,33 @@ class Phase1RuntimeTests(unittest.TestCase):
         reason = _local_model_skip_reason(config, None, classify_prompt(prompt), prompt)
 
         self.assertIsNone(reason)
+
+    def test_local_model_batch_limit_skip_reason(self):
+        config = RuntimeConfig(
+            input_path=Path("/input/tasks.json"),
+            output_path=Path("/output/results.json"),
+            router_mode="accuracy_first",
+            local_confidence_threshold=0.95,
+            fireworks_timeout_seconds=25,
+            fireworks_max_retries=0,
+            batch_deadline_seconds=600,
+            deadline_safety_margin_seconds=60,
+            remote_worker_count=2,
+            local_proof_budget_ms=100,
+            local_cross_check_enabled=True,
+            router_log_path=None,
+            fireworks_api_key=None,
+            fireworks_base_url=None,
+            allowed_models=(),
+            fireworks_max_tokens=192,
+            router_profile="accuracy_gate",
+            local_model_enabled=True,
+            local_model_path=Path("/app/models/qwen.gguf"),
+        )
+        prompt = "Explain in one sentence why a GPU is useful for parallel workloads."
+        reason = _local_model_skip_reason(config, None, classify_prompt(prompt), prompt, local_model_allowed=False)
+
+        self.assertEqual(reason, "local_model_batch_limit")
 
     def test_load_tasks_accepts_wrapped_official_shape_and_field_aliases(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1272,7 +1301,7 @@ class Phase1RuntimeTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            def fake_answer_task(task_id, prompt, config=None, deadline=None):
+            def fake_answer_task(task_id, prompt, config=None, deadline=None, local_model_allowed=True):
                 if task_id == "slow":
                     time.sleep(0.02)
                 return AgentResult(

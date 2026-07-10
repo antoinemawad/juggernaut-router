@@ -18,6 +18,7 @@ def answer_task(
     prompt: str,
     config: RuntimeConfig | None = None,
     deadline: DeadlineManager | None = None,
+    local_model_allowed: bool = True,
 ) -> AgentResult:
     config = config or RuntimeConfig.from_env()
     timings = TimingMetrics()
@@ -86,7 +87,7 @@ def answer_task(
 
     local_model = None
     local_model_validation = None
-    local_model_skip_reason = _local_model_skip_reason(config, deadline, classification, prompt)
+    local_model_skip_reason = _local_model_skip_reason(config, deadline, classification, prompt, local_model_allowed)
     if local_model_skip_reason is None:
         local_model = ask_local_model_structured(
             remote_prompt,
@@ -434,7 +435,15 @@ def _fireworks_available(config: RuntimeConfig) -> bool:
     return bool(config.fireworks_api_key and config.fireworks_base_url and config.allowed_models)
 
 
-def _local_model_skip_reason(config: RuntimeConfig, deadline: DeadlineManager | None, classification, prompt: str) -> str | None:
+def _local_model_skip_reason(
+    config: RuntimeConfig,
+    deadline: DeadlineManager | None,
+    classification,
+    prompt: str,
+    local_model_allowed: bool = True,
+) -> str | None:
+    if not local_model_allowed:
+        return "local_model_batch_limit"
     if not config.local_model_enabled:
         return "local_model_disabled"
     if config.local_model_path is None and not config.local_model_command:

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from threading import RLock
 
 from app.deadline import StageTimer
 
@@ -16,6 +17,7 @@ class LocalLLMResult:
 
 
 _LLM_CACHE = {}
+_LLM_LOCK = RLock()
 
 
 def generate_local_answer(
@@ -44,17 +46,18 @@ def generate_local_answer(
         return _result("", False, timer, f"llama_cpp_import_error:{type(exc).__name__}", str(path), prompt_tokens)
 
     try:
-        llm = _load_model(path, context=context, threads=threads)
-        formatted_prompt = _format_prompt(task, prompt, system_prompt)
-        output = _call_model(
-            llm,
-            task=task,
-            prompt=prompt,
-            formatted_prompt=formatted_prompt,
-            system_prompt=system_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        with _LLM_LOCK:
+            llm = _load_model(path, context=context, threads=threads)
+            formatted_prompt = _format_prompt(task, prompt, system_prompt)
+            output = _call_model(
+                llm,
+                task=task,
+                prompt=prompt,
+                formatted_prompt=formatted_prompt,
+                system_prompt=system_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
     except TimeoutError:
         return _result("", False, timer, "local_llm_timeout", str(path), prompt_tokens)
     except Exception as exc:  # pragma: no cover - depends on optional runtime/model
