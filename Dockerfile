@@ -75,11 +75,10 @@ ENV ROUTER_PROFILE=accuracy_gate \
     ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT=original \
     ROUTER_PROMPT_POLICY_REMOTE_CONCISE=original \
     ROUTER_PROMPT_POLICY_BY_CATEGORY=code_generation=compact,factual_knowledge=compact \
-    ROUTER_MODELS_REMOTE_ACCURACY=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,gemma-4-31b-it-nvfp4 \
-    ROUTER_MODELS_REMOTE_CODE=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,gemma-4-31b-it-nvfp4 \
-    ROUTER_MODELS_REMOTE_FORMAT_STRICT=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,gemma-4-31b-it-nvfp4 \
-    ROUTER_MODELS_REMOTE_CONCISE=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,gemma-4-31b-it-nvfp4 \
-    ROUTER_MODELS_REMOTE_ESCALATION=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,gemma-4-31b-it-nvfp4 \
-    ROUTER_MODELS_BY_CATEGORY=code_debugging=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code;code_generation=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code;factual_knowledge=kimi-k2p7-code,gemma-4-31b-it,gemma-4-26b-a4b-it;logical_deductive_reasoning=gemma-4-26b-a4b-it,gemma-4-31b-it,kimi-k2p7-code;mathematical_reasoning=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code;named_entity_recognition=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code;sentiment_classification=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code;text_summarisation=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code
-
+    ROUTER_MODELS_REMOTE_ACCURACY=gemma-4-31b-it \
+    ROUTER_MODELS_REMOTE_CODE=gemma-4-31b-it \
+    ROUTER_MODELS_REMOTE_FORMAT_STRICT=gemma-4-31b-it \
+    ROUTER_MODELS_REMOTE_CONCISE=gemma-4-31b-it \
+    ROUTER_MODELS_REMOTE_ESCALATION=gemma-4-31b-it \
+    ROUTER_MODELS_BY_CATEGORY=code_debugging=gemma-4-31b-it;code_generation=gemma-4-31b-it;factual_knowledge=gemma-4-31b-it;logical_deductive_reasoning=gemma-4-31b-it;mathematical_reasoning=gemma-4-31b-it;named_entity_recognition=gemma-4-31b-it;sentiment_classification=gemma-4-31b-it;text_summarisation=gemma-4-31b-it
 CMD ["python", "-m", "app.main"]
