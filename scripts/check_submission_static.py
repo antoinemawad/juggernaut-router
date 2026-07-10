@@ -87,7 +87,7 @@ def check_ignore_files() -> list[str]:
             errors.append(f".gitignore missing {required}")
         if required not in dockerignore:
             errors.append(f".dockerignore missing {required}")
-    for required in ("models/", "checkpoints/", "*.safetensors", "*.bin", "*.pt", "*.pth"):
+    for required in ("checkpoints/", "*.safetensors", "*.bin", "*.pt", "*.pth"):
         if required not in dockerignore:
             errors.append(f".dockerignore missing model artifact guard {required}")
     for required in (
@@ -115,10 +115,12 @@ def check_dockerfile_is_submission_scoped() -> list[str]:
         errors.append("Dockerfile should copy app/ into the runtime image")
     if 'CMD ["python", "-m", "app.main"]' not in dockerfile:
         errors.append("Dockerfile should run app.main as the submission entrypoint")
-    if "LOCAL_MODEL_ENABLED=false" not in dockerfile:
-        errors.append("Dockerfile scoring defaults should not enable local GGUF inference")
-    if "LOCAL_MODEL_BATCH_LIMIT=0" not in dockerfile:
-        errors.append("Dockerfile scoring defaults should route non-deterministic tasks to Fireworks")
+    if "ARG ENABLE_LOCAL_MODEL=false" not in dockerfile:
+        errors.append("Dockerfile local GGUF support should be disabled by default")
+    if "LOCAL_MODEL_ENABLED=${ENABLE_LOCAL_MODEL}" not in dockerfile:
+        errors.append("Dockerfile should derive local GGUF runtime enablement from ENABLE_LOCAL_MODEL")
+    if "LOCAL_MODEL_BATCH_LIMIT=12" not in dockerfile:
+        errors.append("Dockerfile restored local GGUF image should allow bounded local-model attempts")
     return errors
 
 

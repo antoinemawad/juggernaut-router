@@ -144,6 +144,155 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(check_submission_static.check_ignore_files(), [])
         self.assertEqual(check_submission_static.check_dockerfile_is_submission_scoped(), [])
 
+    def test_dockerfile_restores_qwen25_local_model_build_defaults(self):
+        dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("ARG ENABLE_LOCAL_MODEL=false", dockerfile)
+        self.assertIn(
+            "ARG LOCAL_MODEL_URL=https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
+            dockerfile,
+        )
+        self.assertIn("ARG LOCAL_MODEL_FILENAME=local-model.gguf", dockerfile)
+        self.assertIn("LOCAL_MODEL_ENABLED=${ENABLE_LOCAL_MODEL}", dockerfile)
+        self.assertIn("LOCAL_MODEL_PATH=/app/models/${LOCAL_MODEL_FILENAME}", dockerfile)
+        self.assertIn("LOCAL_MODEL_BATCH_LIMIT=12", dockerfile)
+        self.assertIn("LOCAL_MODEL_MAX_TOKENS=128", dockerfile)
+        self.assertIn("LOCAL_MODEL_CONTEXT=1024", dockerfile)
+        self.assertIn("LOCAL_MODEL_THREADS=2", dockerfile)
+        self.assertIn("LOCAL_MODEL_TEMPERATURE=0", dockerfile)
+        self.assertIn("LOCAL_MODEL_TIMEOUT_SECONDS=20", dockerfile)
+        self.assertIn("LOCAL_MODEL_MAX_CHARS=4096", dockerfile)
+
+    def test_dockerfile_local_model_selection_is_deterministic_and_hardened(self):
+        dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn('exact="/build-models/${LOCAL_MODEL_FILENAME}"', dockerfile)
+        self.assertIn("Using exact bundled model:", dockerfile)
+        self.assertIn("Downloading local model from configured LOCAL_MODEL_URL", dockerfile)
+        self.assertIn("find /build-models -maxdepth 1 -type f -name '*.gguf' | sort | head -n 1", dockerfile)
+        self.assertIn("No local GGUF model was found.", dockerfile)
+        self.assertIn("test -s", dockerfile)
+
+    def test_dockerfile_preserves_current_fireworks_routing_values(self):
+        dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
+        expected_values = {
+            "ROUTER_PROMPT_POLICY_REMOTE_ACCURACY": "compact",
+            "ROUTER_PROMPT_POLICY_REMOTE_CODE": "compact",
+            "ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT": "answer_only",
+            "ROUTER_PROMPT_POLICY_REMOTE_CONCISE": "compact",
+            "ROUTER_PROMPT_POLICY_BY_CATEGORY": (
+                "sentiment_classification=answer_only;named_entity_recognition=answer_only;"
+                "mathematical_reasoning=final_only;logical_deductive_reasoning=final_only;"
+                "code_generation=compact;code_debugging=compact;factual_knowledge=compact;"
+                "text_summarisation=compact"
+            ),
+            "ROUTER_MODELS_REMOTE_ACCURACY": "minimax-m3,gemma-4-31b-it,kimi-k2p7-code,gemma-4-26b-a4b-it",
+            "ROUTER_MODELS_REMOTE_CODE": "kimi-k2p7-code,minimax-m3,gemma-4-31b-it",
+            "ROUTER_MODELS_REMOTE_FORMAT_STRICT": "minimax-m3,gemma-4-31b-it,kimi-k2p7-code",
+            "ROUTER_MODELS_REMOTE_CONCISE": "minimax-m3,gemma-4-26b-a4b-it,gemma-4-31b-it",
+            "ROUTER_MODELS_REMOTE_ESCALATION": "gemma-4-31b-it,kimi-k2p7-code,minimax-m3",
+            "ROUTER_MODELS_BY_CATEGORY": (
+                "code_debugging=kimi-k2p7-code,minimax-m3,gemma-4-31b-it;"
+                "code_generation=kimi-k2p7-code,minimax-m3,gemma-4-31b-it;"
+                "factual_knowledge=minimax-m3,gemma-4-31b-it,kimi-k2p7-code;"
+                "logical_deductive_reasoning=gemma-4-31b-it,minimax-m3,kimi-k2p7-code;"
+                "mathematical_reasoning=gemma-4-31b-it,minimax-m3,kimi-k2p7-code;"
+                "named_entity_recognition=minimax-m3,gemma-4-31b-it,kimi-k2p7-code;"
+                "sentiment_classification=minimax-m3,gemma-4-31b-it,kimi-k2p7-code;"
+                "text_summarisation=minimax-m3,gemma-4-31b-it,kimi-k2p7-code"
+            ),
+        }
+        for name, value in expected_values.items():
+            self.assertIn(f"{name}={value}", dockerfile)
+
+    def test_dockerfile_exposes_supported_runtime_variables_without_secret_defaults(self):
+        dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
+        for name in (
+            "INPUT_PATH",
+            "OUTPUT_PATH",
+            "FIREWORKS_TIMEOUT_SECONDS",
+            "FIREWORKS_MAX_RETRIES",
+            "FIREWORKS_DISABLE_MAX_TOKENS",
+            "FIREWORKS_MAX_TOKENS",
+            "FIREWORKS_MAX_TOKENS_BY_CATEGORY",
+            "ROUTER_PROFILE",
+            "ROUTER_MODE",
+            "LOCAL_CONFIDENCE_THRESHOLD",
+            "LOCAL_PROOF_BUDGET_MS",
+            "LOCAL_CROSS_CHECK_ENABLED",
+            "LOCAL_MODEL_ENABLED",
+            "LOCAL_MODEL_COMMAND",
+            "LOCAL_MODEL_PATH",
+            "LOCAL_MODEL_MAX_TOKENS",
+            "LOCAL_MODEL_CONTEXT",
+            "LOCAL_MODEL_THREADS",
+            "LOCAL_MODEL_TEMPERATURE",
+            "LOCAL_MODEL_TIMEOUT_SECONDS",
+            "LOCAL_MODEL_MAX_CHARS",
+            "LOCAL_MODEL_BATCH_LIMIT",
+            "BATCH_DEADLINE_SECONDS",
+            "DEADLINE_SAFETY_MARGIN_SECONDS",
+            "REMOTE_WORKER_COUNT",
+            "REMOTE_VALIDATION_ESCALATION_ENABLED",
+            "ROUTER_PROMPT_POLICY_REMOTE_ACCURACY",
+            "ROUTER_PROMPT_POLICY_REMOTE_CODE",
+            "ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT",
+            "ROUTER_PROMPT_POLICY_REMOTE_CONCISE",
+            "ROUTER_PROMPT_POLICY_BY_CATEGORY",
+            "ROUTER_MODELS_REMOTE_ACCURACY",
+            "ROUTER_MODELS_REMOTE_CODE",
+            "ROUTER_MODELS_REMOTE_FORMAT_STRICT",
+            "ROUTER_MODELS_REMOTE_CONCISE",
+            "ROUTER_MODELS_REMOTE_ESCALATION",
+            "ROUTER_MODELS_BY_CATEGORY",
+        ):
+            self.assertIn(name, dockerfile)
+        self.assertIn("# FIREWORKS_API_KEY", dockerfile)
+        self.assertIn("# FIREWORKS_BASE_URL", dockerfile)
+        self.assertIn("# ALLOWED_MODELS", dockerfile)
+        self.assertNotIn("FIREWORKS_API_KEY=", dockerfile)
+        self.assertNotIn("FIREWORKS_BASE_URL=", dockerfile)
+
+    def test_runtime_local_model_enabled_override_still_wins(self):
+        with patch.dict(os.environ, {"LOCAL_MODEL_ENABLED": "false"}, clear=True):
+            self.assertFalse(RuntimeConfig.from_env().local_model_enabled)
+        with patch.dict(os.environ, {"LOCAL_MODEL_ENABLED": "true"}, clear=True):
+            self.assertTrue(RuntimeConfig.from_env().local_model_enabled)
+
+    def test_download_local_model_rejects_empty_file_url(self):
+        from scripts.download_local_model import main as download_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            empty_source = Path(tmp) / "empty.gguf"
+            empty_source.write_bytes(b"")
+            target = Path(tmp) / "target.gguf"
+            with patch.dict(
+                os.environ,
+                {
+                    "LOCAL_MODEL_URL": empty_source.as_uri(),
+                    "LOCAL_MODEL_TARGET": str(target),
+                },
+                clear=True,
+            ):
+                self.assertNotEqual(download_main(), 0)
+            self.assertFalse(target.exists())
+
+    def test_download_local_model_accepts_non_empty_file_url(self):
+        from scripts.download_local_model import main as download_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source.gguf"
+            source.write_bytes(b"not-a-real-model-but-non-empty")
+            target = Path(tmp) / "target.gguf"
+            with patch.dict(
+                os.environ,
+                {
+                    "LOCAL_MODEL_URL": source.as_uri(),
+                    "LOCAL_MODEL_TARGET": str(target),
+                },
+                clear=True,
+            ):
+                self.assertEqual(download_main(), 0)
+            self.assertEqual(target.read_bytes(), source.read_bytes())
+
     def test_live_eval_env_validator_accepts_judging_proxy_env(self):
         errors = validate_live_eval_env({
             "FIREWORKS_API_KEY": "secret",
