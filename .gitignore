@@ -16,7 +16,10 @@ venv/
 
 # Model/cache artifacts
 .cache/
+*.gguf
 models/*
+models/*.gguf
+models/**/*.gguf
 !models/
 !models/.gitkeep
 checkpoints/
@@ -28,6 +31,9 @@ checkpoints/
 # Logs/results that may be large
 logs/
 eval_runs/
+output/
+outputs/
+local_output/
 *.log
 
 # Jupyter
