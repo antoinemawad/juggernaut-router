@@ -184,6 +184,9 @@ def solve_sentiment(text: str):
     else:
         statement = text.lower()
 
+    if _has_uncertain_sentiment_negation(statement):
+        return None
+
     positive_hits = sum(word in statement for word in POSITIVE_WORDS)
     negative_hits = sum(word in statement for word in NEGATIVE_WORDS)
 
@@ -192,6 +195,14 @@ def solve_sentiment(text: str):
     if negative_hits > positive_hits:
         return "negative"
     return "neutral"
+
+
+def _has_uncertain_sentiment_negation(statement: str) -> bool:
+    negation_markers = ("not ", "never ", "hardly ", "barely ", "isn't ", "wasn't ", "doesn't ", "didn't ")
+    if not any(marker in statement for marker in negation_markers):
+        return False
+    sentiment_words = POSITIVE_WORDS + NEGATIVE_WORDS
+    return any(re.search(rf"\b(?:not|never|hardly|barely|isn't|wasn't|doesn't|didn't)\s+\w*\s*{re.escape(word)}\b", statement) for word in sentiment_words)
 
 
 def solve_summary(text: str):
