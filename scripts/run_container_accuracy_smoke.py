@@ -8,6 +8,34 @@ import time
 from pathlib import Path
 
 
+FORWARDED_ENV_NAMES = (
+    "FIREWORKS_API_KEY",
+    "FIREWORKS_BASE_URL",
+    "ALLOWED_MODELS",
+    "FIREWORKS_DISABLE_MAX_TOKENS",
+    "FIREWORKS_MAX_TOKENS",
+    "FIREWORKS_MAX_TOKENS_BY_CATEGORY",
+    "FIREWORKS_TIMEOUT_SECONDS",
+    "FIREWORKS_MAX_RETRIES",
+    "LOCAL_MODEL_ENABLED",
+    "LOCAL_MODEL_PATH",
+    "REMOTE_VALIDATION_ESCALATION_ENABLED",
+    "ROUTER_MODE",
+    "ROUTER_PROFILE",
+    "ROUTER_MODELS_BY_CATEGORY",
+    "ROUTER_MODELS_REMOTE_ACCURACY",
+    "ROUTER_MODELS_REMOTE_CODE",
+    "ROUTER_MODELS_REMOTE_CONCISE",
+    "ROUTER_MODELS_REMOTE_ESCALATION",
+    "ROUTER_MODELS_REMOTE_FORMAT_STRICT",
+    "ROUTER_PROMPT_POLICY_BY_CATEGORY",
+    "ROUTER_PROMPT_POLICY_REMOTE_ACCURACY",
+    "ROUTER_PROMPT_POLICY_REMOTE_CODE",
+    "ROUTER_PROMPT_POLICY_REMOTE_CONCISE",
+    "ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT",
+)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run a local container smoke test for Track 1 IO.")
     parser.add_argument("--image", default="juggernaut-router:local")
@@ -34,12 +62,20 @@ def main() -> int:
             args.platform,
             "-e",
             "ROUTER_LOG_PATH=/output/router_log.jsonl",
-            "-v",
-            f"{input_dir}:/input:ro",
-            "-v",
-            f"{output_dir}:/output",
-            args.image,
         ]
+        for name in FORWARDED_ENV_NAMES:
+            value = os.environ.get(name)
+            if value:
+                cmd.extend(["-e", f"{name}={value}"])
+        cmd.extend(
+            [
+                "-v",
+                f"{input_dir}:/input:ro",
+                "-v",
+                f"{output_dir}:/output",
+                args.image,
+            ]
+        )
         started = time.monotonic()
         proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
         container_elapsed_seconds = time.monotonic() - started

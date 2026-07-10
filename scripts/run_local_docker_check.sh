@@ -9,15 +9,47 @@ MIN_FIXTURE_PASS_RATE="${MIN_FIXTURE_PASS_RATE:-0}"
 mkdir -p "$OUTPUT_DIR"
 rm -f "$OUTPUT_DIR/results.json" "$OUTPUT_DIR/router_log.jsonl"
 
+docker_env_args=(
+  -e LOCAL_MODEL_ENABLED="${LOCAL_MODEL_ENABLED:-true}"
+  -e LOCAL_MODEL_PATH="${LOCAL_MODEL_PATH:-/app/models/local-model.gguf}"
+  -e ROUTER_PROFILE="${ROUTER_PROFILE:-accuracy_gate}"
+  -e ROUTER_LOG_PATH=/output/router_log.jsonl
+)
+
+for name in \
+  FIREWORKS_API_KEY \
+  FIREWORKS_BASE_URL \
+  ALLOWED_MODELS \
+  FIREWORKS_DISABLE_MAX_TOKENS \
+  FIREWORKS_MAX_TOKENS \
+  FIREWORKS_MAX_TOKENS_BY_CATEGORY \
+  FIREWORKS_TIMEOUT_SECONDS \
+  FIREWORKS_MAX_RETRIES \
+  REMOTE_VALIDATION_ESCALATION_ENABLED \
+  ROUTER_MODE \
+  ROUTER_MODELS_BY_CATEGORY \
+  ROUTER_MODELS_REMOTE_ACCURACY \
+  ROUTER_MODELS_REMOTE_CODE \
+  ROUTER_MODELS_REMOTE_CONCISE \
+  ROUTER_MODELS_REMOTE_ESCALATION \
+  ROUTER_MODELS_REMOTE_FORMAT_STRICT \
+  ROUTER_PROMPT_POLICY_BY_CATEGORY \
+  ROUTER_PROMPT_POLICY_REMOTE_ACCURACY \
+  ROUTER_PROMPT_POLICY_REMOTE_CODE \
+  ROUTER_PROMPT_POLICY_REMOTE_CONCISE \
+  ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT
+do
+  if [ -n "${!name:-}" ]; then
+    docker_env_args+=("-e" "${name}=${!name}")
+  fi
+done
+
 started_at="$(date +%s)"
 docker run --rm \
   --platform linux/amd64 \
   --memory=4g \
   --cpus=2 \
-  -e LOCAL_MODEL_ENABLED="${LOCAL_MODEL_ENABLED:-true}" \
-  -e LOCAL_MODEL_PATH="${LOCAL_MODEL_PATH:-/app/models/local-model.gguf}" \
-  -e ROUTER_PROFILE="${ROUTER_PROFILE:-accuracy_gate}" \
-  -e ROUTER_LOG_PATH=/output/router_log.jsonl \
+  "${docker_env_args[@]}" \
   -v "$INPUT_DIR:/input:ro" \
   -v "$OUTPUT_DIR:/output" \
   "$IMAGE"
