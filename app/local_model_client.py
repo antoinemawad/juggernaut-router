@@ -42,9 +42,10 @@ def ask_local_model_structured(
             )
         result = generate_local_answer(
             task=task_id,
-            prompt=_local_model_input(prompt, system_prompt),
+            prompt=prompt,
+            system_prompt=system_prompt,
             model_path=config.local_model_path,
-            max_tokens=config.local_model_max_tokens,
+            max_tokens=_bounded_local_max_tokens(prompt, config.local_model_max_tokens),
             temperature=config.local_model_temperature,
             context=config.local_model_context,
             threads=config.local_model_threads,
@@ -134,3 +135,14 @@ def _local_model_input(prompt: str, system_prompt: str | None) -> str:
     if system_prompt:
         return f"System:\n{system_prompt}\n\nUser:\n{prompt}\n\nAnswer:\n"
     return prompt
+
+
+def _bounded_local_max_tokens(prompt: str, configured_max_tokens: int) -> int:
+    lower = prompt.lower()
+    if "return only code" in lower or "code only" in lower or "write a python function" in lower:
+        return min(configured_max_tokens, 72)
+    if "extract named entities" in lower:
+        return min(configured_max_tokens, 64)
+    if "sentiment" in lower or "label" in lower or "return only the final answer" in lower:
+        return min(configured_max_tokens, 24)
+    return min(configured_max_tokens, 48)

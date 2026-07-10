@@ -12,6 +12,8 @@ from app.classifier import classify_prompt
 from app.config import DEFAULT_ALLOWED_PLANNING_MODELS, RuntimeConfig, parse_allowed_models
 from app.deadline import DeadlineManager
 from app.fireworks_client import ask_fireworks_structured, select_allowed_model
+from app.local_model_client import _bounded_local_max_tokens
+from app.local_llm import _extract_text, _format_messages
 from app.main import load_tasks, main
 from app.normalization import normalize_answer
 from app.telemetry import TelemetryLogger
@@ -243,6 +245,36 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(config.local_model_context, 2048)
         self.assertEqual(config.local_model_threads, 2)
         self.assertEqual(config.local_model_temperature, 0)
+
+    def test_local_model_token_budget_is_bounded_by_prompt_type(self):
+        self.assertEqual(
+            _bounded_local_max_tokens("Explain why FIREWORKS_BASE_URL matters.", 128),
+            48,
+        )
+        self.assertEqual(
+            _bounded_local_max_tokens("Write a Python function clamp(x, low, high). Return only code.", 128),
+            72,
+        )
+        self.assertEqual(
+            _bounded_local_max_tokens("Classify sentiment as positive, negative, or neutral.", 128),
+            24,
+        )
+        self.assertEqual(
+            _bounded_local_max_tokens("Extract named entities and label them.", 128),
+            64,
+        )
+
+    def test_local_llm_extracts_chat_completion_message(self):
+        output = {"choices": [{"message": {"content": "neutral"}}]}
+        self.assertEqual(_extract_text(output), "neutral")
+
+    def test_local_llm_chat_messages_preserve_system_and_user_roles(self):
+        messages = _format_messages("task-1", "Return only 42.", "System instruction")
+
+        self.assertEqual(messages[0]["role"], "system")
+        self.assertEqual(messages[0]["content"], "System instruction")
+        self.assertEqual(messages[1]["role"], "user")
+        self.assertIn("task-1", messages[1]["content"])
 
     def test_accuracy_gate_skips_local_model_for_ambiguous_long_task(self):
         config = RuntimeConfig(

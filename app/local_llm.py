@@ -27,6 +27,7 @@ def generate_local_answer(
     context: int,
     threads: int,
     timeout_seconds: int,
+    system_prompt: str | None = None,
 ) -> LocalLLMResult:
     timer = StageTimer()
     path = Path(model_path) if model_path else None
@@ -44,12 +45,15 @@ def generate_local_answer(
 
     try:
         llm = _load_model(path, context=context, threads=threads)
-        output = llm(
-            _format_prompt(task, prompt),
+        formatted_prompt = _format_prompt(task, prompt, system_prompt)
+        output = _call_model(
+            llm,
+            task=task,
+            prompt=prompt,
+            formatted_prompt=formatted_prompt,
+            system_prompt=system_prompt,
             max_tokens=max_tokens,
             temperature=temperature,
-            stop=["</s>", "\n\nTask:", "\n\nUser:"],
-            echo=False,
         )
     except TimeoutError:
         return _result("", False, timer, "local_llm_timeout", str(path), prompt_tokens)
@@ -80,10 +84,50 @@ def _load_model(path: Path, context: int, threads: int):
     return llm
 
 
-def _format_prompt(task: str, prompt: str) -> str:
-    return (
+def _call_model(
+    llm,
+    task: str,
+    prompt: str,
+    formatted_prompt: str,
+    system_prompt: str | None,
+    max_tokens: int,
+    temperature: float,
+):
+    stop = ["</s>", "<|im_end|>", "\n\nTask:", "\n\nUser:", "```"]
+    if hasattr(llm, "create_chat_completion"):
+        return llm.create_chat_completion(
+            messages=_format_messages(task, prompt, system_prompt),
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop=stop,
+        )
+    return llm(
+        formatted_prompt,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        stop=stop,
+        echo=False,
+    )
+
+
+def _format_messages(task: str, prompt: str, system_prompt: str | None) -> list[dict[str, str]]:
+    system = system_prompt or (
         "You are a concise answer engine. Return only the final answer. "
-        "Do not restate the task, reveal reasoning, or add markdown unless requested.\n\n"
+        "Do not restate the task, reveal reasoning, or add markdown unless requested."
+    )
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": f"Task id: {task}\n{prompt}"},
+    ]
+
+
+def _format_prompt(task: str, prompt: str, system_prompt: str | None = None) -> str:
+    system = system_prompt or (
+        "You are a concise answer engine. Return only the final answer. "
+        "Do not restate the task, reveal reasoning, or add markdown unless requested."
+    )
+    return (
+        f"{system}\n\n"
         f"Task id: {task}\n"
         f"User task:\n{prompt}\n\n"
         "Final answer:"
@@ -94,7 +138,11 @@ def _extract_text(output) -> str:
     try:
         choices = output.get("choices", [])
         if choices:
-            return str(choices[0].get("text", "")).strip()
+            choice = choices[0]
+            message = choice.get("message") if isinstance(choice, dict) else None
+            if isinstance(message, dict):
+                return str(message.get("content") or "").strip()
+            return str(choice.get("text", "")).strip()
     except AttributeError:
         return ""
     return ""
