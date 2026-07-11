@@ -11,7 +11,7 @@ from app.agent import _local_model_skip_reason
 from app.classifier import classify_prompt
 from app.config import DEFAULT_ALLOWED_PLANNING_MODELS, RuntimeConfig, parse_allowed_models
 from app.deadline import DeadlineManager
-from app.fireworks_client import ask_fireworks_structured, select_allowed_model
+from app.fireworks_client import ask_fireworks_structured, provider_model_for_dev, select_allowed_model
 from app.local_model_client import _bounded_local_max_tokens
 from app.local_llm import _extract_text, _format_messages
 from app.main import load_tasks, main
@@ -1244,6 +1244,39 @@ class Phase1RuntimeTests(unittest.TestCase):
 
         self.assertEqual(result.model, "kimi-k2p7-code")
         self.assertEqual(captured["payload"]["model"], "kimi-k2p7-code")
+
+    def test_fireworks_dev_model_map_only_changes_public_fireworks_payload(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse(json.dumps({
+                "choices": [{"message": {"content": "Mapped answer"}}],
+                "usage": {"completion_tokens": 3, "total_tokens": 9},
+            }))
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://api." + "fireworks.ai/inference/v1",
+                "ALLOWED_MODELS": "gemma-4-31b-it",
+                "FIREWORKS_DEV_MODEL_MAP": (
+                    "gemma-4-31b-it=accounts/example/deployments/dev-gemma"
+                ),
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", fake_urlopen):
+            result = ask_fireworks_structured("hello", preferred_models=("gemma-4-31b-it",))
+
+        self.assertEqual(result.model, "gemma-4-31b-it")
+        self.assertEqual(captured["payload"]["model"], "accounts/example/deployments/dev-gemma")
+
+    def test_fireworks_dev_model_map_is_ignored_for_judging_proxy(self):
+        self.assertEqual(
+            provider_model_for_dev("gemma-4-31b-it", "https://judge-proxy.example/v1"),
+            "gemma-4-31b-it",
+        )
 
     def test_fireworks_accepts_mode_specific_system_prompt(self):
         captured = {}

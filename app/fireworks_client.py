@@ -1,11 +1,17 @@
 import json
+import os
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 from app.config import RuntimeConfig
 from app.deadline import DeadlineManager, StageTimer
 from app.types import SAFE_FALLBACK_ANSWER
+
+
+NORMAL_FIREWORKS_HOST = "api.fireworks.ai"
 
 
 @dataclass
@@ -56,8 +62,10 @@ def ask_fireworks_structured(
             error="no_allowed_model",
         )
 
+    provider_model = provider_model_for_dev(model, config.fireworks_base_url)
+
     payload = {
-        "model": model,
+        "model": provider_model,
         "messages": [
             {
                 "role": "system",
@@ -166,3 +174,32 @@ def select_allowed_model(
         if model in allowed:
             return model
     return config.first_allowed_model()
+
+
+def provider_model_for_dev(alias: str, base_url: str | None) -> str:
+    if not normal_fireworks_dev_enabled(base_url):
+        return alias
+    mapping = parse_dev_model_map(os.environ.get("FIREWORKS_DEV_MODEL_MAP", ""))
+    return mapping.get(alias, alias)
+
+
+def normal_fireworks_dev_enabled(base_url: str | None) -> bool:
+    if not base_url:
+        return False
+    return urlparse(base_url).netloc == NORMAL_FIREWORKS_HOST
+
+
+def parse_dev_model_map(raw: str) -> dict[str, str]:
+    mapping = {}
+    for item in re.split(r"[,;]", raw):
+        item = item.strip()
+        if not item:
+            continue
+        if "=" not in item:
+            continue
+        alias, provider_model = item.split("=", 1)
+        alias = alias.strip()
+        provider_model = provider_model.strip()
+        if alias and provider_model:
+            mapping[alias] = provider_model
+    return mapping
