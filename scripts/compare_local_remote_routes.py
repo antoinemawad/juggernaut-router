@@ -102,6 +102,9 @@ def main() -> int:
     parser.add_argument("--memory", default="4g")
     parser.add_argument("--cpus", default="2")
     parser.add_argument("--modes", default="local_only,remote_only,mixed_fast,mixed_broad")
+    parser.add_argument("--runs", type=int, default=1)
+    parser.add_argument("--min-pass-rate", type=float, default=0.0)
+    parser.add_argument("--fail-under-min", action="store_true")
     parser.add_argument("--require-remote", action="store_true")
     parser.add_argument("--keep-outputs", action="store_true")
     args = parser.parse_args()
@@ -117,6 +120,9 @@ def main() -> int:
     if unknown:
         print(f"ERROR: unknown modes: {', '.join(unknown)}", file=sys.stderr)
         return 2
+    if args.runs < 1:
+        print("ERROR: --runs must be >= 1", file=sys.stderr)
+        return 2
 
     out_dir = (ROOT / args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -127,26 +133,30 @@ def main() -> int:
         print("ERROR: FIREWORKS_API_KEY, FIREWORKS_BASE_URL, and ALLOWED_MODELS are required", file=sys.stderr)
         return 3
 
-    summaries = []
+    raw_runs = []
     for mode in selected_modes:
         mode_config = MODE_CONFIGS[mode]
         if mode_config["requires_remote"] and not remote_ready:
-            summaries.append({"mode": mode, "status": "skipped_missing_remote_env"})
+            raw_runs.append({"mode": mode, "run": None, "status": "skipped_missing_remote_env"})
             print(f"{mode}: skipped_missing_remote_env")
             continue
-        summaries.append(
-            run_mode(
-                mode=mode,
-                mode_env=mode_config["env"],
-                image=args.image,
-                input_dir=input_dir,
-                out_dir=out_dir,
-                tasks=tasks,
-                platform=args.platform,
-                memory=args.memory,
-                cpus=args.cpus,
+        for run_index in range(1, args.runs + 1):
+            raw_runs.append(
+                run_mode(
+                    mode=mode,
+                    run_index=run_index,
+                    run_count=args.runs,
+                    mode_env=mode_config["env"],
+                    image=args.image,
+                    input_dir=input_dir,
+                    out_dir=out_dir,
+                    tasks=tasks,
+                    platform=args.platform,
+                    memory=args.memory,
+                    cpus=args.cpus,
+                )
             )
-        )
+    summaries = aggregate_mode_runs(raw_runs)
 
     summary_path = out_dir / "summary.json"
     md_path = out_dir / "summary.md"
@@ -154,8 +164,11 @@ def main() -> int:
         "image": args.image,
         "input_dir": str(input_dir),
         "task_count": len(tasks),
+        "runs_per_mode": args.runs,
+        "min_pass_rate": args.min_pass_rate,
         "remote_env_present": remote_ready,
         "modes": summaries,
+        "raw_runs": raw_runs,
     }
     summary_path.write_text(json.dumps(summary_payload, indent=2), encoding="utf-8")
     md_path.write_text(render_markdown(summary_payload), encoding="utf-8")
@@ -164,12 +177,27 @@ def main() -> int:
     print(f"Markdown: {md_path}")
     if not args.keep_outputs:
         print("Mode outputs kept in:", out_dir)
+    if args.fail_under_min:
+        below = [
+            row
+            for row in summaries
+            if row.get("status") == "passed" and float(row.get("pass_rate", 0.0)) < args.min_pass_rate
+        ]
+        if below:
+            for row in below:
+                print(
+                    f"ERROR: {row['mode']} pass rate {row['pass_rate']:.1%} is below {args.min_pass_rate:.1%}",
+                    file=sys.stderr,
+                )
+            return 9
     return 0
 
 
 def run_mode(
     *,
     mode: str,
+    run_index: int,
+    run_count: int,
     mode_env: dict[str, str],
     image: str,
     input_dir: Path,
@@ -180,6 +208,8 @@ def run_mode(
     cpus: str,
 ) -> dict:
     mode_out = out_dir / mode
+    if run_count > 1:
+        mode_out = mode_out / f"run_{run_index:02d}"
     mode_out.mkdir(parents=True, exist_ok=True)
     for name in ("results.json", "router_log.jsonl", "stdout.txt", "stderr.txt"):
         path = mode_out / name
@@ -236,10 +266,14 @@ def run_mode(
     results = load_results_if_present(results_path)
     scored = score_results(tasks, results)
     route_counts = route_counter(telemetry)
+    error_counts = value_counter(telemetry, ("fireworks_error", "error"))
+    model_counts = value_counter(telemetry, ("selected_model",))
+    reason_counts = value_counter(telemetry, ("route_reason",))
     startup = next((row for row in telemetry if row.get("event") == "startup"), {})
     finish = next((row for row in reversed(telemetry) if row.get("event") == "finish"), {})
     summary = {
         "mode": mode,
+        "run": run_index,
         "status": "passed" if proc.returncode == 0 and results else "failed",
         "returncode": proc.returncode,
         "elapsed_seconds": round(elapsed_seconds, 3),
@@ -253,6 +287,9 @@ def run_mode(
         "local_llm_count": finish.get("local_llm_count", route_counts.get("local_model", 0)),
         "fallbacks_count": finish.get("fallbacks_count", route_counts.get("fallback", 0)),
         "deterministic_count": finish.get("deterministic_count", route_counts.get("local", 0)),
+        "error_counts": error_counts,
+        "model_counts": model_counts,
+        "route_reason_counts": reason_counts,
         "remote_env_seen": {
             "fireworks_api_key_present": bool(startup.get("fireworks_api_key_present")),
             "fireworks_base_url_present": bool(startup.get("fireworks_base_url_present")),
@@ -260,13 +297,132 @@ def run_mode(
         },
         "by_category": scored["by_category"],
         "failures": scored["failures"][:10],
+        "task_scores": scored["rows"],
         "output_dir": str(mode_out),
     }
     print(
-        f"{mode}: status={summary['status']} pass_rate={summary['pass_rate']:.1%} "
+        f"{mode} run {run_index}/{run_count}: status={summary['status']} pass_rate={summary['pass_rate']:.1%} "
         f"elapsed={summary['elapsed_seconds']:.1f}s routes={summary['route_counts']}"
     )
     return summary
+
+
+def aggregate_mode_runs(raw_runs: list[dict]) -> list[dict]:
+    by_mode: dict[str, list[dict]] = defaultdict(list)
+    skipped: dict[str, dict] = {}
+    for row in raw_runs:
+        if str(row.get("status", "")).startswith("skipped"):
+            skipped[row["mode"]] = row
+        else:
+            by_mode[row["mode"]].append(row)
+
+    summaries: list[dict] = []
+    for mode in sorted(set(by_mode) | set(skipped)):
+        runs = by_mode.get(mode, [])
+        if not runs:
+            summaries.append(skipped[mode])
+            continue
+        completed = [row for row in runs if row.get("status") == "passed"]
+        source = completed or runs
+        aggregate = {
+            "mode": mode,
+            "status": "passed" if completed and len(completed) == len(runs) else "failed",
+            "runs": len(runs),
+            "completed_runs": len(completed),
+            "pass_rate": average(row.get("pass_rate", 0.0) for row in source),
+            "avg_score": average(row.get("avg_score", 0.0) for row in source),
+            "elapsed_seconds": average(row.get("elapsed_seconds", 0.0) for row in source),
+            "max_elapsed_seconds": max(float(row.get("elapsed_seconds", 0.0)) for row in source),
+            "answers_written": min(int(row.get("answers_written", 0)) for row in source),
+            "fireworks_count": average(row.get("fireworks_count", 0.0) for row in source),
+            "local_llm_count": average(row.get("local_llm_count", 0.0) for row in source),
+            "fallbacks_count": average(row.get("fallbacks_count", 0.0) for row in source),
+            "deterministic_count": average(row.get("deterministic_count", 0.0) for row in source),
+            "route_counts": merge_average_counts(row.get("route_counts", {}) for row in source),
+            "error_counts": merge_sum_counts(row.get("error_counts", {}) for row in source),
+            "model_counts": merge_sum_counts(row.get("model_counts", {}) for row in source),
+            "route_reason_counts": merge_sum_counts(row.get("route_reason_counts", {}) for row in source),
+            "remote_env_seen": source[-1].get("remote_env_seen", {}),
+            "by_category": aggregate_categories(source),
+            "unstable_tasks": unstable_tasks(source),
+            "failures": source[-1].get("failures", []),
+            "output_dir": str(Path(source[-1].get("output_dir", "")).parent if len(source) > 1 else source[-1].get("output_dir", "")),
+        }
+        summaries.append(aggregate)
+    return summaries
+
+
+def average(values) -> float:
+    numbers = [float(value) for value in values]
+    if not numbers:
+        return 0.0
+    return sum(numbers) / len(numbers)
+
+
+def merge_sum_counts(counts_list) -> dict[str, int]:
+    merged = Counter()
+    for counts in counts_list:
+        merged.update({str(key): int(value) for key, value in dict(counts).items()})
+    return {key: value for key, value in merged.most_common()}
+
+
+def merge_average_counts(counts_list) -> dict[str, float]:
+    rows = [dict(counts) for counts in counts_list]
+    if not rows:
+        return {}
+    keys = sorted({str(key) for row in rows for key in row})
+    return {
+        key: round(sum(float(row.get(key, 0.0)) for row in rows) / len(rows), 3)
+        for key in keys
+    }
+
+
+def aggregate_categories(runs: list[dict]) -> dict:
+    buckets = defaultdict(lambda: {"runs": 0, "rows": 0, "pass_rate": 0.0, "avg_score": 0.0})
+    for run in runs:
+        for category, bucket in (run.get("by_category") or {}).items():
+            target = buckets[category]
+            target["runs"] += 1
+            target["rows"] = max(target["rows"], int(bucket.get("rows", 0)))
+            target["pass_rate"] += float(bucket.get("pass_rate", 0.0))
+            target["avg_score"] += float(bucket.get("avg_score", 0.0))
+    return {
+        category: {
+            "rows": bucket["rows"],
+            "runs": bucket["runs"],
+            "pass_rate": bucket["pass_rate"] / max(1, bucket["runs"]),
+            "avg_score": bucket["avg_score"] / max(1, bucket["runs"]),
+        }
+        for category, bucket in sorted(buckets.items())
+    }
+
+
+def unstable_tasks(runs: list[dict]) -> list[dict]:
+    by_task = defaultdict(list)
+    for run in runs:
+        for row in run.get("task_scores") or []:
+            by_task[row["task_id"]].append(row)
+
+    unstable = []
+    for task_id, rows in sorted(by_task.items()):
+        if len(rows) <= 1:
+            continue
+        pass_values = [bool(row["passed"]) for row in rows]
+        scores = [float(row["score"]) for row in rows]
+        if len(set(pass_values)) > 1 or max(scores) - min(scores) >= 0.25:
+            unstable.append(
+                {
+                    "task_id": task_id,
+                    "category": rows[-1].get("category", "unknown"),
+                    "pass_rate": sum(pass_values) / len(pass_values),
+                    "min_score": min(scores),
+                    "max_score": max(scores),
+                    "latest_notes": rows[-1].get("notes", []),
+                    "latest_answer_preview": str(rows[-1].get("answer", "")).replace("\n", "\\n")[:180],
+                }
+            )
+    unstable.sort(key=lambda row: (row["pass_rate"], row["min_score"], row["task_id"]))
+    return unstable
 
 
 def score_results(tasks: list[dict], results: list[dict]) -> dict:
@@ -323,12 +479,31 @@ def score_results(tasks: list[dict], results: list[dict]) -> dict:
         for row in rows
         if not row["passed"]
     ]
-    return {"pass_rate": pass_rate, "avg_score": avg_score, "by_category": by_category, "failures": failures}
+    return {
+        "pass_rate": pass_rate,
+        "avg_score": avg_score,
+        "by_category": by_category,
+        "failures": failures,
+        "rows": rows,
+    }
 
 
 def route_counter(telemetry: list[dict]) -> dict[str, int]:
     counts = Counter(row.get("route") for row in telemetry if row.get("task_id"))
     return {str(key): value for key, value in sorted(counts.items()) if key}
+
+
+def value_counter(telemetry: list[dict], keys: tuple[str, ...]) -> dict[str, int]:
+    counts = Counter()
+    for row in telemetry:
+        if not row.get("task_id"):
+            continue
+        for key in keys:
+            value = row.get(key)
+            if value:
+                counts[str(value)] += 1
+                break
+    return {key: value for key, value in counts.most_common()}
 
 
 def load_tasks(path: Path) -> list[dict]:
@@ -376,20 +551,23 @@ def render_markdown(payload: dict) -> str:
         "",
         f"Image: `{payload['image']}`",
         f"Tasks: {payload['task_count']}",
+        f"Runs per mode: {payload.get('runs_per_mode', 1)}",
+        f"Minimum pass rate target: {float(payload.get('min_pass_rate', 0.0)):.1%}",
         f"Remote env present: `{payload['remote_env_present']}`",
         "",
         "## Summary",
         "",
-        "| Mode | Status | Pass Rate | Avg Score | Seconds | Fireworks | Local LLM | Fallbacks | Deterministic | Answers |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Mode | Status | Runs | Pass Rate | Avg Score | Avg Seconds | Max Seconds | Fireworks | Local LLM | Fallbacks | Deterministic | Answers |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in payload["modes"]:
         if row.get("status", "").startswith("skipped"):
-            lines.append(f"| {row['mode']} | {row['status']} |  |  |  |  |  |  |  |  |")
+            lines.append(f"| {row['mode']} | {row['status']} |  |  |  |  |  |  |  |  |  |  |")
             continue
         lines.append(
-            "| {mode} | {status} | {pass_rate:.1%} | {avg_score:.3f} | {elapsed_seconds:.1f} | "
-            "{fireworks_count} | {local_llm_count} | {fallbacks_count} | {deterministic_count} | {answers_written} |".format(
+            "| {mode} | {status} | {completed_runs}/{runs} | {pass_rate:.1%} | {avg_score:.3f} | {elapsed_seconds:.1f} | "
+            "{max_elapsed_seconds:.1f} | {fireworks_count:.1f} | {local_llm_count:.1f} | {fallbacks_count:.1f} | "
+            "{deterministic_count:.1f} | {answers_written} |".format(
                 **row
             )
         )
@@ -397,10 +575,40 @@ def render_markdown(payload: dict) -> str:
     for row in payload["modes"]:
         if "by_category" not in row:
             continue
-        lines.extend([f"### {row['mode']}", "", "| Category | Pass Rate | Avg Score | Rows |", "| --- | ---: | ---: | ---: |"])
+        lines.extend([f"### {row['mode']}", "", "| Category | Pass Rate | Avg Score | Rows | Runs |", "| --- | ---: | ---: | ---: | ---: |"])
         for category, bucket in row["by_category"].items():
             lines.append(
-                f"| {category} | {bucket['pass_rate']:.1%} | {bucket['avg_score']:.3f} | {bucket['rows']} |"
+                f"| {category} | {bucket['pass_rate']:.1%} | {bucket['avg_score']:.3f} | {bucket['rows']} | {bucket.get('runs', 1)} |"
+            )
+        lines.append("")
+    lines.extend(["## Models And Errors", ""])
+    for row in payload["modes"]:
+        if row.get("status", "").startswith("skipped"):
+            continue
+        lines.append(f"### {row['mode']}")
+        model_counts = row.get("model_counts") or {}
+        error_counts = row.get("error_counts") or {}
+        if model_counts:
+            lines.append("Models: " + ", ".join(f"`{key}`={value}" for key, value in list(model_counts.items())[:8]))
+        else:
+            lines.append("Models: none")
+        if error_counts:
+            lines.append("Errors: " + ", ".join(f"`{key}`={value}" for key, value in list(error_counts.items())[:8]))
+        else:
+            lines.append("Errors: none")
+        lines.append("")
+    lines.extend(["## Unstable Tasks", ""])
+    for row in payload["modes"]:
+        unstable = row.get("unstable_tasks") or []
+        if not unstable:
+            continue
+        lines.append(f"### {row['mode']}")
+        for task in unstable[:12]:
+            notes = ";".join(task.get("latest_notes") or [])
+            lines.append(
+                f"- `{task['task_id']}` ({task['category']}): pass_rate={task['pass_rate']:.1%}; "
+                f"score_range={task['min_score']:.3f}-{task['max_score']:.3f}; notes={notes}; "
+                f"answer={task['latest_answer_preview']}"
             )
         lines.append("")
     lines.extend(["## First Failures", ""])

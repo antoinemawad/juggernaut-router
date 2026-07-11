@@ -30,6 +30,7 @@ from scripts.final_submission_commands import validate_image_ref
 from scripts.validate_runtime_recommendation import isolated_env, validate_recommendation
 from scripts import check_submission_static
 from scripts import build_evidence_manifest
+from scripts import compare_local_remote_routes
 from scripts import compare_eval_reports
 from scripts import recommend_runtime_env
 from scripts import summarize_model_matrix_runs
@@ -1744,6 +1745,65 @@ class Phase1RuntimeTests(unittest.TestCase):
 
         self.assertEqual(len(records), 1)
         self.assertTrue(required_fields.issubset(records[0]))
+
+    def test_local_remote_compare_aggregates_repeated_runs(self):
+        raw_runs = [
+            {
+                "mode": "remote_only",
+                "status": "passed",
+                "pass_rate": 0.5,
+                "avg_score": 0.6,
+                "elapsed_seconds": 10,
+                "answers_written": 2,
+                "fireworks_count": 2,
+                "local_llm_count": 0,
+                "fallbacks_count": 0,
+                "deterministic_count": 0,
+                "route_counts": {"fireworks": 2},
+                "error_counts": {},
+                "model_counts": {"gemma-4-31b-it": 2},
+                "route_reason_counts": {"no_local_solver": 2},
+                "by_category": {"factual_knowledge": {"rows": 2, "pass_rate": 0.5, "avg_score": 0.6}},
+                "task_scores": [
+                    {"task_id": "a", "category": "factual_knowledge", "passed": True, "score": 1.0, "notes": [], "answer": "ok"},
+                    {"task_id": "b", "category": "factual_knowledge", "passed": False, "score": 0.2, "notes": ["x"], "answer": "bad"},
+                ],
+                "failures": [],
+                "output_dir": "eval_runs/demo/remote_only/run_01",
+            },
+            {
+                "mode": "remote_only",
+                "status": "passed",
+                "pass_rate": 1.0,
+                "avg_score": 1.0,
+                "elapsed_seconds": 14,
+                "answers_written": 2,
+                "fireworks_count": 2,
+                "local_llm_count": 0,
+                "fallbacks_count": 0,
+                "deterministic_count": 0,
+                "route_counts": {"fireworks": 2},
+                "error_counts": {},
+                "model_counts": {"gemma-4-31b-it": 2},
+                "route_reason_counts": {"no_local_solver": 2},
+                "by_category": {"factual_knowledge": {"rows": 2, "pass_rate": 1.0, "avg_score": 1.0}},
+                "task_scores": [
+                    {"task_id": "a", "category": "factual_knowledge", "passed": True, "score": 1.0, "notes": [], "answer": "ok"},
+                    {"task_id": "b", "category": "factual_knowledge", "passed": True, "score": 1.0, "notes": [], "answer": "good"},
+                ],
+                "failures": [],
+                "output_dir": "eval_runs/demo/remote_only/run_02",
+            },
+        ]
+
+        [summary] = compare_local_remote_routes.aggregate_mode_runs(raw_runs)
+
+        self.assertEqual(summary["mode"], "remote_only")
+        self.assertEqual(summary["completed_runs"], 2)
+        self.assertAlmostEqual(summary["pass_rate"], 0.75)
+        self.assertAlmostEqual(summary["elapsed_seconds"], 12.0)
+        self.assertEqual(summary["model_counts"], {"gemma-4-31b-it": 4})
+        self.assertEqual(summary["unstable_tasks"][0]["task_id"], "b")
 
 
 if __name__ == "__main__":
