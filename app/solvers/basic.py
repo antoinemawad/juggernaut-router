@@ -92,31 +92,17 @@ def solve_compound_growth_problem(text: str):
 
 def solve_batch_rerun_problem(text: str):
     match = re.search(
-        r"(?:processes|completes)\s+(\d+(?:\.\d+)?)\s+batches\s+per\s+(?:hour|minute)\s+for\s+"
-        r"(\d+(?:\.\d+)?)\s+(?:hours?|minutes?),?\s+then\s+(\d+(?:\.\d+)?)\s+batches\s+"
-        r"(?:must\s+be\s+)?rerun",
-        text,
-        flags=re.IGNORECASE,
-    )
-    if match:
-        rate = float(match.group(1))
-        duration = float(match.group(2))
-        rerun = float(match.group(3))
-        remaining = rate * duration - rerun
-        return str(int(remaining) if remaining.is_integer() else remaining)
-
-    legacy_match = re.search(
         r"processes\s+(\d+(?:\.\d+)?)\s+batches\s+per\s+hour\s+for\s+(\d+(?:\.\d+)?)\s+hours?,"
         r"\s+then\s+fails\s+and\s+reruns\s+(\d+(?:\.\d+)?)\s+batches",
         text,
         flags=re.IGNORECASE,
     )
-    if not legacy_match:
+    if not match:
         return None
 
-    rate = float(legacy_match.group(1))
-    hours = float(legacy_match.group(2))
-    rerun = float(legacy_match.group(3))
+    rate = float(match.group(1))
+    hours = float(match.group(2))
+    rerun = float(match.group(3))
     remaining = rate * hours - rerun
     return str(int(remaining) if remaining.is_integer() else remaining)
 
@@ -130,10 +116,6 @@ def solve_basic_math(text: str):
     budget_answer = solve_budget_remaining_problem(text)
     if budget_answer is not None:
         return budget_answer
-
-    aggregate_answer = solve_aggregate_math_problem(text)
-    if aggregate_answer is not None:
-        return aggregate_answer
 
     arithmetic_answer = solve_arithmetic_expression(text)
     if arithmetic_answer is not None:
@@ -160,45 +142,6 @@ def solve_budget_remaining_problem(text: str):
         return None
     remaining = amounts[0] - sum(amounts[1:])
     return _format_money(remaining)
-
-
-def solve_aggregate_math_problem(text: str):
-    lower = text.lower()
-
-    if "average" in lower:
-        numbers = [float(value) for value in re.findall(r"(\d+(?:\.\d+)?)\s*(?:ms|milliseconds)?", text)]
-        if len(numbers) >= 2:
-            average = sum(numbers) / len(numbers)
-            return str(int(average) if average.is_integer() else round(average, 2))
-
-    reduction_match = re.search(
-        r"baseline\s+uses\s+([\d,]+(?:\.\d+)?)\s+fireworks\s+tokens\s+and\s+a\s+router\s+uses\s+"
-        r"([\d,]+(?:\.\d+)?)",
-        text,
-        flags=re.IGNORECASE,
-    )
-    if reduction_match and "percentage reduction" in lower:
-        baseline = float(reduction_match.group(1).replace(",", ""))
-        routed = float(reduction_match.group(2).replace(",", ""))
-        if baseline:
-            reduction = (baseline - routed) / baseline * 100
-            return str(int(reduction) if reduction.is_integer() else round(reduction, 2))
-
-    weighted_match = re.search(
-        r"(\d+(?:\.\d+)?)%\s+accuracy\s+and\s+(\d+(?:\.\d+)?)%\s+efficiency.*?"
-        r"accuracy\s+is\s+(\d+(?:\.\d+)?)\s+and\s+efficiency\s+is\s+(\d+(?:\.\d+)?)",
-        text,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    if weighted_match:
-        accuracy_weight = float(weighted_match.group(1)) / 100
-        efficiency_weight = float(weighted_match.group(2)) / 100
-        accuracy = float(weighted_match.group(3))
-        efficiency = float(weighted_match.group(4))
-        score = accuracy_weight * accuracy + efficiency_weight * efficiency
-        return f"{score:.1f}".rstrip("0").rstrip(".")
-
-    return None
 
 
 def solve_arithmetic_expression(text: str):
@@ -320,10 +263,6 @@ def solve_summary(text: str):
         and "uncertain tasks to fireworks" in passage.lower()
     ):
         return "The router should classify locally, answer safe tasks locally, and escalate uncertain tasks to Fireworks."
-    if "reduce Fireworks tokens" in passage and "local proofs plus remote fallback" in passage:
-        return "The router reduces Fireworks tokens with local proofs and remote fallback."
-    if "without using the word cheap" in text.lower() and "deterministic local answers" in passage:
-        return "A router lowers scored token usage through local answers, compact prompts, and model selection."
 
     first_sentence = re.split(r"(?<=[.!?])\s+", passage)[0]
     return first_sentence[:300]
@@ -345,8 +284,6 @@ def solve_exact_summary(text: str, passage: str):
         return "Local classification protects accuracy while reducing Fireworks tokens usage."
     if "gemma may be cost-effective" in passage_lower and "deployment readiness" in passage_lower:
         return "Gemma supports cost-effective routing after deployment readiness."
-    if "evaluation logs should capture accuracy" in passage_lower and "retries" in passage_lower:
-        return "Evaluation logs track accuracy, latency, tokens, routes, retries, and failures."
     return None
 
 
@@ -361,25 +298,11 @@ def solve_simple_ner(text: str):
         return "None"
     if "speaker=lisa su" in lower and "company=amd" in lower:
         return "Lisa Su: PERSON; AMD: ORG; San Jose: LOCATION; July 10, 2026: DATE"
-    if "openai and amd" in lower and "rocm support for vllm" in lower:
-        return "OpenAI: ORG; AMD: ORG; ROCm: PRODUCT; vLLM: PRODUCT; New York: LOCATION; July 12, 2026: DATE"
-    if "fireworks enabled minimax-m3" in lower and "gemma-4-26b-a4b-it" in lower:
-        return (
-            "Fireworks: ORG; minimax-m3: MODEL; gemma-4-26b-a4b-it: MODEL; Antoine: PERSON; "
-            "Beirut: LOCATION; July 9, 2026: DATE"
-        )
-    if "jordan lee visited amman" in lower:
-        return "Jordan Lee: PERSON; Amman: LOCATION; AMD: ORG; July 11, 2026: DATE"
-    if "google deepmind announced gemma support with amd" in lower:
-        return "Google DeepMind: ORG; Gemma: PRODUCT; AMD: ORG; London: LOCATION; July 7, 2026: DATE"
 
     entities = []
 
     # Simple pattern for the sample style: "Lisa Chen joined AMD in Austin on July 6, 2026."
-    person_match = re.search(
-        r"\b([A-Z][a-z]+\s+(?:Chen|Lee|Su|Smith|Johnson|Brown|Davis|Miller|Wilson|Taylor))\b",
-        content,
-    )
+    person_match = re.search(r"([A-Z][a-z]+\s+[A-Z][a-z]+)", content)
     if person_match:
         entities.append(f"{person_match.group(1)}: PERSON")
 
@@ -409,10 +332,6 @@ def solve_simple_logic(text: str):
 
     if "alice is taller than bob" in lower and "bob is taller than carol" in lower and "shortest" in lower:
         return "Carol"
-    if "a is faster than b" in lower and "c is slower than b" in lower and "fastest" in lower:
-        return "A"
-    if "server a is faster than server b" in lower and "server b is faster than server c" in lower and "fastest" in lower:
-        return "A"
     if "a is older than b" in lower and "c is older than d" in lower and "oldest" in lower:
         return "cannot determine"
     if "false that the build did not pass" in lower:
@@ -482,12 +401,6 @@ def solve_code_generation(text: str):
     if "define safe_divide" in lower and "b is zero" in lower:
         return "def safe_divide(a, b):\n    if b == 0:\n        return None\n    return a / b"
 
-    if "function filter_even" in lower:
-        return "def filter_even(nums):\n    return [n for n in nums if n % 2 == 0]"
-
-    if "function word_count" in lower:
-        return "def word_count(text):\n    return len(text.split())"
-
     return None
 
 
@@ -517,12 +430,6 @@ def solve_code_debugging(text: str):
 
     if "def is_valid_score(score)" in lower and "score >= 0 or score <= 100" in lower:
         return "def is_valid_score(score):\n    return 0 <= score <= 100"
-
-    if "def numbers_up_to(n)" in lower and "range(n)" in lower and "include n" in lower:
-        return "def numbers_up_to(n):\n    return list(range(n + 1))"
-
-    if "def first_item(items)" in lower and "items[1]" in lower:
-        return "def first_item(items):\n    return items[0]"
 
     return None
 
@@ -607,10 +514,6 @@ def _evidence_for_solver(prompt: str, solver_name: str) -> list[str]:
         elif "amd developer cloud" in lower:
             evidence.append("proof:stable_summary_template")
         elif "classify locally" in lower and "uncertain tasks to fireworks" in lower:
-            evidence.append("proof:stable_summary_template")
-        elif "local proofs plus remote fallback" in lower:
-            evidence.append("proof:stable_summary_template")
-        elif "deterministic local answers" in lower and "model selection" in lower:
             evidence.append("proof:stable_summary_template")
     if solver_name == "stable_factual_template":
         evidence.append("proof:stable_factual_template")
