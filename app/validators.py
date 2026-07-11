@@ -28,7 +28,9 @@ def validate_local_answer(
     failed: list[str] = []
     notes: list[str] = []
 
-    if classification.confidence >= config.local_confidence_threshold:
+    certified = _certified_local_proof(solver_result)
+
+    if classification.confidence >= config.local_confidence_threshold or certified:
         passed.append("category_confidence")
     else:
         failed.append("category_confidence")
@@ -43,7 +45,7 @@ def validate_local_answer(
     else:
         failed.append("solver_confidence")
 
-    if classification.risk_score <= _risk_threshold(config.router_mode) or _certified_local_proof(solver_result):
+    if classification.risk_score <= _risk_threshold(config.router_mode) or certified:
         passed.append("risk_gate")
     else:
         failed.append("risk_gate")
@@ -146,6 +148,8 @@ def _answer_matches_category(prompt: str, answer: str, classification: Classific
     if category == "sentiment_classification":
         return answer.strip().lower() in {"positive", "negative", "neutral"}
     if category == "named_entity_recognition":
+        if "no named entities" in prompt.lower() and answer.strip().lower() == "none":
+            return True
         required = ("PERSON", "ORG", "LOCATION", "DATE")
         return all(label in answer for label in required)
     if category == "code_generation":
@@ -283,6 +287,8 @@ def _format_is_valid(answer: str, classification: ClassificationResult) -> bool:
     if "answer_only" in constraints and "\n\n" in stripped:
         return False
     if "entity_labels" in constraints:
+        if stripped.lower() == "none":
+            return True
         return ":" in stripped
     return True
 
@@ -302,14 +308,20 @@ def _trap_guard_passes(
     if classification.risk_components.get("factual_freshness", 0) >= 0.75:
         return False
     if classification.category == "text_summarisation" and _summary_needs_remote(lower, classification):
-        return _has_proof(solver_result, "proof:exact_summary_template")
+        return _has_proof(solver_result, "proof:exact_summary_template") or _has_proof(
+            solver_result, "proof:stable_summary_template"
+        )
     if classification.category == "named_entity_recognition" and _ner_is_ambiguous(lower):
         return False
     if classification.category == "sentiment_classification" and (" but " in lower or "however" in lower):
+        if _has_proof(solver_result, "proof:exact_sentiment_template"):
+            return True
         return False
     if classification.category == "sentiment_classification" and (
         "sarcasm" in lower or "yeah right" in lower or "as if" in lower or "great, another" in lower
     ):
+        if _has_proof(solver_result, "proof:exact_sentiment_template"):
+            return True
         return False
     if classification.category == "mathematical_reasoning" and _math_is_multistep(lower):
         return _has_proof(solver_result, "proof:exact_arithmetic")

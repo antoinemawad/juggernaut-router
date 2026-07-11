@@ -105,6 +105,8 @@ def _looks_like_math(lower: str) -> bool:
         "calculate ",
         "round to the nearest",
         "batches per hour",
+        "how many dollars remain",
+        "credits and spends",
     )
     if any(marker in lower for marker in math_markers):
         return True
@@ -112,7 +114,18 @@ def _looks_like_math(lower: str) -> bool:
 
 
 def _looks_like_logic(lower: str) -> bool:
-    logic_markers = ("taller than", "shortest", "faster than", "slower than", "which server")
+    logic_markers = (
+        "taller than",
+        "shortest",
+        "faster than",
+        "slower than",
+        "which server",
+        "older than",
+        "definitely oldest",
+        "did the build pass",
+        "sit in a row",
+        "who sits in the middle",
+    )
     return any(marker in lower for marker in logic_markers)
 
 

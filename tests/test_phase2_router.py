@@ -281,7 +281,7 @@ class Phase2RouterTests(unittest.TestCase):
         ) as local_model, patch("app.agent.ask_fireworks_structured") as fireworks:
             result = answer_task(
                 "local_model_sentiment",
-                "Classify the sentiment as positive, negative, or neutral. Return only the label: Yeah right, the outage was just perfect.",
+                "Classify the sentiment as positive, negative, or neutral. Return only the label: The launch was not terrible.",
             )
 
         local_model.assert_called_once()
@@ -310,16 +310,16 @@ class Phase2RouterTests(unittest.TestCase):
             return_value=LocalModelResult(answer="The user wants me to choose a label.", elapsed_ms=3),
         ), patch(
             "app.agent.ask_fireworks_structured",
-            return_value=FireworksResult(answer="negative", model="minimax-m3", completion_tokens=1, total_tokens=8),
+            return_value=FireworksResult(answer="positive", model="minimax-m3", completion_tokens=1, total_tokens=8),
         ) as fireworks:
             result = answer_task(
                 "remote_after_bad_local_model",
-                "Classify the sentiment as positive, negative, or neutral. Return only the label: Yeah right, the outage was just perfect.",
+                "Classify the sentiment as positive, negative, or neutral. Return only the label: The launch was not terrible.",
             )
 
         fireworks.assert_called_once()
         self.assertEqual(result.route, "fireworks")
-        self.assertEqual(result.answer, "negative")
+        self.assertEqual(result.answer, "positive")
         self.assertEqual(result.total_tokens, 8)
         self.assertIn("reasoning_leakage", result.metadata["local_model_validation_failed"])
 

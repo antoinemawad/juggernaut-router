@@ -340,7 +340,7 @@ def estimate_tokens(text: str) -> int:
 
 def _requests_code_only(prompt: str) -> bool:
     lower = prompt.lower()
-    return "code only" in lower or "return only code" in lower
+    return "code only" in lower or "return only code" in lower or "return only corrected code" in lower
 
 
 def _normalize_for_classification(answer, prompt: str, classification) -> str:
@@ -395,6 +395,8 @@ def _select_remote_mode(classification, local_result=None) -> str:
     if classification.risk_components.get("factual_freshness", 0) >= 0.5:
         return "remote_accuracy"
     if classification.risk_components.get("ambiguity", 0) >= 0.5:
+        return "remote_accuracy"
+    if classification.category == "logical_deductive_reasoning" and local_result is None:
         return "remote_accuracy"
     if classification.category == "factual_knowledge" and local_result is None:
         return "remote_accuracy"
