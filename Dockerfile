@@ -75,11 +75,11 @@ ENV INPUT_PATH=/input/tasks.json \
 # ROUTER_RECOMMENDATION_PATH
 
 # Router profile and deterministic/local gate.
-ENV ROUTER_PROFILE=accuracy_gate \
-    ROUTER_MODE=accuracy_first \
-    LOCAL_CONFIDENCE_THRESHOLD=0.98 \
-    LOCAL_PROOF_BUDGET_MS=250 \
-    LOCAL_CROSS_CHECK_ENABLED=true
+ENV ROUTER_PROFILE=token_competitive \
+    ROUTER_MODE=balanced \
+    LOCAL_CONFIDENCE_THRESHOLD=1.0 \
+    LOCAL_PROOF_BUDGET_MS=100 \
+    LOCAL_CROSS_CHECK_ENABLED=false
 
 # Local GGUF runtime. ENABLE_LOCAL_MODEL is a build arg; runtime can still override LOCAL_MODEL_ENABLED.
 ENV LOCAL_MODEL_ENABLED=${ENABLE_LOCAL_MODEL} \
