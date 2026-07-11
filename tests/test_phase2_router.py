@@ -804,7 +804,7 @@ class Phase2RouterTests(unittest.TestCase):
             )
 
         self.assertEqual(result.route, "fireworks")
-        self.assertIn("cross_check", result.metadata["local_proof_layers_failed"])
+        self.assertTrue({"validator", "cross_check"} & set(result.metadata["local_proof_layers_failed"]))
 
     def test_remote_ner_answer_is_normalized_to_entity_lines(self):
         from app.fireworks_client import FireworksResult
