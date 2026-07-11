@@ -11,7 +11,7 @@ from app.agent import _local_model_skip_reason
 from app.classifier import classify_prompt
 from app.config import DEFAULT_ALLOWED_PLANNING_MODELS, RuntimeConfig, parse_allowed_models
 from app.deadline import DeadlineManager
-from app.fireworks_client import ask_fireworks_structured, provider_model_for_dev, select_allowed_model
+from app.fireworks_client import allowed_model_candidates, ask_fireworks_structured, provider_model_for_dev, select_allowed_model
 from app.local_model_client import _bounded_local_max_tokens
 from app.local_llm import _extract_text, _format_messages
 from app.main import load_tasks, main
@@ -1319,6 +1319,74 @@ class Phase1RuntimeTests(unittest.TestCase):
             fireworks_max_tokens=256,
         )
         self.assertEqual(select_allowed_model(config, ("kimi-k2p7-code",)), "minimax-m3")
+        self.assertEqual(allowed_model_candidates(config, ("kimi-k2p7-code",)), ["minimax-m3"])
+
+    def test_fireworks_falls_through_to_next_model_after_empty_response(self):
+        payload_models = []
+
+        def fake_urlopen(request, timeout):
+            payload = json.loads(request.data.decode("utf-8"))
+            payload_models.append(payload["model"])
+            if payload["model"] == "gemma-4-31b-it":
+                return FakeResponse(json.dumps({"choices": [{"message": {"content": None}}]}))
+            return FakeResponse(json.dumps({
+                "choices": [{"message": {"content": "Fallback model answer"}}],
+                "usage": {"completion_tokens": 4, "total_tokens": 12},
+            }))
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "gemma-4-31b-it,kimi-k2p7-code",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", fake_urlopen):
+            result = ask_fireworks_structured(
+                "hello",
+                preferred_models=("gemma-4-31b-it", "kimi-k2p7-code"),
+            )
+
+        self.assertEqual(result.answer, "Fallback model answer")
+        self.assertEqual(result.model, "kimi-k2p7-code")
+        self.assertEqual(result.retry_count, 1)
+        self.assertEqual(payload_models, ["gemma-4-31b-it", "kimi-k2p7-code"])
+
+    def test_fireworks_dev_mapping_falls_through_across_provider_models(self):
+        payload_models = []
+
+        def fake_urlopen(request, timeout):
+            payload = json.loads(request.data.decode("utf-8"))
+            payload_models.append(payload["model"])
+            if payload["model"] == "accounts/example/deployments/gemma":
+                return FakeResponse(json.dumps({"choices": [{"message": {"content": ""}}]}))
+            return FakeResponse(json.dumps({"choices": [{"message": {"content": "Kimi worked"}}]}))
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://api." + "fireworks.ai/inference/v1",
+                "ALLOWED_MODELS": "gemma-4-31b-it,kimi-k2p7-code",
+                "FIREWORKS_DEV_MODEL_MAP": (
+                    "gemma-4-31b-it=accounts/example/deployments/gemma;"
+                    "kimi-k2p7-code=accounts/fireworks/models/kimi-k2p6"
+                ),
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", fake_urlopen):
+            result = ask_fireworks_structured(
+                "hello",
+                preferred_models=("gemma-4-31b-it", "kimi-k2p7-code"),
+            )
+
+        self.assertEqual(result.answer, "Kimi worked")
+        self.assertEqual(result.model, "kimi-k2p7-code")
+        self.assertEqual(
+            payload_models,
+            ["accounts/example/deployments/gemma", "accounts/fireworks/models/kimi-k2p6"],
+        )
 
     def test_fireworks_invalid_json_fails_soft(self):
         with patch.dict(

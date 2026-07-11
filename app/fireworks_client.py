@@ -54,83 +54,87 @@ def ask_fireworks_structured(
             error="deadline_suppressed_remote",
         )
 
-    model = select_allowed_model(config, preferred_models)
-    if model is None:
+    models = allowed_model_candidates(config, preferred_models)
+    if not models:
         return FireworksResult(
             answer=SAFE_FALLBACK_ANSWER,
             elapsed_ms=timer.elapsed_ms(),
             error="no_allowed_model",
         )
 
-    provider_model = provider_model_for_dev(model, config.fireworks_base_url)
-
-    payload = {
-        "model": provider_model,
-        "messages": [
-            {
-                "role": "system",
-                "content": system_prompt or "Answer accurately and concisely in English."
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        "temperature": 0,
-    }
-    if not config.fireworks_disable_max_tokens:
-        payload["max_tokens"] = config.fireworks_max_tokens
-
     url = config.fireworks_base_url.rstrip("/") + "/chat/completions"
 
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {config.fireworks_api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-
     last_error = None
+    last_model = None
     max_attempts = config.fireworks_max_retries + 1
-    for attempt in range(max_attempts):
-        if attempt > 0 and deadline is not None and not deadline.should_retry(config.fireworks_timeout_seconds):
-            return FireworksResult(
-                answer=SAFE_FALLBACK_ANSWER,
-                model=model,
-                elapsed_ms=timer.elapsed_ms(),
-                retry_count=attempt,
-                error="deadline_suppressed_retry",
-            )
-        try:
-            with urllib.request.urlopen(request, timeout=config.fireworks_timeout_seconds) as response:
-                data = json.loads(response.read().decode("utf-8"))
-                http_status = getattr(response, "status", None)
-            answer = _extract_answer(data)
-            usage = data.get("usage") if isinstance(data, dict) else None
-            return FireworksResult(
-                answer=answer,
-                model=model,
-                http_status=http_status,
-                completion_tokens=_usage_int(usage, "completion_tokens"),
-                total_tokens=_usage_int(usage, "total_tokens"),
-                elapsed_ms=timer.elapsed_ms(),
-                retry_count=attempt,
-            )
-        except urllib.error.HTTPError as exc:
-            last_error = f"fireworks_http_error:{exc.code}:{_safe_error_body(exc)}"
-        except (TimeoutError, urllib.error.URLError) as exc:
-            last_error = f"fireworks_network_error:{type(exc).__name__}"
-        except (json.JSONDecodeError, ValueError, KeyError, TypeError) as exc:
-            last_error = f"fireworks_response_error:{type(exc).__name__}"
+    total_attempts = 0
+    for model in models:
+        last_model = model
+        provider_model = provider_model_for_dev(model, config.fireworks_base_url)
+        payload = {
+            "model": provider_model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt or "Answer accurately and concisely in English."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0,
+        }
+        if not config.fireworks_disable_max_tokens:
+            payload["max_tokens"] = config.fireworks_max_tokens
+
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {config.fireworks_api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        for attempt in range(max_attempts):
+            total_attempts += 1
+            if total_attempts > 1 and deadline is not None and not deadline.should_retry(config.fireworks_timeout_seconds):
+                return FireworksResult(
+                    answer=SAFE_FALLBACK_ANSWER,
+                    model=last_model,
+                    elapsed_ms=timer.elapsed_ms(),
+                    retry_count=total_attempts - 1,
+                    error="deadline_suppressed_retry",
+                )
+            try:
+                with urllib.request.urlopen(request, timeout=config.fireworks_timeout_seconds) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                    http_status = getattr(response, "status", None)
+                answer = _extract_answer(data)
+                usage = data.get("usage") if isinstance(data, dict) else None
+                return FireworksResult(
+                    answer=answer,
+                    model=model,
+                    http_status=http_status,
+                    completion_tokens=_usage_int(usage, "completion_tokens"),
+                    total_tokens=_usage_int(usage, "total_tokens"),
+                    elapsed_ms=timer.elapsed_ms(),
+                    retry_count=total_attempts - 1,
+                )
+            except urllib.error.HTTPError as exc:
+                last_error = f"fireworks_http_error:{exc.code}:model={model}:{_safe_error_body(exc)}"
+            except (TimeoutError, urllib.error.URLError) as exc:
+                last_error = f"fireworks_network_error:{type(exc).__name__}:model={model}"
+            except (json.JSONDecodeError, ValueError, KeyError, TypeError) as exc:
+                last_error = f"fireworks_response_error:{type(exc).__name__}:model={model}"
 
     return FireworksResult(
         answer=SAFE_FALLBACK_ANSWER,
-        model=model,
+        model=last_model,
         elapsed_ms=timer.elapsed_ms(),
-        retry_count=max_attempts - 1,
+        retry_count=max(0, total_attempts - 1),
         error=last_error or "fireworks_unknown_error",
     )
 
@@ -174,6 +178,21 @@ def select_allowed_model(
         if model in allowed:
             return model
     return config.first_allowed_model()
+
+
+def allowed_model_candidates(
+    config: RuntimeConfig,
+    preferred_models: tuple[str, ...] | list[str] | None = None,
+) -> list[str]:
+    allowed = set(config.allowed_models)
+    candidates = []
+    for model in preferred_models or ():
+        if model in allowed and model not in candidates:
+            candidates.append(model)
+    for model in config.allowed_models:
+        if model not in candidates:
+            candidates.append(model)
+    return candidates
 
 
 def provider_model_for_dev(alias: str, base_url: str | None) -> str:
