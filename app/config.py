@@ -33,6 +33,7 @@ RECOMMENDATION_EXPORT_NAMES = {
     "LOCAL_MODEL_COMMAND",
     "LOCAL_MODEL_ENABLED",
     "LOCAL_MODEL_CONTEXT",
+    "LOCAL_MODEL_CATEGORIES",
     "LOCAL_MODEL_MAX_CHARS",
     "LOCAL_MODEL_MAX_TOKENS",
     "LOCAL_MODEL_BATCH_LIMIT",
@@ -196,6 +197,18 @@ def _get_int_map_from(
     return mapping
 
 
+def _get_category_set_from(env: dict[str, str], name: str) -> tuple[str, ...]:
+    raw = env.get(name, "")
+    categories = []
+    seen = set()
+    for item in raw.split(","):
+        category = item.strip()
+        if category and category not in seen:
+            categories.append(category)
+            seen.add(category)
+    return tuple(categories)
+
+
 def parse_allowed_models(raw: str | None) -> list[str]:
     if not raw:
         return []
@@ -267,6 +280,7 @@ class RuntimeConfig:
     local_model_timeout_seconds: int = 20
     local_model_max_chars: int = 4096
     local_model_batch_limit: int = 12
+    local_model_categories: tuple[str, ...] = ()
     prompt_policy_remote_accuracy: str = "compact"
     prompt_policy_remote_code: str = "answer_only"
     prompt_policy_remote_format_strict: str = "answer_only"
@@ -319,6 +333,7 @@ class RuntimeConfig:
             local_model_timeout_seconds=_get_int_from(env, "LOCAL_MODEL_TIMEOUT_SECONDS", 20, 1, 120),
             local_model_max_chars=_get_int_from(env, "LOCAL_MODEL_MAX_CHARS", 4096, 128, 20000),
             local_model_batch_limit=_get_int_from(env, "LOCAL_MODEL_BATCH_LIMIT", 12, 0, 10000),
+            local_model_categories=_get_category_set_from(env, "LOCAL_MODEL_CATEGORIES"),
             router_log_path=Path(router_log_path) if router_log_path else None,
             fireworks_api_key=env.get("FIREWORKS_API_KEY"),
             fireworks_base_url=env.get("FIREWORKS_BASE_URL"),

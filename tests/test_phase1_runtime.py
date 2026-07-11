@@ -154,12 +154,13 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertIn("ARG LOCAL_MODEL_FILENAME=local-model.gguf", dockerfile)
         self.assertIn("LOCAL_MODEL_ENABLED=${ENABLE_LOCAL_MODEL}", dockerfile)
         self.assertIn("LOCAL_MODEL_PATH=/app/models/${LOCAL_MODEL_FILENAME}", dockerfile)
-        self.assertIn("LOCAL_MODEL_BATCH_LIMIT=12", dockerfile)
+        self.assertIn("LOCAL_MODEL_BATCH_LIMIT=6", dockerfile)
+        self.assertIn("LOCAL_MODEL_CATEGORIES=sentiment_classification,text_summarisation", dockerfile)
         self.assertIn("LOCAL_MODEL_MAX_TOKENS=128", dockerfile)
         self.assertIn("LOCAL_MODEL_CONTEXT=1024", dockerfile)
         self.assertIn("LOCAL_MODEL_THREADS=2", dockerfile)
         self.assertIn("LOCAL_MODEL_TEMPERATURE=0", dockerfile)
-        self.assertIn("LOCAL_MODEL_TIMEOUT_SECONDS=20", dockerfile)
+        self.assertIn("LOCAL_MODEL_TIMEOUT_SECONDS=10", dockerfile)
         self.assertIn("LOCAL_MODEL_MAX_CHARS=4096", dockerfile)
 
     def test_dockerfile_local_model_selection_is_deterministic_and_hardened(self):
@@ -382,6 +383,7 @@ class Phase1RuntimeTests(unittest.TestCase):
                 "LOCAL_MODEL_PATH": "/app/models/qwen.gguf",
                 "LOCAL_MODEL_MAX_TOKENS": "96",
                 "LOCAL_MODEL_BATCH_LIMIT": "7",
+                "LOCAL_MODEL_CATEGORIES": "sentiment_classification,text_summarisation",
                 "LOCAL_MODEL_CONTEXT": "2048",
                 "LOCAL_MODEL_THREADS": "2",
                 "LOCAL_MODEL_TEMPERATURE": "0",
@@ -394,6 +396,7 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertEqual(str(config.local_model_path), "/app/models/qwen.gguf")
         self.assertEqual(config.local_model_max_tokens, 96)
         self.assertEqual(config.local_model_batch_limit, 7)
+        self.assertEqual(config.local_model_categories, ("sentiment_classification", "text_summarisation"))
         self.assertEqual(config.local_model_context, 2048)
         self.assertEqual(config.local_model_threads, 2)
         self.assertEqual(config.local_model_temperature, 0)
@@ -481,6 +484,39 @@ class Phase1RuntimeTests(unittest.TestCase):
         reason = _local_model_skip_reason(config, None, classify_prompt(prompt), prompt)
 
         self.assertIsNone(reason)
+
+    def test_local_model_category_allowlist_overrides_profile_defaults(self):
+        config = RuntimeConfig(
+            input_path=Path("/input/tasks.json"),
+            output_path=Path("/output/results.json"),
+            router_mode="balanced",
+            local_confidence_threshold=0.95,
+            fireworks_timeout_seconds=25,
+            fireworks_max_retries=0,
+            batch_deadline_seconds=600,
+            deadline_safety_margin_seconds=60,
+            remote_worker_count=2,
+            local_proof_budget_ms=100,
+            local_cross_check_enabled=True,
+            router_log_path=None,
+            fireworks_api_key=None,
+            fireworks_base_url=None,
+            allowed_models=(),
+            fireworks_max_tokens=192,
+            router_profile="token_competitive",
+            local_model_enabled=True,
+            local_model_path=Path("/app/models/qwen.gguf"),
+            local_model_categories=("sentiment_classification",),
+        )
+
+        sentiment_prompt = "Classify sentiment as positive, negative, or neutral: The setup was easy."
+        factual_prompt = "In one sentence, explain what ROCm is."
+
+        self.assertIsNone(_local_model_skip_reason(config, None, classify_prompt(sentiment_prompt), sentiment_prompt))
+        self.assertEqual(
+            _local_model_skip_reason(config, None, classify_prompt(factual_prompt), factual_prompt),
+            "category_not_local_model_safe",
+        )
 
     def test_local_model_batch_limit_skip_reason(self):
         config = RuntimeConfig(

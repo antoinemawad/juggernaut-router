@@ -119,8 +119,10 @@ def check_dockerfile_is_submission_scoped() -> list[str]:
         errors.append("Dockerfile local GGUF support should be disabled by default")
     if "LOCAL_MODEL_ENABLED=${ENABLE_LOCAL_MODEL}" not in dockerfile:
         errors.append("Dockerfile should derive local GGUF runtime enablement from ENABLE_LOCAL_MODEL")
-    if "LOCAL_MODEL_BATCH_LIMIT=12" not in dockerfile:
-        errors.append("Dockerfile restored local GGUF image should allow bounded local-model attempts")
+    if "LOCAL_MODEL_BATCH_LIMIT=6" not in dockerfile:
+        errors.append("Dockerfile restored local GGUF image should keep local-model attempts tightly bounded")
+    if "LOCAL_MODEL_CATEGORIES=sentiment_classification,text_summarisation" not in dockerfile:
+        errors.append("Dockerfile mixed profile should only use local model for fast validated categories by default")
     return errors
 
 
