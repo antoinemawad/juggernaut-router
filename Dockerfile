@@ -106,7 +106,7 @@ ENV FIREWORKS_TIMEOUT_SECONDS=25 \
     FIREWORKS_MAX_RETRIES=1
 
 # Per-category output-token controls.
-ENV FIREWORKS_MAX_TOKENS_BY_CATEGORY=sentiment_classification=16,named_entity_recognition=96,mathematical_reasoning=192,logical_deductive_reasoning=192,factual_knowledge=192,text_summarisation=256,code_generation=512,code_debugging=384
+ENV FIREWORKS_MAX_TOKENS_BY_CATEGORY=sentiment_classification=12,named_entity_recognition=96,mathematical_reasoning=160,logical_deductive_reasoning=160,factual_knowledge=224,text_summarisation=224,code_generation=512,code_debugging=448
 
 # Remote validation and escalation.
 ENV REMOTE_VALIDATION_ESCALATION_ENABLED=true

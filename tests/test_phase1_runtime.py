@@ -205,6 +205,14 @@ class Phase1RuntimeTests(unittest.TestCase):
         }
         for name, value in expected_values.items():
             self.assertIn(f"{name}={value}", dockerfile)
+        self.assertIn(
+            "FIREWORKS_MAX_TOKENS_BY_CATEGORY="
+            "sentiment_classification=12,named_entity_recognition=96,"
+            "mathematical_reasoning=160,logical_deductive_reasoning=160,"
+            "factual_knowledge=224,text_summarisation=224,"
+            "code_generation=512,code_debugging=448",
+            dockerfile,
+        )
 
     def test_dockerfile_exposes_supported_runtime_variables_without_secret_defaults(self):
         dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
