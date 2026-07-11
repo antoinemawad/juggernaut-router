@@ -176,30 +176,30 @@ class Phase1RuntimeTests(unittest.TestCase):
     def test_dockerfile_preserves_current_fireworks_routing_values(self):
         dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
         expected_values = {
-            "ROUTER_PROMPT_POLICY_REMOTE_ACCURACY": "compact",
-            "ROUTER_PROMPT_POLICY_REMOTE_CODE": "compact",
+            "ROUTER_PROMPT_POLICY_REMOTE_ACCURACY": "answer_only",
+            "ROUTER_PROMPT_POLICY_REMOTE_CODE": "answer_only",
             "ROUTER_PROMPT_POLICY_REMOTE_FORMAT_STRICT": "answer_only",
-            "ROUTER_PROMPT_POLICY_REMOTE_CONCISE": "compact",
+            "ROUTER_PROMPT_POLICY_REMOTE_CONCISE": "answer_only",
             "ROUTER_PROMPT_POLICY_BY_CATEGORY": (
                 "sentiment_classification=answer_only;named_entity_recognition=answer_only;"
                 "mathematical_reasoning=final_only;logical_deductive_reasoning=final_only;"
-                "code_generation=compact;code_debugging=compact;factual_knowledge=compact;"
-                "text_summarisation=compact"
+                "code_generation=answer_only;code_debugging=answer_only;factual_knowledge=answer_only;"
+                "text_summarisation=answer_only"
             ),
-            "ROUTER_MODELS_REMOTE_ACCURACY": "minimax-m3,gemma-4-31b-it,kimi-k2p7-code,gemma-4-26b-a4b-it",
-            "ROUTER_MODELS_REMOTE_CODE": "kimi-k2p7-code,minimax-m3,gemma-4-31b-it",
-            "ROUTER_MODELS_REMOTE_FORMAT_STRICT": "minimax-m3,gemma-4-31b-it,kimi-k2p7-code",
-            "ROUTER_MODELS_REMOTE_CONCISE": "minimax-m3,gemma-4-26b-a4b-it,gemma-4-31b-it",
-            "ROUTER_MODELS_REMOTE_ESCALATION": "gemma-4-31b-it,kimi-k2p7-code,minimax-m3",
+            "ROUTER_MODELS_REMOTE_ACCURACY": "gemma-4-31b-it,kimi-k2p7-code,gemma-4-26b-a4b-it,minimax-m3",
+            "ROUTER_MODELS_REMOTE_CODE": "kimi-k2p7-code,gemma-4-31b-it,gemma-4-26b-a4b-it,minimax-m3",
+            "ROUTER_MODELS_REMOTE_FORMAT_STRICT": "gemma-4-31b-it,kimi-k2p7-code,gemma-4-26b-a4b-it,minimax-m3",
+            "ROUTER_MODELS_REMOTE_CONCISE": "gemma-4-26b-a4b-it,gemma-4-31b-it,kimi-k2p7-code,minimax-m3",
+            "ROUTER_MODELS_REMOTE_ESCALATION": "gemma-4-31b-it,kimi-k2p7-code,gemma-4-26b-a4b-it,minimax-m3",
             "ROUTER_MODELS_BY_CATEGORY": (
-                "code_debugging=kimi-k2p7-code,minimax-m3,gemma-4-31b-it;"
-                "code_generation=kimi-k2p7-code,minimax-m3,gemma-4-31b-it;"
-                "factual_knowledge=minimax-m3,gemma-4-31b-it,kimi-k2p7-code;"
-                "logical_deductive_reasoning=gemma-4-31b-it,minimax-m3,kimi-k2p7-code;"
-                "mathematical_reasoning=gemma-4-31b-it,minimax-m3,kimi-k2p7-code;"
-                "named_entity_recognition=minimax-m3,gemma-4-31b-it,kimi-k2p7-code;"
-                "sentiment_classification=minimax-m3,gemma-4-31b-it,kimi-k2p7-code;"
-                "text_summarisation=minimax-m3,gemma-4-31b-it,kimi-k2p7-code"
+                "code_debugging=kimi-k2p7-code,gemma-4-31b-it,gemma-4-26b-a4b-it,minimax-m3;"
+                "code_generation=kimi-k2p7-code,gemma-4-31b-it,gemma-4-26b-a4b-it,minimax-m3;"
+                "factual_knowledge=gemma-4-31b-it,kimi-k2p7-code,gemma-4-26b-a4b-it,minimax-m3;"
+                "logical_deductive_reasoning=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,minimax-m3;"
+                "mathematical_reasoning=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,minimax-m3;"
+                "named_entity_recognition=gemma-4-31b-it,gemma-4-26b-a4b-it,kimi-k2p7-code,minimax-m3;"
+                "sentiment_classification=gemma-4-26b-a4b-it,gemma-4-31b-it,kimi-k2p7-code,minimax-m3;"
+                "text_summarisation=gemma-4-26b-a4b-it,gemma-4-31b-it,kimi-k2p7-code,minimax-m3"
             ),
         }
         for name, value in expected_values.items():

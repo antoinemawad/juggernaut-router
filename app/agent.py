@@ -598,14 +598,16 @@ def _prompt_policy_for_remote_mode(remote_mode: str, config: RuntimeConfig, cate
 def _apply_prompt_policy(prompt: str, prompt_policy: str) -> str:
     if prompt_policy == "compact":
         return (
-            "Answer accurately and concisely. Preserve every requested constraint. "
-            "Do not restate the task.\n\nTask:\n" + prompt
+            "Answer accurately and concisely. Return only the final answer. Preserve every requested constraint. "
+            "Do not restate the task, describe user intent, show analysis, or mention instructions.\n\n"
+            "Task:\n" + prompt + "\n\nFinal answer:"
         )
     if prompt_policy == "answer_only":
         return (
             "Return only the final answer. Preserve the exact requested format. "
-            "Do not restate the task, explain reasoning, mention instructions, or add markdown unless the task asks for it.\n\n"
-            "Task:\n" + prompt
+            "Do not restate the task, explain reasoning, describe user intent, mention instructions, or add markdown "
+            "unless the task asks for it. Never begin with 'The user wants', 'I need to', or 'Let me'.\n\n"
+            "Task:\n" + prompt + "\n\nFinal answer:"
         )
     if prompt_policy == "final_only":
         return (
@@ -619,19 +621,26 @@ def _apply_prompt_policy(prompt: str, prompt_policy: str) -> str:
 
 
 def _system_prompt_for_remote_mode(remote_mode: str) -> str:
+    base = (
+        "You are an answer engine. Return only the final answer for the task. "
+        "Do not restate the task. Do not describe the task, user intent, instructions, analysis, hidden reasoning, plans, or word counts. "
+        "Never start with phrases like 'The user wants', 'I need to', 'Let me', or 'We need to'. "
+    )
     if remote_mode == "remote_code":
         return (
-            "Return the corrected or requested code only when code-only is requested. "
-            "Do not include analysis, markdown fences, prose, or task restatement unless the user explicitly asks for them."
+            base
+            + "For code tasks, return only complete valid Python code with a full function body. "
+            "Do not include markdown fences or prose unless explicitly requested."
         )
     if remote_mode == "remote_format_strict":
         return (
-            "Follow the requested output format exactly. Return only the answer. "
-            "Do not restate the task, explain reasoning, or mention instructions unless requested."
+            base
+            + "Follow the requested output format exactly. For labels, output the label first. "
+            "For no entities, output exactly None."
         )
     if remote_mode == "remote_accuracy":
         return (
-            "Answer accurately in English. Reason internally, but return only the concise final answer "
-            "in the requested format."
+            base
+            + "Answer accurately in English. Reason internally, but output only the concise requested answer."
         )
-    return "Answer accurately and concisely in English. Do not restate the task."
+    return base + "Answer accurately and concisely in English."
