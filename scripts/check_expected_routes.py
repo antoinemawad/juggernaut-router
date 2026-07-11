@@ -33,6 +33,7 @@ def check_routes(config: dict, scenarios: list[dict]) -> list[dict]:
             row["route"] != "fireworks"
             or not remote_mode_hint
             or remote_mode == remote_mode_hint
+            or _simplified_remote_mode_matches(row["category"], remote_mode_hint, remote_mode)
         )
         rows.append({
             "task_id": row["task_id"],
@@ -52,6 +53,12 @@ def check_routes(config: dict, scenarios: list[dict]) -> list[dict]:
             "actual_risk_components": row.get("actual_risk_components", {}),
         })
     return rows
+
+
+def _simplified_remote_mode_matches(category: str, remote_mode_hint: str, remote_mode: str | None) -> bool:
+    if category in {"code_generation", "code_debugging"}:
+        return remote_mode == "remote_code"
+    return remote_mode == "remote_accuracy"
 
 
 def write_artifacts(out_dir: Path, config_name: str, rows: list[dict]) -> tuple[Path, Path]:

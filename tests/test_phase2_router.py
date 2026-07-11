@@ -226,7 +226,15 @@ class Phase2RouterTests(unittest.TestCase):
 
             return FireworksResult(answer="Remote answer", model="minimax-m3", elapsed_ms=1)
 
-        with patch("app.agent.classify_prompt", side_effect=fake_classify), patch(
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch("app.agent.classify_prompt", side_effect=fake_classify), patch(
             "app.agent.ask_fireworks_structured", side_effect=fake_remote
         ):
             result = answer_task("remote", "Explain a difficult thing.")
@@ -258,8 +266,9 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.selected_model, "minimax-m3")
         self.assertEqual(result.remote_mode, "remote_accuracy")
-        self.assertEqual(result.prompt_policy, "compact")
+        self.assertEqual(result.prompt_policy, "original")
         self.assertEqual(captured["url"], "https://judge-proxy.example/v1/chat/completions")
+        self.assertTrue(captured.get("url"))
         self.assertIn("trap_guard", result.metadata["local_proof_layers_failed"])
 
     def test_valid_local_model_answer_prevents_fireworks_call(self):
@@ -291,7 +300,7 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.total_tokens, 0)
         self.assertEqual(result.timings.local_model_elapsed_ms, 3)
 
-    def test_invalid_local_model_answer_falls_through_to_fireworks(self):
+    def test_invalid_local_model_answer_does_not_fall_through_to_fireworks(self):
         from app.fireworks_client import FireworksResult
         from app.local_model_client import LocalModelResult
 
@@ -317,11 +326,61 @@ class Phase2RouterTests(unittest.TestCase):
                 "Classify the sentiment as positive, negative, or neutral. Return only the label: The launch was not terrible.",
             )
 
-        fireworks.assert_called_once()
-        self.assertEqual(result.route, "fireworks")
-        self.assertEqual(result.answer, "positive")
-        self.assertEqual(result.total_tokens, 8)
+        fireworks.assert_not_called()
+        self.assertEqual(result.route, "local_model")
+        self.assertEqual(result.answer, "The user wants me to choose a label.")
+        self.assertEqual(result.metadata["generation_call_count"], 1)
         self.assertIn("reasoning_leakage", result.metadata["local_model_validation_failed"])
+
+    def test_each_route_uses_at_most_one_generation_call(self):
+        from app.fireworks_client import FireworksResult
+        from app.local_model_client import LocalModelResult
+
+        deterministic = answer_task(
+            "deterministic",
+            "A product costs $80 and is discounted by 25%. What is the final price?",
+        )
+        self.assertEqual(deterministic.route, "local")
+        self.assertEqual(deterministic.metadata["generation_call_count"], 0)
+
+        with patch.dict(
+            os.environ,
+            {
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(answer="GPUs accelerate AI training with many parallel cores.", elapsed_ms=2),
+        ), patch("app.agent.ask_fireworks_structured") as fireworks:
+            local_model = answer_task(
+                "local_model",
+                "Explain in one sentence why GPUs are useful for AI training.",
+            )
+        fireworks.assert_not_called()
+        self.assertEqual(local_model.route, "local_model")
+        self.assertEqual(local_model.metadata["generation_call_count"], 1)
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3,kimi-k2p7-code",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_fireworks_structured",
+            return_value=FireworksResult(answer="The answer is remote.", model="minimax-m3", total_tokens=7),
+        ) as remote:
+            fireworks_result = answer_task("remote", "Explain why GPUs are useful for AI workloads.")
+        remote.assert_called_once()
+        self.assertEqual(fireworks_result.route, "fireworks")
+        self.assertEqual(fireworks_result.metadata["generation_call_count"], 1)
 
     def test_accuracy_gate_factual_attempts_local_model(self):
         from app.local_model_client import LocalModelResult
@@ -379,7 +438,7 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.route, "local_model")
         self.assertEqual(result.answer, "def parse_ints(text):\n    return []")
 
-    def test_rejected_local_code_escalates_to_fireworks_when_available(self):
+    def test_rejected_local_code_does_not_escalate_to_fireworks_when_available(self):
         from app.fireworks_client import FireworksResult
         from app.local_model_client import LocalModelResult
 
@@ -411,9 +470,9 @@ class Phase2RouterTests(unittest.TestCase):
             )
 
         local_model.assert_called_once()
-        fireworks.assert_called_once()
-        self.assertEqual(result.route, "fireworks")
-        self.assertEqual(result.answer, "def parse_ints(text):\n    return []")
+        fireworks.assert_not_called()
+        self.assertEqual(result.route, "local_model")
+        self.assertEqual(result.answer, "Here is code later.")
         self.assertTrue(result.metadata["local_model_attempted"])
         self.assertIn("answer_shape", result.metadata["local_model_validation_failed"])
 
@@ -442,7 +501,7 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.route, "fallback")
         self.assertTrue(result.metadata["local_model_attempted"])
         self.assertEqual(result.metadata["local_model_error"], "local_model_empty")
-        self.assertEqual(result.route_reason, "fireworks_unavailable_after_local_model")
+        self.assertEqual(result.route_reason, "local_model_empty")
 
     def test_repeated_markdown_fence_local_factual_is_rejected(self):
         from app.local_model_client import LocalModelResult
@@ -470,12 +529,12 @@ class Phase2RouterTests(unittest.TestCase):
 
         local_model.assert_called_once()
         fireworks.assert_not_called()
-        self.assertEqual(result.route, "fallback")
+        self.assertEqual(result.route, "local_model")
         self.assertTrue(result.metadata["local_model_attempted"])
         self.assertIn("artifact_guard", result.metadata["local_model_validation_failed"])
         self.assertIn("repeated_markdown_fence", result.metadata["local_model_validation_notes"])
 
-    def test_rejected_repetition_local_answer_escalates_to_fireworks_when_available(self):
+    def test_rejected_repetition_local_answer_does_not_escalate_to_fireworks_when_available(self):
         from app.fireworks_client import FireworksResult
         from app.local_model_client import LocalModelResult
 
@@ -508,8 +567,8 @@ class Phase2RouterTests(unittest.TestCase):
             )
 
         local_model.assert_called_once()
-        fireworks.assert_called_once()
-        self.assertEqual(result.route, "fireworks")
+        fireworks.assert_not_called()
+        self.assertEqual(result.route, "local_model")
         self.assertIn("runaway_repetition", result.metadata["local_model_validation_notes"])
 
     def test_valid_short_factual_answer_passes_artifact_validation(self):
@@ -649,9 +708,9 @@ class Phase2RouterTests(unittest.TestCase):
             )
 
         self.assertEqual(result.remote_mode, "remote_code")
-        self.assertEqual(result.prompt_policy, "compact")
-        self.assertIn("Answer accurately and concisely", captured["payload"]["messages"][1]["content"])
-        self.assertNotIn("Final answer only:", captured["payload"]["messages"][1]["content"])
+        self.assertEqual(result.prompt_policy, "original")
+        self.assertTrue(captured["payload"]["messages"][1]["content"].startswith("Write Python code only"))
+        self.assertNotIn("Answer accurately and concisely", captured["payload"]["messages"][1]["content"])
 
     def test_category_token_budget_override_reaches_fireworks_payload(self):
         captured = {}
@@ -708,7 +767,7 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.max_tokens, 4096)
         self.assertNotIn("max_tokens", captured["payload"])
 
-    def test_remote_accuracy_model_preference_can_be_overridden(self):
+    def test_remote_accuracy_uses_simple_minimax_policy(self):
         captured = {}
 
         def fake_urlopen(request, timeout):
@@ -732,10 +791,10 @@ class Phase2RouterTests(unittest.TestCase):
             )
 
         self.assertEqual(result.remote_mode, "remote_accuracy")
-        self.assertEqual(result.selected_model, "gemma-4-31b-it")
-        self.assertEqual(captured["payload"]["model"], "gemma-4-31b-it")
+        self.assertEqual(result.selected_model, "minimax-m3")
+        self.assertEqual(captured["payload"]["model"], "minimax-m3")
 
-    def test_category_model_preference_beats_remote_mode_default(self):
+    def test_category_model_preference_does_not_override_simple_policy(self):
         captured = {}
 
         def fake_urlopen(request, timeout):
@@ -759,8 +818,8 @@ class Phase2RouterTests(unittest.TestCase):
             )
 
         self.assertEqual(result.remote_mode, "remote_accuracy")
-        self.assertEqual(result.selected_model, "kimi-k2p7-code")
-        self.assertEqual(captured["payload"]["model"], "kimi-k2p7-code")
+        self.assertEqual(result.selected_model, "minimax-m3")
+        self.assertEqual(captured["payload"]["model"], "minimax-m3")
 
     def test_category_model_preference_still_respects_allowed_models(self):
         captured = {}
@@ -809,7 +868,15 @@ class Phase2RouterTests(unittest.TestCase):
     def test_remote_ner_answer_is_normalized_to_entity_lines(self):
         from app.fireworks_client import FireworksResult
 
-        with patch("app.agent.ask_fireworks_structured") as mocked_remote:
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch("app.agent.ask_fireworks_structured") as mocked_remote:
             mocked_remote.return_value = FireworksResult(
                 answer="Entities:\n- PERSON: Lisa Chen\n- ORG: AMD\n- LOCATION: Austin\n- DATE: July 6, 2026",
                 model="minimax-m3",
@@ -820,7 +887,7 @@ class Phase2RouterTests(unittest.TestCase):
             )
 
         self.assertEqual(result.route, "fireworks")
-        self.assertEqual(result.remote_mode, "remote_format_strict")
+        self.assertEqual(result.remote_mode, "remote_accuracy")
         self.assertEqual(result.answer, "PERSON: Lisa Chen\nORG: AMD\nLOCATION: Austin\nDATE: July 6, 2026")
 
     def test_exact_summary_routes_remote_for_format_control(self):
@@ -845,12 +912,14 @@ class Phase2RouterTests(unittest.TestCase):
             )
 
         self.assertEqual(result.route, "fireworks")
-        self.assertEqual(result.remote_mode, "remote_format_strict")
-        self.assertEqual(result.prompt_policy, "answer_only")
-        self.assertTrue(captured["payload"]["messages"][1]["content"].startswith("Return only the final answer."))
-        self.assertIn("Do not restate the task", captured["payload"]["messages"][1]["content"])
-        self.assertIn("output format exactly", captured["payload"]["messages"][0]["content"])
-        self.assertIn("Do not restate the task", captured["payload"]["messages"][0]["content"])
+        self.assertEqual(result.remote_mode, "remote_accuracy")
+        self.assertEqual(result.prompt_policy, "original")
+        self.assertTrue(captured["payload"]["messages"][1]["content"].startswith("Summarise in exactly 12 words"))
+        self.assertNotIn("Return only the final answer.", captured["payload"]["messages"][1]["content"])
+        self.assertEqual(
+            captured["payload"]["messages"][0]["content"],
+            "Follow the user's instructions exactly. Return only the requested answer.",
+        )
         self.assertIn("cross_check", result.metadata["local_proof_layers_failed"])
 
     def test_sarcasm_sentiment_routes_remote(self):
@@ -891,7 +960,15 @@ class Phase2RouterTests(unittest.TestCase):
             allowed_models=("minimax-m3",),
             fireworks_max_tokens=config.fireworks_max_tokens,
         )
-        with patch("app.agent.ask_fireworks_structured") as mocked_remote:
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "kimi-k2p7-code",
+            },
+            clear=True,
+        ), patch("app.agent.ask_fireworks_structured") as mocked_remote:
             from app.fireworks_client import FireworksResult
 
             mocked_remote.return_value = FireworksResult(answer="def parse_ints(text):\n    return []", model="minimax-m3")
@@ -934,7 +1011,15 @@ class Phase2RouterTests(unittest.TestCase):
     def test_remote_code_answer_is_normalized_to_code_only(self):
         from app.fireworks_client import FireworksResult
 
-        with patch("app.agent.ask_fireworks_structured") as mocked_remote:
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "kimi-k2p7-code",
+            },
+            clear=True,
+        ), patch("app.agent.ask_fireworks_structured") as mocked_remote:
             mocked_remote.return_value = FireworksResult(
                 answer="Here is the code:\n\n```python\ndef parse_ints(text):\n    return []\n```\n",
                 model="kimi-k2p7-code",
@@ -948,7 +1033,7 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.remote_mode, "remote_code")
         self.assertEqual(result.answer, "def parse_ints(text):\n    return []")
 
-    def test_invalid_remote_code_triggers_validation_escalation(self):
+    def test_invalid_remote_code_is_observed_without_validation_escalation(self):
         from app.fireworks_client import FireworksResult
 
         with patch.dict(
@@ -962,25 +1047,27 @@ class Phase2RouterTests(unittest.TestCase):
             },
             clear=True,
         ), patch("app.agent.ask_fireworks_structured") as mocked_remote:
-            mocked_remote.side_effect = [
-                FireworksResult(answer="def parse_ints(text):\n    return a +", model="minimax-m3", completion_tokens=3, total_tokens=20),
-                FireworksResult(answer="def parse_ints(text):\n    return []", model="kimi-k2p7-code", completion_tokens=6, total_tokens=40),
-            ]
+            mocked_remote.return_value = FireworksResult(
+                answer="def parse_ints(text):\n    return a +",
+                model="kimi-k2p7-code",
+                completion_tokens=3,
+                total_tokens=20,
+            )
             result = answer_task(
                 "code",
                 "Write a Python function parse_ints(text) that returns all integers in the string. Return only code.",
             )
 
-        self.assertEqual(mocked_remote.call_count, 2)
+        mocked_remote.assert_called_once()
         self.assertEqual(result.route, "fireworks")
-        self.assertEqual(result.answer, "def parse_ints(text):\n    return []")
+        self.assertEqual(result.answer, "def parse_ints(text):\n    return a +")
         self.assertEqual(result.selected_model, "kimi-k2p7-code")
-        self.assertEqual(result.total_tokens, 60)
-        self.assertEqual(result.retry_count, 1)
-        self.assertTrue(result.metadata["remote_escalated_after_validation"])
-        self.assertEqual(result.metadata["remote_escalation_model"], "kimi-k2p7-code")
-        self.assertFalse(result.metadata["remote_validation_failed"])
-        self.assertEqual(mocked_remote.call_args_list[1].kwargs["preferred_models"], ("kimi-k2p7-code",))
+        self.assertEqual(result.total_tokens, 20)
+        self.assertEqual(result.retry_count, 0)
+        self.assertFalse(result.metadata["remote_escalated_after_validation"])
+        self.assertIsNone(result.metadata["remote_escalation_model"])
+        self.assertIn("answer_shape", result.metadata["remote_validation_failed"])
+        self.assertEqual(mocked_remote.call_args.kwargs["preferred_models"], ("kimi-k2p7-code",))
 
     def test_remote_validation_escalation_can_be_disabled(self):
         from app.fireworks_client import FireworksResult
@@ -1010,7 +1097,7 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertFalse(result.metadata["remote_validation_escalation_enabled"])
         self.assertFalse(result.metadata["remote_escalated_after_validation"])
         self.assertIn("answer_shape", result.metadata["remote_validation_failed"])
-        self.assertTrue(result.route_reason.startswith("remote_validation_failed:"))
+        self.assertTrue(result.route_reason.startswith("remote_validation_observed:"))
 
     def test_certified_code_templates_use_local_proof(self):
         prompts = {
@@ -1116,7 +1203,15 @@ class Phase2RouterTests(unittest.TestCase):
     def test_remote_numeric_answer_is_normalized_to_exact_value(self):
         from app.fireworks_client import FireworksResult
 
-        with patch.dict(os.environ, {}, clear=True), patch("app.agent.ask_fireworks_structured") as mocked_remote:
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch("app.agent.ask_fireworks_structured") as mocked_remote:
             mocked_remote.return_value = FireworksResult(
                 answer="The final price is $66.00 after applying discount and tax.",
                 model="minimax-m3",
@@ -1128,13 +1223,21 @@ class Phase2RouterTests(unittest.TestCase):
 
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.remote_mode, "remote_accuracy")
-        self.assertEqual(result.prompt_policy, "compact")
+        self.assertEqual(result.prompt_policy, "original")
         self.assertEqual(result.answer, "$66.00")
 
     def test_remote_sentiment_answer_is_normalized_to_label(self):
         from app.fireworks_client import FireworksResult
 
-        with patch.dict(os.environ, {}, clear=True), patch("app.agent.ask_fireworks_structured") as mocked_remote:
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+            },
+            clear=True,
+        ), patch("app.agent.ask_fireworks_structured") as mocked_remote:
             mocked_remote.return_value = FireworksResult(
                 answer="The sentiment is negative because the wording is sarcastic.",
                 model="minimax-m3",
@@ -1146,7 +1249,7 @@ class Phase2RouterTests(unittest.TestCase):
 
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.remote_mode, "remote_accuracy")
-        self.assertEqual(result.prompt_policy, "compact")
+        self.assertEqual(result.prompt_policy, "original")
         self.assertEqual(result.answer, "negative")
 
     def test_incomplete_logic_routes_remote_even_if_simple_pattern_matches(self):
@@ -1519,7 +1622,7 @@ class Phase2RouterTests(unittest.TestCase):
             }.issubset(names)
         )
 
-    def test_router_sweep_validation_escalation_records_extra_remote_cost(self):
+    def test_router_sweep_validation_escalation_is_observational_only(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "gemma_first_router_with_validation_escalation")
         scenario = {
             "task_id": "codegen_parse_ints",
@@ -1536,12 +1639,13 @@ class Phase2RouterTests(unittest.TestCase):
 
         row = run_scenario(config, scenario)
 
-        self.assertTrue(row["passed"])
-        self.assertEqual(row["model"], "kimi-k2p7-code")
-        self.assertTrue(row["validation_escalation_enabled"])
-        self.assertTrue(row["escalated_after_validation"])
+        self.assertFalse(row["passed"])
+        self.assertEqual(row["model"], "gemma-4-31b-it-nvfp4")
+        self.assertFalse(row["validation_escalation_enabled"])
+        self.assertFalse(row["escalated_after_validation"])
         self.assertEqual(row["escalation_model"], "kimi-k2p7-code")
-        self.assertEqual(row["prompt_tokens"], estimate_tokens(prompt_for_policy(scenario, config["prompt_policy"])) * 2)
+        self.assertEqual(row["prompt_tokens"], estimate_tokens(prompt_for_policy(scenario, "original")))
+        self.assertTrue(row["format_failure"])
 
     def test_router_sweep_supports_category_prompt_policy_overrides(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid_kimi_prompt_evidence")
@@ -1562,8 +1666,8 @@ class Phase2RouterTests(unittest.TestCase):
 
         self.assertEqual(row["route"], "fireworks")
         self.assertEqual(row["model"], "kimi-k2p7-code")
-        self.assertEqual(row["prompt_policy"], "compact")
-        self.assertEqual(row["prompt_tokens"], estimate_tokens(prompt_for_policy(scenario, "compact")))
+        self.assertEqual(row["prompt_policy"], "original")
+        self.assertEqual(row["prompt_tokens"], estimate_tokens(prompt_for_policy(scenario, "original")))
 
     def test_router_sweep_supports_category_model_preferences(self):
         config = next(item for item in DEFAULT_CONFIGS if item["name"] == "strict_hybrid_kimi_prompt_evidence")

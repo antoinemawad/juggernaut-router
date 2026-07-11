@@ -56,6 +56,7 @@ class AgentResult:
     prompt_token_estimate: int = 0
     remote_prompt_token_estimate: int | None = None
     completion_tokens: int | None = None
+    prompt_tokens: int | None = None
     total_tokens: int | None = None
     retry_count: int = 0
     deadline_decision: str | None = None
@@ -80,6 +81,7 @@ class AgentResult:
             "answer_char_count": len(self.answer),
             "answer_token_estimate": _rough_token_estimate(self.answer),
             "completion_tokens": self.completion_tokens,
+            "prompt_tokens": self.prompt_tokens,
             "total_tokens": self.total_tokens,
             "retry_count": self.retry_count,
             "deadline_decision": self.deadline_decision,

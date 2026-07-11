@@ -19,6 +19,7 @@ class FireworksResult:
     answer: str
     model: str | None = None
     http_status: int | None = None
+    prompt_tokens: int | None = None
     completion_tokens: int | None = None
     total_tokens: int | None = None
     elapsed_ms: int = 0
@@ -118,6 +119,7 @@ def ask_fireworks_structured(
                     answer=answer,
                     model=model,
                     http_status=http_status,
+                    prompt_tokens=_usage_int(usage, "prompt_tokens"),
                     completion_tokens=_usage_int(usage, "completion_tokens"),
                     total_tokens=_usage_int(usage, "total_tokens"),
                     elapsed_ms=timer.elapsed_ms(),

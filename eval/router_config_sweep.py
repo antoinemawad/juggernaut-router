@@ -206,28 +206,13 @@ def fallback_model_for_scenario(config, scenario):
 def build_mock_remote_outcome(config, scenario):
     model = fallback_model_for_scenario(config, scenario)
     answer = mock_answer(model, scenario)
-    passed, _score, _notes = score_answer(answer, scenario)
-    escalation_model = config.get("escalation_model")
-    escalated = False
-
-    if config.get("validation_escalation") and escalation_model and not passed:
-        escalated = True
-        model = escalation_model
-        answer = mock_answer(model, scenario)
-
-    return model, answer, escalated
+    return model, answer, False
 
 
 def estimate_remote_usage(config, scenario, answer, escalated_after_validation=False):
     completion_tokens = estimate_tokens(answer)
     total_tokens = estimate_remote_tokens(config, scenario, answer)
-    if not escalated_after_validation:
-        return completion_tokens, total_tokens
-
-    first_answer = mock_answer(fallback_model_for_scenario(config, scenario), scenario)
-    first_completion_tokens = estimate_tokens(first_answer)
-    first_total_tokens = estimate_remote_tokens(config, scenario, first_answer)
-    return completion_tokens + first_completion_tokens, total_tokens + first_total_tokens
+    return completion_tokens, total_tokens
 
 
 def runtime_config(config):
@@ -353,9 +338,9 @@ def run_scenario(config, scenario):
         "gemma_decision": gemma_decision,
         "model_preferences": model_preference_for_scenario(config, scenario),
         "gemma_candidate_model": fallback_model if is_gemma_model(fallback_model) else None,
-        "validation_escalation_enabled": bool(config.get("validation_escalation")),
+        "validation_escalation_enabled": False,
         "escalation_model": config.get("escalation_model"),
-        "escalated_after_validation": route == "fireworks" and escalated_after_validation,
+        "escalated_after_validation": False,
         "prompt_policy": result.prompt_policy,
         "max_tokens": config["max_tokens"],
         "router_mode": config["router_mode"],

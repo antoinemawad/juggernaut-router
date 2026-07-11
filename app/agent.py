@@ -1,7 +1,7 @@
 from dataclasses import replace
 
 from app.classifier import classify_prompt
-from app.config import DEFAULT_ACCURACY_FIRST_MODELS, RuntimeConfig
+from app.config import RuntimeConfig
 from app.deadline import DeadlineManager, StageTimer
 from app.fireworks_client import ask_fireworks_structured
 from app.local_model_client import ask_local_model_structured
@@ -78,77 +78,131 @@ def answer_task(
                 "local_proof_layers_passed": list(validation.passed_layers),
                 "local_proof_layers_failed": list(validation.failed_layers),
                 "validator_notes": list(validation.notes),
+                "selected_route_before_generation": "local",
+                "selected_model_before_generation": None,
+                "generation_call_count": 0,
+                "deterministic_solver_used": True,
+                "normalization_applied": _normalization_name(prompt, classification),
+                "validator_result": _validation_result(validation),
+                "fireworks_called": False,
+                "local_model_attempted": False,
+                "final_answer_type": _answer_type(answer),
             },
         )
 
     remote_mode = _select_remote_mode(classification, local_result)
-    prompt_policy = _prompt_policy_for_remote_mode(remote_mode, config, classification.category)
-    remote_prompt = _apply_prompt_policy(prompt, prompt_policy)
-    remote_prompt_token_estimate = estimate_tokens(remote_prompt)
+    prompt_policy = "original"
+    generation_prompt = _apply_prompt_policy(prompt, prompt_policy)
+    remote_prompt_token_estimate = estimate_tokens(generation_prompt)
     system_prompt = _system_prompt_for_remote_mode(remote_mode)
     remote_max_tokens = _max_tokens_for_category(config, classification.category)
-    remote_config = _config_with_max_tokens(config, remote_max_tokens)
+    metadata_base = _base_metadata(classification, local_result, validation)
 
-    local_model = None
-    local_model_validation = None
     local_model_skip_reason = _local_model_skip_reason(config, deadline, classification, prompt, local_model_allowed)
     if local_model_skip_reason is None:
         local_model = ask_local_model_structured(
-            remote_prompt,
+            generation_prompt,
             config=config,
             deadline=deadline,
             system_prompt=system_prompt,
             task_id=task_id,
         )
         timings.local_model_elapsed_ms = local_model.elapsed_ms
-        if local_model.error is None:
-            raw_local_model_answer = local_model.answer if isinstance(local_model.answer, str) else str(local_model.answer)
-            local_model_validation = validate_remote_answer(prompt, raw_local_model_answer, classification)
-        if local_model.error is None and local_model_validation is not None and local_model_validation.accepted:
+        if local_model.error is not None:
+            answer = SAFE_FALLBACK_ANSWER
+            local_model_validation = None
+            route = "fallback"
+            route_reason = local_model.error
+            error = local_model.error
+        else:
             normalize_timer = StageTimer()
-            local_model_answer = _normalize_for_classification(local_model.answer, prompt, classification)
+            answer = _normalize_for_classification(local_model.answer, prompt, classification)
             timings.normalization_elapsed_ms += normalize_timer.elapsed_ms()
-            local_model_validation = validate_remote_answer(prompt, local_model_answer, classification)
-            if local_model_validation.accepted:
-                _finish_timings(timings, task_timer, deadline)
-                return AgentResult(
-                    answer=local_model_answer,
-                    route="local_model",
-                    route_reason="local_model_validated",
-                    category=classification.category,
-                    router_mode=config.router_mode,
-                    selected_model="local_model",
-                    remote_mode=remote_mode,
-                    prompt_policy=prompt_policy,
-                    max_tokens=remote_max_tokens,
-                    prompt_char_count=prompt_char_count,
-                    prompt_token_estimate=prompt_token_estimate,
-                    remote_prompt_token_estimate=remote_prompt_token_estimate,
-                    completion_tokens=0,
-                    total_tokens=0,
-                    deadline_decision=_deadline_decision(deadline, config),
-                    timings=timings,
-                    metadata={
-                        "answer_shape": classification.answer_shape,
-                        "constraints": list(classification.constraints),
-                        "classification_confidence": classification.confidence,
-                        "risk_score": classification.risk_score,
-                        "risk_components": classification.risk_components,
-                        "solver_confidence": local_result.confidence if local_result is not None else None,
-                        "local_evidence": list(local_result.evidence) if local_result is not None else [],
-                        "local_proof_layers_passed": list(validation.passed_layers),
-                        "local_proof_layers_failed": list(validation.failed_layers),
-                        "validator_notes": list(validation.notes),
-                        "local_model_validation_passed": list(local_model_validation.passed_layers),
-                        "local_model_validation_failed": list(local_model_validation.failed_layers),
-                        "local_model_validation_notes": list(local_model_validation.notes),
-                        "local_model_path": local_model.model_path,
-                        "local_model_runtime": local_model.runtime,
-                        "local_model_prompt_tokens_estimate": local_model.prompt_tokens_estimate,
-                        "local_model_output_tokens_estimate": local_model.output_tokens_estimate,
-                        "final_answer_type": _answer_type(local_model_answer),
-                    },
-                )
+            local_model_validation = validate_remote_answer(prompt, answer, classification)
+            route = "local_model"
+            route_reason = "local_model_generated"
+            error = None
+        _finish_timings(timings, task_timer, deadline)
+        return AgentResult(
+            answer=answer,
+            route=route,
+            route_reason=route_reason,
+            category=classification.category,
+            router_mode=config.router_mode,
+            selected_model="local_model" if route == "local_model" else None,
+            remote_mode=remote_mode,
+            prompt_policy=prompt_policy,
+            max_tokens=config.local_model_max_tokens,
+            prompt_char_count=prompt_char_count,
+            prompt_token_estimate=prompt_token_estimate,
+            remote_prompt_token_estimate=remote_prompt_token_estimate,
+            completion_tokens=0 if route == "local_model" else None,
+            prompt_tokens=0 if route == "local_model" else None,
+            total_tokens=0 if route == "local_model" else None,
+            deadline_decision=_deadline_decision(deadline, config),
+            error=error,
+            timings=timings,
+            metadata={
+                **metadata_base,
+                "selected_route_before_generation": "local_model",
+                "generation_call_count": 1,
+                "normalization_applied": _normalization_name(prompt, classification),
+                "validator_result": _validation_result(local_model_validation),
+                "local_model_attempted": True,
+                "local_model_skip_reason": local_model_skip_reason,
+                "local_model_error": local_model.error,
+                "local_model_path": local_model.model_path,
+                "local_model_runtime": local_model.runtime,
+                "local_model_prompt_tokens_estimate": local_model.prompt_tokens_estimate,
+                "local_model_output_tokens_estimate": local_model.output_tokens_estimate,
+                "local_model_validation_passed": (
+                    list(local_model_validation.passed_layers) if local_model_validation is not None else []
+                ),
+                "local_model_validation_failed": (
+                    list(local_model_validation.failed_layers) if local_model_validation is not None else []
+                ),
+                "local_model_validation_notes": (
+                    list(local_model_validation.notes) if local_model_validation is not None else []
+                ),
+                "fireworks_called": False,
+                "final_answer_type": _answer_type(answer),
+            },
+        )
+
+    selected_model = _select_single_fireworks_model(remote_mode, config, classification.category)
+    if selected_model is None or not _fireworks_available(config):
+        _finish_timings(timings, task_timer, deadline)
+        return AgentResult(
+            answer=SAFE_FALLBACK_ANSWER,
+            route="fallback",
+            route_reason="fireworks_unavailable",
+            category=classification.category,
+            router_mode=config.router_mode,
+            remote_mode=remote_mode,
+            prompt_policy=prompt_policy,
+            max_tokens=remote_max_tokens,
+            prompt_char_count=prompt_char_count,
+            prompt_token_estimate=prompt_token_estimate,
+            remote_prompt_token_estimate=remote_prompt_token_estimate,
+            deadline_decision=_deadline_decision(deadline, config),
+            error="fireworks_unavailable",
+            timings=timings,
+            metadata={
+                **metadata_base,
+                "selected_route_before_generation": "fallback",
+                "selected_model_before_generation": selected_model,
+                "generation_call_count": 0,
+                "normalization_applied": None,
+                "validator_result": None,
+                "fireworks_called": False,
+                "fireworks_http_status": None,
+                "fireworks_error": "fireworks_unavailable",
+                "local_model_attempted": False,
+                "local_model_skip_reason": local_model_skip_reason,
+                "final_answer_type": _answer_type(SAFE_FALLBACK_ANSWER),
+            },
+        )
+
     if deadline is not None and not deadline.can_spend(config.fireworks_timeout_seconds):
         _finish_timings(timings, task_timer, deadline)
         return AgentResult(
@@ -167,80 +221,24 @@ def answer_task(
             error="deadline_suppressed_remote",
             timings=timings,
             metadata={
-                "answer_shape": classification.answer_shape,
-                "constraints": list(classification.constraints),
-                "classification_confidence": classification.confidence,
-                "risk_score": classification.risk_score,
-                "risk_components": classification.risk_components,
-                "solver_confidence": local_result.confidence if local_result is not None else None,
-                "local_evidence": list(local_result.evidence) if local_result is not None else [],
-                "local_proof_layers_passed": list(validation.passed_layers),
-                "local_proof_layers_failed": list(validation.failed_layers),
-                "validator_notes": list(validation.notes),
-                "local_model_error": local_model.error if local_model is not None else None,
-                "local_model_skip_reason": local_model_skip_reason,
-                "local_model_path": local_model.model_path if local_model is not None else None,
-                "local_model_runtime": local_model.runtime if local_model is not None else None,
-                "local_model_validation_failed": (
-                    list(local_model_validation.failed_layers) if local_model_validation is not None else []
-                ),
-                "local_model_validation_notes": (
-                    list(local_model_validation.notes) if local_model_validation is not None else []
-                ),
-            },
-        )
-
-    if config.local_model_enabled and not _fireworks_available(config):
-        _finish_timings(timings, task_timer, deadline)
-        return AgentResult(
-            answer=SAFE_FALLBACK_ANSWER,
-            route="fallback",
-            route_reason="fireworks_unavailable_after_local_model",
-            category=classification.category,
-            router_mode=config.router_mode,
-            remote_mode=remote_mode,
-            prompt_policy=prompt_policy,
-            max_tokens=remote_max_tokens,
-            prompt_char_count=prompt_char_count,
-            prompt_token_estimate=prompt_token_estimate,
-            remote_prompt_token_estimate=remote_prompt_token_estimate,
-            deadline_decision=_deadline_decision(deadline, config),
-            error="fireworks_unavailable",
-            timings=timings,
-            metadata={
-                "answer_shape": classification.answer_shape,
-                "constraints": list(classification.constraints),
-                "classification_confidence": classification.confidence,
-                "risk_score": classification.risk_score,
-                "risk_components": classification.risk_components,
-                "solver_confidence": local_result.confidence if local_result is not None else None,
-                "local_evidence": list(local_result.evidence) if local_result is not None else [],
-                "local_proof_layers_passed": list(validation.passed_layers),
-                "local_proof_layers_failed": list(validation.failed_layers),
-                "validator_notes": list(validation.notes),
+                **metadata_base,
+                "selected_route_before_generation": "fallback",
+                "selected_model_before_generation": selected_model,
+                "generation_call_count": 0,
+                "normalization_applied": None,
+                "validator_result": None,
                 "fireworks_called": False,
-                "fireworks_http_status": None,
-                "fireworks_error": "fireworks_unavailable",
-                "local_model_attempted": local_model is not None,
+                "local_model_attempted": False,
                 "local_model_skip_reason": local_model_skip_reason,
-                "local_model_error": local_model.error if local_model is not None else None,
-                "local_model_path": local_model.model_path if local_model is not None else None,
-                "local_model_runtime": local_model.runtime if local_model is not None else None,
-                "local_model_validation_failed": (
-                    list(local_model_validation.failed_layers) if local_model_validation is not None else []
-                ),
-                "local_model_validation_notes": (
-                    list(local_model_validation.notes) if local_model_validation is not None else []
-                ),
-                "final_answer_type": _answer_type(SAFE_FALLBACK_ANSWER),
             },
         )
 
+    single_model_config = _single_generation_config(config, selected_model, remote_max_tokens)
     remote = ask_fireworks_structured(
-        remote_prompt,
-        config=remote_config,
+        generation_prompt,
+        config=single_model_config,
         deadline=deadline,
-        preferred_models=_preferred_models_for_remote_mode(remote_mode, config, classification.category),
+        preferred_models=(selected_model,),
         system_prompt=system_prompt,
     )
     timings.remote_elapsed_ms = remote.elapsed_ms
@@ -248,28 +246,6 @@ def answer_task(
     answer = _normalize_for_classification(remote.answer, prompt, classification)
     timings.normalization_elapsed_ms = normalize_timer.elapsed_ms()
     remote_validation = validate_remote_answer(prompt, answer, classification)
-    escalation = None
-    escalation_validation = None
-    if _should_escalate_remote_answer(remote, remote_validation, config, deadline):
-        escalation_prompt_policy = _escalation_prompt_policy(prompt_policy)
-        escalation_prompt = _apply_prompt_policy(prompt, escalation_prompt_policy)
-        escalation = ask_fireworks_structured(
-            escalation_prompt,
-            config=_config_with_max_tokens(config, _escalation_max_tokens(remote_max_tokens, classification.category)),
-            deadline=deadline,
-            preferred_models=_escalation_models(remote.model, config),
-            system_prompt=_system_prompt_for_remote_mode(remote_mode),
-        )
-        timings.remote_elapsed_ms += escalation.elapsed_ms
-        if escalation.error is None:
-            escalation_answer = _normalize_for_classification(escalation.answer, prompt, classification)
-            escalation_validation = validate_remote_answer(prompt, escalation_answer, classification)
-            if escalation_validation.accepted:
-                answer = escalation_answer
-                remote = _merged_remote_result(remote, escalation)
-                prompt_policy = escalation_prompt_policy
-                remote_prompt_token_estimate = estimate_tokens(escalation_prompt)
-                remote_validation = escalation_validation
     _finish_timings(timings, task_timer, deadline)
 
     return AgentResult(
@@ -278,13 +254,14 @@ def answer_task(
         route_reason=_remote_route_reason(local_result, validation, remote.error, remote_validation),
         category=classification.category,
         router_mode=config.router_mode,
-        selected_model=remote.model,
+        selected_model=remote.model or selected_model,
         remote_mode=remote_mode,
         prompt_policy=prompt_policy,
         max_tokens=remote_max_tokens,
         prompt_char_count=prompt_char_count,
         prompt_token_estimate=prompt_token_estimate,
         remote_prompt_token_estimate=remote_prompt_token_estimate,
+        prompt_tokens=remote.prompt_tokens,
         completion_tokens=remote.completion_tokens,
         total_tokens=remote.total_tokens,
         retry_count=remote.retry_count,
@@ -292,43 +269,26 @@ def answer_task(
         error=remote.error,
         timings=timings,
         metadata={
-            "answer_shape": classification.answer_shape,
-            "constraints": list(classification.constraints),
-            "classification_confidence": classification.confidence,
-            "risk_score": classification.risk_score,
-            "risk_components": classification.risk_components,
-            "solver_confidence": local_result.confidence if local_result is not None else None,
-            "local_evidence": list(local_result.evidence) if local_result is not None else [],
-            "local_proof_layers_passed": list(validation.passed_layers),
-            "local_proof_layers_failed": list(validation.failed_layers),
-            "validator_notes": list(validation.notes),
+            **metadata_base,
+            "selected_route_before_generation": "fireworks",
+            "selected_model_before_generation": selected_model,
+            "generation_call_count": 1 if remote.model is not None else 0,
+            "normalization_applied": _normalization_name(prompt, classification),
+            "validator_result": _validation_result(remote_validation),
             "remote_validation_passed": list(remote_validation.passed_layers),
             "remote_validation_failed": list(remote_validation.failed_layers),
             "remote_validation_notes": list(remote_validation.notes),
             "fireworks_called": remote.model is not None,
             "fireworks_http_status": remote.http_status,
             "fireworks_error": remote.error,
-            "remote_validation_escalation_enabled": config.remote_validation_escalation_enabled,
-            "local_model_attempted": local_model is not None,
+            "remote_validation_escalation_enabled": False,
+            "local_model_attempted": False,
             "local_model_skip_reason": local_model_skip_reason,
-            "local_model_error": local_model.error if local_model is not None else None,
-            "local_model_path": local_model.model_path if local_model is not None else None,
-            "local_model_runtime": local_model.runtime if local_model is not None else None,
-            "local_model_prompt_tokens_estimate": local_model.prompt_tokens_estimate if local_model is not None else None,
-            "local_model_output_tokens_estimate": local_model.output_tokens_estimate if local_model is not None else None,
-            "local_model_validation_failed": (
-                list(local_model_validation.failed_layers) if local_model_validation is not None else []
-            ),
-            "local_model_validation_notes": (
-                list(local_model_validation.notes) if local_model_validation is not None else []
-            ),
             "validation_result": "accepted" if remote_validation.accepted else "rejected",
-            "remote_escalated_after_validation": escalation is not None,
-            "remote_escalation_model": escalation.model if escalation is not None else None,
-            "remote_escalation_error": escalation.error if escalation is not None else None,
-            "remote_escalation_validation_failed": (
-                list(escalation_validation.failed_layers) if escalation_validation is not None else []
-            ),
+            "remote_escalated_after_validation": False,
+            "remote_escalation_model": None,
+            "remote_escalation_error": None,
+            "remote_escalation_validation_failed": [],
             "final_answer_type": _answer_type(answer),
         },
     )
@@ -378,7 +338,7 @@ def _remote_route_reason(local_result, validation, remote_error: str | None, rem
     if remote_error is not None:
         return remote_error
     if remote_validation is not None and remote_validation.failed_layers:
-        return "remote_validation_failed:" + ",".join(remote_validation.failed_layers)
+        return "remote_validation_observed:" + ",".join(remote_validation.failed_layers)
     if local_result is None:
         return "no_local_solver"
     if validation.failed_layers:
@@ -387,42 +347,17 @@ def _remote_route_reason(local_result, validation, remote_error: str | None, rem
 
 
 def _select_remote_mode(classification, local_result=None) -> str:
-    constraints = set(classification.constraints)
     if classification.category in {"code_generation", "code_debugging"}:
         return "remote_code"
-    if classification.risk_components.get("reasoning_depth", 0) >= 0.5:
-        return "remote_accuracy"
-    if classification.risk_components.get("factual_freshness", 0) >= 0.5:
-        return "remote_accuracy"
-    if classification.risk_components.get("ambiguity", 0) >= 0.5:
-        return "remote_accuracy"
-    if classification.category == "logical_deductive_reasoning" and local_result is None:
-        return "remote_accuracy"
-    if classification.category == "factual_knowledge" and local_result is None:
-        return "remote_accuracy"
-    if constraints & {"code_only", "entity_labels", "exact_numeric"}:
-        return "remote_format_strict"
-    if classification.risk_components.get("format_strictness", 0) >= 0.45:
-        return "remote_format_strict"
-    return "remote_concise"
+    return "remote_accuracy"
 
 
-def _preferred_models_for_remote_mode(
-    remote_mode: str,
-    config: RuntimeConfig,
-    category: str | None = None,
-) -> tuple[str, ...]:
-    if category and config.models_by_category and category in config.models_by_category:
-        return config.models_by_category[category]
-    if config.router_mode == "accuracy_first":
-        return DEFAULT_ACCURACY_FIRST_MODELS
-    if remote_mode == "remote_code":
-        return config.models_remote_code
-    if remote_mode == "remote_accuracy":
-        return config.models_remote_accuracy
-    if remote_mode == "remote_format_strict":
-        return config.models_remote_format_strict
-    return config.models_remote_concise
+def _select_single_fireworks_model(remote_mode: str, config: RuntimeConfig, category: str | None = None) -> str | None:
+    allowed = set(config.allowed_models)
+    preferred = "kimi-k2p7-code" if remote_mode == "remote_code" else "minimax-m3"
+    if preferred in allowed:
+        return preferred
+    return config.first_allowed_model()
 
 
 def _max_tokens_for_category(config: RuntimeConfig, category: str | None) -> int:
@@ -433,28 +368,13 @@ def _max_tokens_for_category(config: RuntimeConfig, category: str | None) -> int
     return config.fireworks_max_tokens
 
 
-def _escalation_max_tokens(base_max_tokens: int, category: str | None) -> int:
-    if category in {"code_generation", "code_debugging", "text_summarisation", "factual_knowledge"}:
-        return max(base_max_tokens, 384)
-    return base_max_tokens
-
-
-def _config_with_max_tokens(config: RuntimeConfig, max_tokens: int) -> RuntimeConfig:
-    if max_tokens == config.fireworks_max_tokens:
-        return config
-    return replace(config, fireworks_max_tokens=max_tokens)
-
-
-def _should_escalate_remote_answer(remote, remote_validation, config: RuntimeConfig, deadline: DeadlineManager | None) -> bool:
-    if not config.remote_validation_escalation_enabled:
-        return False
-    if remote.error is None and remote_validation.accepted:
-        return False
-    if not _escalation_models(remote.model, config):
-        return False
-    if deadline is not None and not deadline.should_retry(config.fireworks_timeout_seconds):
-        return False
-    return True
+def _single_generation_config(config: RuntimeConfig, selected_model: str, max_tokens: int) -> RuntimeConfig:
+    return replace(
+        config,
+        allowed_models=(selected_model,),
+        fireworks_max_retries=0,
+        fireworks_max_tokens=max_tokens,
+    )
 
 
 def _fireworks_available(config: RuntimeConfig) -> bool:
@@ -557,46 +477,6 @@ def _answer_type(answer: str) -> str:
     return "text"
 
 
-def _escalation_models(current_model: str | None, config: RuntimeConfig) -> tuple[str, ...]:
-    models = config.models_remote_escalation or DEFAULT_ACCURACY_FIRST_MODELS
-    return tuple(model for model in models if model != current_model)
-
-
-def _escalation_prompt_policy(prompt_policy: str) -> str:
-    if prompt_policy in {"compact", "original"}:
-        return "answer_only"
-    return prompt_policy
-
-
-def _merged_remote_result(first, second):
-    first_completion = first.completion_tokens if first.completion_tokens is not None else 0
-    second_completion = second.completion_tokens if second.completion_tokens is not None else 0
-    first_total = first.total_tokens if first.total_tokens is not None else 0
-    second_total = second.total_tokens if second.total_tokens is not None else 0
-    first.completion_tokens = first_completion + second_completion if first.completion_tokens is not None or second.completion_tokens is not None else None
-    first.total_tokens = first_total + second_total if first.total_tokens is not None or second.total_tokens is not None else None
-    first.retry_count += second.retry_count + 1
-    first.model = second.model
-    first.answer = second.answer
-    first.elapsed_ms += second.elapsed_ms
-    first.error = second.error
-    return first
-
-
-def _prompt_policy_for_remote_mode(remote_mode: str, config: RuntimeConfig, category: str | None = None) -> str:
-    if category and config.prompt_policy_by_category and category in config.prompt_policy_by_category:
-        return config.prompt_policy_by_category[category]
-    if remote_mode == "remote_code":
-        return config.prompt_policy_remote_code
-    if remote_mode == "remote_format_strict":
-        return config.prompt_policy_remote_format_strict
-    if remote_mode == "remote_accuracy":
-        return config.prompt_policy_remote_accuracy
-    if remote_mode == "remote_concise":
-        return config.prompt_policy_remote_concise
-    return "original"
-
-
 def _apply_prompt_policy(prompt: str, prompt_policy: str) -> str:
     if prompt_policy == "compact":
         return (
@@ -623,26 +503,55 @@ def _apply_prompt_policy(prompt: str, prompt_policy: str) -> str:
 
 
 def _system_prompt_for_remote_mode(remote_mode: str) -> str:
-    base = (
-        "You are an answer engine. Return only the final answer for the task. "
-        "Do not restate the task. Do not describe the task, user intent, instructions, analysis, hidden reasoning, plans, or word counts. "
-        "Never start with phrases like 'The user wants', 'I need to', 'Let me', or 'We need to'. "
-    )
-    if remote_mode == "remote_code":
-        return (
-            base
-            + "For code tasks, return only complete valid Python code with a full function body. "
-            "Do not include markdown fences or prose unless explicitly requested."
-        )
-    if remote_mode == "remote_format_strict":
-        return (
-            base
-            + "Follow the requested output format exactly. For labels, output the label first. "
-            "For no entities, output exactly None."
-        )
-    if remote_mode == "remote_accuracy":
-        return (
-            base
-            + "Answer accurately in English. Reason internally, but output only the concise requested answer."
-        )
-    return base + "Answer accurately and concisely in English."
+    return "Follow the user's instructions exactly. Return only the requested answer."
+
+
+def _base_metadata(classification, local_result, validation) -> dict:
+    return {
+        "answer_shape": classification.answer_shape,
+        "constraints": list(classification.constraints),
+        "classification": {
+            "category": classification.category,
+            "answer_shape": classification.answer_shape,
+            "constraints": list(classification.constraints),
+            "confidence": classification.confidence,
+            "risk_score": classification.risk_score,
+            "risk_components": classification.risk_components,
+        },
+        "classification_confidence": classification.confidence,
+        "risk_score": classification.risk_score,
+        "risk_components": classification.risk_components,
+        "deterministic_solver_used": local_result is not None and validation.accepted,
+        "solver_confidence": local_result.confidence if local_result is not None else None,
+        "local_evidence": list(local_result.evidence) if local_result is not None else [],
+        "local_proof_layers_passed": list(validation.passed_layers),
+        "local_proof_layers_failed": list(validation.failed_layers),
+        "validator_notes": list(validation.notes),
+    }
+
+
+def _validation_result(validation) -> dict | None:
+    if validation is None:
+        return None
+    return {
+        "accepted": validation.accepted,
+        "passed": list(validation.passed_layers),
+        "failed": list(validation.failed_layers),
+        "notes": list(validation.notes),
+    }
+
+
+def _normalization_name(prompt: str, classification) -> str:
+    constraints = set(classification.constraints)
+    applied = []
+    if _requests_code_only(prompt) or "code_only" in constraints:
+        applied.append("code_only")
+    if "exact_numeric" in constraints:
+        applied.append("exact_numeric")
+    if "answer_only" in constraints:
+        applied.append("answer_only")
+    if "entity_labels" in constraints:
+        applied.append("entity_labels")
+    if _allowed_labels_for_classification(classification):
+        applied.append("allowed_label")
+    return ",".join(applied) if applied else "trim"
