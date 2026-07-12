@@ -448,13 +448,34 @@ def _config_with_max_tokens(config: RuntimeConfig, max_tokens: int) -> RuntimeCo
 def _should_escalate_remote_answer(remote, remote_validation, config: RuntimeConfig, deadline: DeadlineManager | None) -> bool:
     if not config.remote_validation_escalation_enabled:
         return False
-    if remote.error is None and remote_validation.accepted:
+    remote_answer_empty = not isinstance(remote.answer, str) or not remote.answer.strip()
+    if remote.error is None and remote_validation.accepted and not remote_answer_empty:
+        return False
+    if remote.error is None and not remote_answer_empty and not _objective_remote_failure(remote_validation):
         return False
     if not _escalation_models(remote.model, config):
         return False
     if deadline is not None and not deadline.should_retry(config.fireworks_timeout_seconds):
         return False
     return True
+
+
+def _objective_remote_failure(remote_validation) -> bool:
+    failed = set(remote_validation.failed_layers)
+    notes = set(remote_validation.notes)
+    if "non_empty" in failed:
+        return True
+    if "reasoning_leakage" in failed:
+        return True
+    if "artifact_guard" in failed and notes & {
+        "repeated_markdown_fence",
+        "runaway_repetition",
+        "markdown_fence_in_code_answer",
+    }:
+        return True
+    if "answer_shape" in failed or "format_validator" in failed:
+        return True
+    return False
 
 
 def _fireworks_available(config: RuntimeConfig) -> bool:

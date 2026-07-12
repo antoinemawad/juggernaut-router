@@ -32,17 +32,43 @@ def classify_prompt(prompt: str) -> ClassificationResult:
     constraints: list[str] = []
     risk = {component: 0.0 for component in RISK_COMPONENTS}
 
-    if "sentiment" in lower:
+    if _looks_like_multiple_choice(text, lower):
+        category = "logical_deductive_reasoning"
+        confidence = 0.9
+        answer_shape = "label"
+        constraints.append("answer_only")
+        constraints.append("multiple_choice")
+        risk["format_strictness"] = 0.45
+    elif _looks_like_json_request(lower):
+        category = "factual_knowledge"
+        confidence = 0.86
+        answer_shape = "json"
+        constraints.append("answer_only")
+        constraints.append("json_only")
+        risk["format_strictness"] = 0.55
+    elif "sentiment" in lower or _looks_like_sentiment_without_keyword(lower):
         category = "sentiment_classification"
         confidence = 0.98
         answer_shape = "label"
         constraints.append("label")
+    elif _looks_like_general_classification(lower):
+        category = "factual_knowledge"
+        confidence = 0.84
+        answer_shape = "label"
+        constraints.append("answer_only")
+        risk["format_strictness"] = 0.45
     elif "summarise" in lower or "summarize" in lower:
         category = "text_summarisation"
         confidence = 0.97
         answer_shape = "summary"
         constraints.append("one_sentence")
         risk["local_validator_weakness"] = 0.35
+    elif _looks_like_transformation(lower):
+        category = "text_summarisation"
+        confidence = 0.88
+        answer_shape = "short_text"
+        constraints.append("answer_only")
+        risk["format_strictness"] = 0.35
     elif "extract named entities" in lower:
         category = "named_entity_recognition"
         confidence = 0.98
@@ -129,13 +155,43 @@ def _looks_like_logic(lower: str) -> bool:
     return any(marker in lower for marker in logic_markers)
 
 
+def _looks_like_multiple_choice(text: str, lower: str) -> bool:
+    if "return only the option letter" in lower or "choose from a, b, c" in lower or "choose from a, b, c, or d" in lower:
+        return True
+    option_lines = re.findall(r"(?m)^\s*[A-D][.)]\s+\S+", text)
+    return len(option_lines) >= 2
+
+
+def _looks_like_json_request(lower: str) -> bool:
+    return any(marker in lower for marker in ("valid json", "json object", "json array", "return only json"))
+
+
+def _looks_like_sentiment_without_keyword(lower: str) -> bool:
+    return (
+        "positive or negative" in lower
+        or "positive, negative, or neutral" in lower
+        or "positive negative or neutral" in lower
+    )
+
+
+def _looks_like_general_classification(lower: str) -> bool:
+    return any(marker in lower for marker in ("spam or not spam", "choose one label", "classify as", "which label"))
+
+
+def _looks_like_transformation(lower: str) -> bool:
+    return any(
+        marker in lower
+        for marker in ("translate", "rewrite", "rephrase", "correct the grammar", "make this professional")
+    )
+
+
 def _apply_constraint_risk(lower: str, constraints: list[str], risk: dict[str, float]) -> None:
     if "return only" in lower or "answer only" in lower or "no explanation" in lower:
         constraints.append("answer_only")
         risk["format_strictness"] = max(risk["format_strictness"], 0.3)
-    if "exactly" in lower or "round " in lower:
+    if "exactly" in lower or "round " in lower or re.search(r"\b(?:respond\s+with|use)\s+\d+\s+words?\b", lower):
         risk["format_strictness"] = max(risk["format_strictness"], 0.45)
-    if re.search(r"\bexactly\s+\d+\s+words?\b", lower):
+    if re.search(r"\b(?:in\s+)?exactly\s+\d+\s+words?\b|\b(?:respond\s+with|use)\s+\d+\s+words?\b", lower):
         constraints.append("exact_word_count")
     if "two sentences" in lower:
         constraints.append("two_sentences")

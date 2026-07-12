@@ -79,6 +79,21 @@ class Phase2RouterTests(unittest.TestCase):
             with self.subTest(expected=expected):
                 self.assertEqual(classify_prompt(prompt).category, expected)
 
+    def test_classifier_recognizes_high_value_missing_patterns(self):
+        cases = {
+            "Choose from A, B, C, or D. Return only the option letter.\nA. Red\nB. Blue": "logical_deductive_reasoning",
+            "Return only JSON: a valid JSON object with keys name and score.": "factual_knowledge",
+            "Classify as spam or not spam: Win a free prize now.": "factual_knowledge",
+            "Is this positive or negative? The release fixed every bug.": "sentiment_classification",
+            "Translate this to French: good morning": "text_summarisation",
+            "Correct the grammar: she go to school yesterday": "text_summarisation",
+        }
+        for prompt, expected in cases.items():
+            with self.subTest(prompt=prompt):
+                result = classify_prompt(prompt)
+                self.assertEqual(result.category, expected)
+                self.assertGreaterEqual(result.confidence, 0.80)
+
     def test_recommendation_excludes_access_failures_from_quality_scoring(self):
         rows = [
             {
@@ -1012,6 +1027,50 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertIn("answer_shape", result.metadata["remote_validation_failed"])
         self.assertTrue(result.route_reason.startswith("remote_validation_failed:"))
 
+    def test_open_ended_short_factual_answer_does_not_escalate(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3,kimi-k2p7-code",
+                "ROUTER_MODELS_REMOTE_ACCURACY": "minimax-m3,kimi-k2p7-code",
+            },
+            clear=True,
+        ), patch("app.agent.ask_fireworks_structured") as mocked_remote:
+            mocked_remote.return_value = FireworksResult(answer="GPUs process many operations in parallel.", model="minimax-m3")
+            result = answer_task("factual", "Explain briefly why routers use validation after remote model answers.")
+
+        mocked_remote.assert_called_once()
+        self.assertEqual(result.route, "fireworks")
+        self.assertFalse(result.metadata["remote_escalated_after_validation"])
+
+    def test_empty_remote_answer_still_escalates_once(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch.dict(
+            os.environ,
+            {
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3,kimi-k2p7-code",
+                "ROUTER_MODELS_REMOTE_ACCURACY": "minimax-m3,kimi-k2p7-code",
+                "ROUTER_MODELS_REMOTE_ESCALATION": "kimi-k2p7-code,minimax-m3",
+            },
+            clear=True,
+        ), patch("app.agent.ask_fireworks_structured") as mocked_remote:
+            mocked_remote.side_effect = [
+                FireworksResult(answer="", model="minimax-m3"),
+                FireworksResult(answer="A GPU runs many parallel operations, while a CPU handles general sequential control.", model="kimi-k2p7-code"),
+            ]
+            result = answer_task("factual", "Explain briefly why routers use validation after remote model answers.")
+
+        self.assertEqual(mocked_remote.call_count, 2)
+        self.assertTrue(result.metadata["remote_escalated_after_validation"])
+        self.assertEqual(result.selected_model, "kimi-k2p7-code")
+
     def test_certified_code_templates_use_local_proof(self):
         prompts = {
             "clamp": "Write a Python function clamp(x, low, high) that returns low if x is below low, high if x is above high, otherwise x. Return only code.",
@@ -1130,6 +1189,34 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.remote_mode, "remote_accuracy")
         self.assertEqual(result.prompt_policy, "compact")
         self.assertEqual(result.answer, "$66.00")
+
+    def test_exact_word_count_validation_uses_prompt_count(self):
+        prompts = [
+            "Summarize the sentence in exactly 5 words: Gemma helps routing stay cost effective.",
+            "Respond with 5 words: Gemma helps routing stay cost effective.",
+            "Use 5 words: Gemma helps routing stay cost effective.",
+        ]
+        for prompt in prompts:
+            classification = classify_prompt(prompt)
+            with self.subTest(prompt=prompt):
+                self.assertIn("exact_word_count", classification.constraints)
+                self.assertTrue(
+                    validate_remote_answer(prompt, "Gemma helps routing stay efficient.", classification).accepted
+                )
+                self.assertFalse(validate_remote_answer(prompt, "Gemma helps routing stay.", classification).accepted)
+                self.assertFalse(
+                    validate_remote_answer(prompt, "Gemma helps routing stay very efficient.", classification).accepted
+                )
+
+        prompt = prompts[0]
+        classification = classify_prompt(prompt)
+        punctuation = validate_remote_answer(prompt, "Gemma helps routing, staying efficient.", classification)
+        no_count_prompt = "Summarize this: Gemma helps routing stay efficient."
+        no_count_classification = classify_prompt(no_count_prompt)
+        no_count = validate_remote_answer(no_count_prompt, "Gemma helps routing stay efficient.", no_count_classification)
+
+        self.assertTrue(punctuation.accepted)
+        self.assertTrue(no_count.accepted)
 
     def test_remote_sentiment_answer_is_normalized_to_label(self):
         from app.fireworks_client import FireworksResult

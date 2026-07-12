@@ -56,7 +56,7 @@ def validate_local_answer(
     else:
         failed.append("validator")
 
-    if solver_result is not None and _format_is_valid(solver_result.answer, classification):
+    if solver_result is not None and _format_is_valid(solver_result.answer, classification, prompt):
         passed.append("format_validator")
     else:
         failed.append("format_validator")
@@ -118,7 +118,7 @@ def validate_remote_answer(
     else:
         failed.append("answer_shape")
 
-    if _format_is_valid(stripped, classification):
+    if _format_is_valid(stripped, classification, prompt):
         passed.append("format_validator")
     else:
         failed.append("format_validator")
@@ -275,11 +275,11 @@ def _has_reasoning_leakage(answer: str) -> bool:
     return any(marker in lowered for marker in leakage_markers)
 
 
-def _format_is_valid(answer: str, classification: ClassificationResult) -> bool:
+def _format_is_valid(answer: str, classification: ClassificationResult, prompt: str | None = None) -> bool:
     constraints = set(classification.constraints)
     stripped = answer.strip()
     if "exact_word_count" in constraints:
-        requested = _requested_word_count(stripped)
+        requested = _requested_word_count(prompt or "")
         if requested is not None and _word_count(stripped) != requested:
             return False
     if "code_only" in constraints:
@@ -444,8 +444,15 @@ def _summary_cross_check_passes(prompt: str, answer: str, classification: Classi
 
 
 def _requested_word_count(text: str) -> int | None:
-    match = re.search(r"\bexactly\s+(\d+)\s+words?\b", text, flags=re.IGNORECASE)
-    return int(match.group(1)) if match else None
+    match = re.search(
+        r"\b(?:in\s+)?exactly\s+(\d+)\s+words?\b|\b(?:respond\s+with|use)\s+(\d+)\s+words?\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    value = match.group(1) or match.group(2)
+    return int(value) if value else None
 
 
 def _word_count(text: str) -> int:

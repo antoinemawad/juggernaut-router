@@ -1157,6 +1157,40 @@ class Phase1RuntimeTests(unittest.TestCase):
         answer = normalize_answer("The final price is $66.00 after tax.", exact_numeric=True)
         self.assertEqual(answer, "$66.00")
 
+    def test_normalize_answer_prefers_final_currency_over_earlier_number(self):
+        answer = normalize_answer("The original price is $100. The final price is $80.", exact_numeric=True)
+        self.assertEqual(answer, "$80")
+
+    def test_normalize_answer_preserves_ambiguous_multiple_numbers(self):
+        answer = normalize_answer("The values are 10 and 20.", exact_numeric=True)
+        self.assertEqual(answer, "The values are 10 and 20.")
+
+    def test_normalize_answer_handles_numeric_variants(self):
+        cases = {
+            "-12": "-12",
+            "Final answer: -12.5": "-12.5",
+            "Final answer: 42%": "42%",
+            "Final answer: $19.99": "$19.99",
+            "Final answer: 1.2e-3": "1.2e-3",
+            "Final answer: 42 kg": "42 kg",
+            "Only one value is 17 in the response.": "17",
+        }
+        for raw, expected in cases.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(normalize_answer(raw, exact_numeric=True), expected)
+
+    def test_normalize_answer_only_preserves_multiline_content_after_prefix(self):
+        answer = normalize_answer("Final answer:\n- alpha\n- beta", answer_only=True)
+        self.assertEqual(answer, "- alpha\n- beta")
+
+    def test_normalize_answer_only_preserves_json_after_prefix(self):
+        answer = normalize_answer('The answer is: {"ok": true, "items": [1, 2]}', answer_only=True)
+        self.assertEqual(answer, '{"ok": true, "items": [1, 2]}')
+
+    def test_normalize_answer_only_preserves_multiple_requested_lines(self):
+        answer = normalize_answer("Answer: first\nsecond\nthird", answer_only=True)
+        self.assertEqual(answer, "first\nsecond\nthird")
+
     def test_normalize_answer_extracts_allowed_label_when_requested(self):
         answer = normalize_answer("The sentiment is negative because the service failed.", allowed_labels=("positive", "negative", "neutral"))
         self.assertEqual(answer, "negative")
