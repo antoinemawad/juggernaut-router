@@ -307,7 +307,7 @@ class RuntimeConfig:
         else:
             default_mode = "conservative"
         mode = env.get("ROUTER_MODE", default_mode).strip().lower()
-        if mode not in {"conservative", "balanced", "aggressive", "accuracy_first"}:
+        if mode not in {"conservative", "balanced", "aggressive", "accuracy_first", "local_only"}:
             mode = default_mode
         local_model_path = env.get("LOCAL_MODEL_PATH")
 

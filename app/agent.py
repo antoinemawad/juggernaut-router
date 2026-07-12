@@ -149,6 +149,52 @@ def answer_task(
                         "final_answer_type": _answer_type(local_model_answer),
                     },
                 )
+    if config.router_mode == "local_only":
+        _finish_timings(timings, task_timer, deadline)
+        return AgentResult(
+            answer=SAFE_FALLBACK_ANSWER,
+            route="fallback",
+            route_reason="local_only_after_local_model",
+            category=classification.category,
+            router_mode=config.router_mode,
+            remote_mode=remote_mode,
+            prompt_policy=prompt_policy,
+            max_tokens=remote_max_tokens,
+            prompt_char_count=prompt_char_count,
+            prompt_token_estimate=prompt_token_estimate,
+            remote_prompt_token_estimate=remote_prompt_token_estimate,
+            deadline_decision=_deadline_decision(deadline, config),
+            error="local_model_unaccepted",
+            timings=timings,
+            metadata={
+                "answer_shape": classification.answer_shape,
+                "constraints": list(classification.constraints),
+                "classification_confidence": classification.confidence,
+                "risk_score": classification.risk_score,
+                "risk_components": classification.risk_components,
+                "solver_confidence": local_result.confidence if local_result is not None else None,
+                "local_evidence": list(local_result.evidence) if local_result is not None else [],
+                "local_proof_layers_passed": list(validation.passed_layers),
+                "local_proof_layers_failed": list(validation.failed_layers),
+                "validator_notes": list(validation.notes),
+                "fireworks_called": False,
+                "fireworks_http_status": None,
+                "fireworks_error": "local_only",
+                "local_model_attempted": local_model is not None,
+                "local_model_skip_reason": local_model_skip_reason,
+                "local_model_error": local_model.error if local_model is not None else None,
+                "local_model_path": local_model.model_path if local_model is not None else None,
+                "local_model_runtime": local_model.runtime if local_model is not None else None,
+                "local_model_validation_failed": (
+                    list(local_model_validation.failed_layers) if local_model_validation is not None else []
+                ),
+                "local_model_validation_notes": (
+                    list(local_model_validation.notes) if local_model_validation is not None else []
+                ),
+                "final_answer_type": _answer_type(SAFE_FALLBACK_ANSWER),
+            },
+        )
+
     if deadline is not None and not deadline.can_spend(config.fireworks_timeout_seconds):
         _finish_timings(timings, task_timer, deadline)
         return AgentResult(
@@ -480,15 +526,16 @@ def _local_model_skip_reason(
         return "prompt_too_long_for_local_model"
     if classification.category not in _local_model_safe_categories(config):
         return "category_not_local_model_safe"
-    if classification.risk_components.get("ambiguity", 0) >= 0.5 and classification.category not in {
-        "sentiment_classification",
-        "named_entity_recognition",
-    }:
-        return "ambiguous_task"
-    if classification.risk_components.get("factual_freshness", 0) >= 0.5:
-        return "fresh_factual_task"
-    if classification.risk_components.get("reasoning_depth", 0) >= 0.75:
-        return "deep_reasoning_task"
+    if config.router_mode != "local_only":
+        if classification.risk_components.get("ambiguity", 0) >= 0.5 and classification.category not in {
+            "sentiment_classification",
+            "named_entity_recognition",
+        }:
+            return "ambiguous_task"
+        if classification.risk_components.get("factual_freshness", 0) >= 0.5:
+            return "fresh_factual_task"
+        if classification.risk_components.get("reasoning_depth", 0) >= 0.75:
+            return "deep_reasoning_task"
     if classification.category in {"code_generation", "code_debugging"} and not _code_task_is_local_model_eligible(
         prompt,
         classification,

@@ -76,7 +76,7 @@ ENV INPUT_PATH=/input/tasks.json \
 
 # Router profile and deterministic/local gate.
 ENV ROUTER_PROFILE=token_competitive \
-    ROUTER_MODE=balanced \
+    ROUTER_MODE=local_only \
     LOCAL_CONFIDENCE_THRESHOLD=1.0 \
     LOCAL_PROOF_BUDGET_MS=100 \
     LOCAL_CROSS_CHECK_ENABLED=false
@@ -86,8 +86,8 @@ ENV LOCAL_MODEL_ENABLED=${ENABLE_LOCAL_MODEL} \
     LOCAL_MODEL_COMMAND= \
     LOCAL_MODEL_PATH=/app/models/${LOCAL_MODEL_FILENAME} \
     LOCAL_MODEL_MAX_TOKENS=128 \
-    LOCAL_MODEL_BATCH_LIMIT=6 \
-    LOCAL_MODEL_CATEGORIES=sentiment_classification,text_summarisation \
+    LOCAL_MODEL_BATCH_LIMIT=1000 \
+    LOCAL_MODEL_CATEGORIES=factual_knowledge,text_summarisation,sentiment_classification,named_entity_recognition,mathematical_reasoning,logical_deductive_reasoning,code_generation,code_debugging \
     LOCAL_MODEL_CONTEXT=1024 \
     LOCAL_MODEL_THREADS=2 \
     LOCAL_MODEL_TEMPERATURE=0 \

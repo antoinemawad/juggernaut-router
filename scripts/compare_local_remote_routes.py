@@ -51,6 +51,16 @@ LOCAL_CATEGORIES_ALL = ",".join(
 )
 
 MODE_CONFIGS = {
+    "deterministic_only": {
+        "requires_remote": False,
+        "env": {
+            "LOCAL_MODEL_ENABLED": "false",
+            "LOCAL_MODEL_BATCH_LIMIT": "0",
+            "LOCAL_MODEL_CATEGORIES": "",
+            "ROUTER_PROFILE": "accuracy_gate",
+            "ROUTER_MODE": "local_only",
+        },
+    },
     "local_only": {
         "requires_remote": False,
         "env": {
@@ -58,7 +68,7 @@ MODE_CONFIGS = {
             "LOCAL_MODEL_BATCH_LIMIT": "1000",
             "LOCAL_MODEL_CATEGORIES": LOCAL_CATEGORIES_ALL,
             "ROUTER_PROFILE": "accuracy_gate",
-            "ROUTER_MODE": "accuracy_first",
+            "ROUTER_MODE": "local_only",
         },
     },
     "remote_only": {
@@ -97,11 +107,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Compare local, remote, and mixed Docker routing modes.")
     parser.add_argument("--image", required=True)
     parser.add_argument("--input-dir", default="local_test/accuracy_gate_input")
+    parser.add_argument("--tasks-file", help="Optional JSON/JSONL task file to convert into a mounted /input/tasks.json.")
     parser.add_argument("--out-dir", default="eval_runs/local_remote_compare")
     parser.add_argument("--platform", default="linux/amd64")
     parser.add_argument("--memory", default="4g")
     parser.add_argument("--cpus", default="2")
-    parser.add_argument("--modes", default="local_only,remote_only,mixed_fast,mixed_broad")
+    parser.add_argument("--modes", default="deterministic_only,local_only,remote_only,mixed_fast,mixed_broad")
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--min-pass-rate", type=float, default=0.0)
     parser.add_argument("--fail-under-min", action="store_true")
@@ -109,8 +120,23 @@ def main() -> int:
     parser.add_argument("--keep-outputs", action="store_true")
     args = parser.parse_args()
 
-    input_dir = (ROOT / args.input_dir).resolve()
-    tasks_path = input_dir / "tasks.json"
+    out_dir = (ROOT / args.out_dir).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.tasks_file:
+        tasks_source = (ROOT / args.tasks_file).resolve()
+        if not tasks_source.exists():
+            print(f"ERROR: missing task file {tasks_source}", file=sys.stderr)
+            return 2
+        tasks = load_tasks(tasks_source)
+        input_dir = out_dir / "_input"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        tasks_path = input_dir / "tasks.json"
+        tasks_path.write_text(json.dumps({"tasks": tasks}, indent=2), encoding="utf-8")
+    else:
+        input_dir = (ROOT / args.input_dir).resolve()
+        tasks_path = input_dir / "tasks.json"
+        tasks = load_tasks(tasks_path) if tasks_path.exists() else []
     if not tasks_path.exists():
         print(f"ERROR: missing fixture {tasks_path}", file=sys.stderr)
         return 2
@@ -124,10 +150,6 @@ def main() -> int:
         print("ERROR: --runs must be >= 1", file=sys.stderr)
         return 2
 
-    out_dir = (ROOT / args.out_dir).resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    tasks = load_tasks(tasks_path)
     remote_ready = all(os.environ.get(name, "").strip() for name in REMOTE_ENV_NAMES)
     if args.require_remote and not remote_ready:
         print("ERROR: FIREWORKS_API_KEY, FIREWORKS_BASE_URL, and ALLOWED_MODELS are required", file=sys.stderr)
@@ -221,7 +243,7 @@ def run_mode(
         "LOCAL_MODEL_PATH": "/app/models/local-model.gguf",
         **mode_env,
     }
-    if mode != "local_only":
+    if MODE_CONFIGS[mode]["requires_remote"]:
         for name in REMOTE_ENV_NAMES:
             value = os.environ.get(name, "")
             if value:
@@ -296,6 +318,8 @@ def run_mode(
             "allowed_models_count": len(startup.get("allowed_models") or []),
         },
         "by_category": scored["by_category"],
+        "by_difficulty": scored["by_difficulty"],
+        "by_scenario_class": scored["by_scenario_class"],
         "failures": scored["failures"][:10],
         "task_scores": scored["rows"],
         "output_dir": str(mode_out),
@@ -344,6 +368,8 @@ def aggregate_mode_runs(raw_runs: list[dict]) -> list[dict]:
             "route_reason_counts": merge_sum_counts(row.get("route_reason_counts", {}) for row in source),
             "remote_env_seen": source[-1].get("remote_env_seen", {}),
             "by_category": aggregate_categories(source),
+            "by_difficulty": aggregate_named_buckets(source, "by_difficulty"),
+            "by_scenario_class": aggregate_named_buckets(source, "by_scenario_class"),
             "unstable_tasks": unstable_tasks(source),
             "failures": source[-1].get("failures", []),
             "output_dir": str(Path(source[-1].get("output_dir", "")).parent if len(source) > 1 else source[-1].get("output_dir", "")),
@@ -378,22 +404,26 @@ def merge_average_counts(counts_list) -> dict[str, float]:
 
 
 def aggregate_categories(runs: list[dict]) -> dict:
+    return aggregate_named_buckets(runs, "by_category")
+
+
+def aggregate_named_buckets(runs: list[dict], key: str) -> dict:
     buckets = defaultdict(lambda: {"runs": 0, "rows": 0, "pass_rate": 0.0, "avg_score": 0.0})
     for run in runs:
-        for category, bucket in (run.get("by_category") or {}).items():
-            target = buckets[category]
+        for name, bucket in (run.get(key) or {}).items():
+            target = buckets[name]
             target["runs"] += 1
             target["rows"] = max(target["rows"], int(bucket.get("rows", 0)))
             target["pass_rate"] += float(bucket.get("pass_rate", 0.0))
             target["avg_score"] += float(bucket.get("avg_score", 0.0))
     return {
-        category: {
+        name: {
             "rows": bucket["rows"],
             "runs": bucket["runs"],
             "pass_rate": bucket["pass_rate"] / max(1, bucket["runs"]),
             "avg_score": bucket["avg_score"] / max(1, bucket["runs"]),
         }
-        for category, bucket in sorted(buckets.items())
+        for name, bucket in sorted(buckets.items())
     }
 
 
@@ -414,6 +444,8 @@ def unstable_tasks(runs: list[dict]) -> list[dict]:
                 {
                     "task_id": task_id,
                     "category": rows[-1].get("category", "unknown"),
+                    "difficulty": rows[-1].get("difficulty", "unknown"),
+                    "scenario_class": rows[-1].get("scenario_class", "unknown"),
                     "pass_rate": sum(pass_values) / len(pass_values),
                     "min_score": min(scores),
                     "max_score": max(scores),
@@ -445,6 +477,8 @@ def score_results(tasks: list[dict], results: list[dict]) -> dict:
             {
                 "task_id": task_id,
                 "category": task.get("category", "unknown"),
+                "difficulty": task.get("difficulty", "unknown"),
+                "scenario_class": task.get("scenario_class", "unknown"),
                 "passed": bool(passed),
                 "score": float(score),
                 "notes": list(notes),
@@ -455,23 +489,15 @@ def score_results(tasks: list[dict], results: list[dict]) -> dict:
     total = len(rows)
     pass_rate = sum(1 for row in rows if row["passed"]) / max(1, total)
     avg_score = sum(row["score"] for row in rows) / max(1, total)
-    buckets = defaultdict(lambda: {"rows": 0, "passed": 0, "score": 0.0})
-    for row in rows:
-        bucket = buckets[row["category"]]
-        bucket["rows"] += 1
-        bucket["passed"] += int(row["passed"])
-        bucket["score"] += row["score"]
-    by_category = {}
-    for category, bucket in sorted(buckets.items()):
-        by_category[category] = {
-            "rows": bucket["rows"],
-            "pass_rate": bucket["passed"] / max(1, bucket["rows"]),
-            "avg_score": bucket["score"] / max(1, bucket["rows"]),
-        }
+    by_category = bucket_scores(rows, "category")
+    by_difficulty = bucket_scores(rows, "difficulty")
+    by_scenario_class = bucket_scores(rows, "scenario_class")
     failures = [
         {
             "task_id": row["task_id"],
             "category": row["category"],
+            "difficulty": row["difficulty"],
+            "scenario_class": row["scenario_class"],
             "score": row["score"],
             "notes": row["notes"],
             "answer_preview": str(row["answer"]).replace("\n", "\\n")[:220],
@@ -483,9 +509,28 @@ def score_results(tasks: list[dict], results: list[dict]) -> dict:
         "pass_rate": pass_rate,
         "avg_score": avg_score,
         "by_category": by_category,
+        "by_difficulty": by_difficulty,
+        "by_scenario_class": by_scenario_class,
         "failures": failures,
         "rows": rows,
     }
+
+
+def bucket_scores(rows: list[dict], key: str) -> dict:
+    buckets = defaultdict(lambda: {"rows": 0, "passed": 0, "score": 0.0})
+    for row in rows:
+        bucket = buckets[row.get(key) or "unknown"]
+        bucket["rows"] += 1
+        bucket["passed"] += int(row["passed"])
+        bucket["score"] += row["score"]
+    output = {}
+    for name, bucket in sorted(buckets.items()):
+        output[name] = {
+            "rows": bucket["rows"],
+            "pass_rate": bucket["passed"] / max(1, bucket["rows"]),
+            "avg_score": bucket["score"] / max(1, bucket["rows"]),
+        }
+    return output
 
 
 def route_counter(telemetry: list[dict]) -> dict[str, int]:
@@ -507,6 +552,8 @@ def value_counter(telemetry: list[dict], keys: tuple[str, ...]) -> dict[str, int
 
 
 def load_tasks(path: Path) -> list[dict]:
+    if path.suffix == ".jsonl":
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, list):
         return payload
@@ -581,6 +628,26 @@ def render_markdown(payload: dict) -> str:
                 f"| {category} | {bucket['pass_rate']:.1%} | {bucket['avg_score']:.3f} | {bucket['rows']} | {bucket.get('runs', 1)} |"
             )
         lines.append("")
+    lines.extend(["## Difficulty Scores", ""])
+    for row in payload["modes"]:
+        if "by_difficulty" not in row:
+            continue
+        lines.extend([f"### {row['mode']}", "", "| Difficulty | Pass Rate | Avg Score | Rows | Runs |", "| --- | ---: | ---: | ---: | ---: |"])
+        for difficulty, bucket in row["by_difficulty"].items():
+            lines.append(
+                f"| {difficulty} | {bucket['pass_rate']:.1%} | {bucket['avg_score']:.3f} | {bucket['rows']} | {bucket.get('runs', 1)} |"
+            )
+        lines.append("")
+    lines.extend(["## Scenario Class Scores", ""])
+    for row in payload["modes"]:
+        if "by_scenario_class" not in row:
+            continue
+        lines.extend([f"### {row['mode']}", "", "| Scenario Class | Pass Rate | Avg Score | Rows | Runs |", "| --- | ---: | ---: | ---: | ---: |"])
+        for scenario_class, bucket in row["by_scenario_class"].items():
+            lines.append(
+                f"| {scenario_class} | {bucket['pass_rate']:.1%} | {bucket['avg_score']:.3f} | {bucket['rows']} | {bucket.get('runs', 1)} |"
+            )
+        lines.append("")
     lines.extend(["## Models And Errors", ""])
     for row in payload["modes"]:
         if row.get("status", "").startswith("skipped"):
@@ -606,7 +673,8 @@ def render_markdown(payload: dict) -> str:
         for task in unstable[:12]:
             notes = ";".join(task.get("latest_notes") or [])
             lines.append(
-                f"- `{task['task_id']}` ({task['category']}): pass_rate={task['pass_rate']:.1%}; "
+                f"- `{task['task_id']}` ({task['category']}, {task.get('difficulty', 'unknown')}, {task.get('scenario_class', 'unknown')}): "
+                f"pass_rate={task['pass_rate']:.1%}; "
                 f"score_range={task['min_score']:.3f}-{task['max_score']:.3f}; notes={notes}; "
                 f"answer={task['latest_answer_preview']}"
             )
@@ -620,7 +688,8 @@ def render_markdown(payload: dict) -> str:
         for failure in failures[:10]:
             notes = ";".join(failure["notes"])
             lines.append(
-                f"- `{failure['task_id']}` ({failure['category']}): score={failure['score']:.3f}; "
+                f"- `{failure['task_id']}` ({failure['category']}, {failure.get('difficulty', 'unknown')}, "
+                f"{failure.get('scenario_class', 'unknown')}): score={failure['score']:.3f}; "
                 f"notes={notes}; answer={failure['answer_preview']}"
             )
         lines.append("")

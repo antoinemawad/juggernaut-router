@@ -155,8 +155,13 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertIn("ARG LOCAL_MODEL_FILENAME=local-model.gguf", dockerfile)
         self.assertIn("LOCAL_MODEL_ENABLED=${ENABLE_LOCAL_MODEL}", dockerfile)
         self.assertIn("LOCAL_MODEL_PATH=/app/models/${LOCAL_MODEL_FILENAME}", dockerfile)
-        self.assertIn("LOCAL_MODEL_BATCH_LIMIT=6", dockerfile)
-        self.assertIn("LOCAL_MODEL_CATEGORIES=sentiment_classification,text_summarisation", dockerfile)
+        self.assertIn("LOCAL_MODEL_BATCH_LIMIT=1000", dockerfile)
+        self.assertIn(
+            "LOCAL_MODEL_CATEGORIES=factual_knowledge,text_summarisation,sentiment_classification,"
+            "named_entity_recognition,mathematical_reasoning,logical_deductive_reasoning,"
+            "code_generation,code_debugging",
+            dockerfile,
+        )
         self.assertIn("LOCAL_MODEL_MAX_TOKENS=128", dockerfile)
         self.assertIn("LOCAL_MODEL_CONTEXT=1024", dockerfile)
         self.assertIn("LOCAL_MODEL_THREADS=2", dockerfile)
