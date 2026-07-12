@@ -21,6 +21,8 @@ WORKDIR /app
 ARG ENABLE_LOCAL_MODEL=false
 ARG LOCAL_MODEL_URL=https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf
 ARG LOCAL_MODEL_FILENAME=local-model.gguf
+ARG LOCAL_MODEL_PATH_BY_CATEGORY=
+ARG LOCAL_MODEL_CATEGORIES=sentiment_classification,text_summarisation
 
 COPY requirements-local-model.txt ./requirements-local-model.txt
 COPY scripts/download_local_model.py /tmp/download_local_model.py
@@ -85,9 +87,10 @@ ENV ROUTER_PROFILE=token_competitive \
 ENV LOCAL_MODEL_ENABLED=${ENABLE_LOCAL_MODEL} \
     LOCAL_MODEL_COMMAND= \
     LOCAL_MODEL_PATH=/app/models/${LOCAL_MODEL_FILENAME} \
+    LOCAL_MODEL_PATH_BY_CATEGORY=${LOCAL_MODEL_PATH_BY_CATEGORY} \
     LOCAL_MODEL_MAX_TOKENS=128 \
     LOCAL_MODEL_BATCH_LIMIT=6 \
-    LOCAL_MODEL_CATEGORIES=sentiment_classification,text_summarisation \
+    LOCAL_MODEL_CATEGORIES=${LOCAL_MODEL_CATEGORIES} \
     LOCAL_MODEL_CONTEXT=1024 \
     LOCAL_MODEL_THREADS=2 \
     LOCAL_MODEL_TEMPERATURE=0 \

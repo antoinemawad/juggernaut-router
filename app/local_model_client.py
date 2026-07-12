@@ -25,26 +25,28 @@ def ask_local_model_structured(
     deadline: DeadlineManager | None = None,
     system_prompt: str | None = None,
     task_id: str = "task",
+    category: str | None = None,
 ) -> LocalModelResult:
     config = config or RuntimeConfig.from_env()
+    model_path = _local_model_path_for_category(config, category)
     timer = StageTimer()
 
     if not config.local_model_enabled:
         return LocalModelResult(SAFE_FALLBACK_ANSWER, elapsed_ms=timer.elapsed_ms(), error="local_model_disabled")
-    if config.local_model_path is not None:
+    if model_path is not None:
         if deadline is not None and not deadline.can_spend(config.local_model_timeout_seconds):
             return LocalModelResult(
                 SAFE_FALLBACK_ANSWER,
                 elapsed_ms=timer.elapsed_ms(),
                 error="deadline_suppressed_local_model",
-                model_path=str(config.local_model_path),
+                model_path=str(model_path),
                 runtime="llama_cpp",
             )
         result = generate_local_answer(
             task=task_id,
             prompt=prompt,
             system_prompt=system_prompt,
-            model_path=config.local_model_path,
+            model_path=model_path,
             max_tokens=_bounded_local_max_tokens(prompt, config.local_model_max_tokens),
             temperature=config.local_model_temperature,
             context=config.local_model_context,
@@ -129,6 +131,14 @@ def ask_local_model_structured(
             runtime="command",
         )
     return LocalModelResult(answer[: config.local_model_max_chars], elapsed_ms=timer.elapsed_ms(), runtime="command")
+
+
+def _local_model_path_for_category(config: RuntimeConfig, category: str | None):
+    if category and config.local_model_paths_by_category:
+        path = config.local_model_paths_by_category.get(category)
+        if path is not None:
+            return path
+    return config.local_model_path
 
 
 def _local_model_input(prompt: str, system_prompt: str | None) -> str:

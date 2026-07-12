@@ -38,6 +38,7 @@ RECOMMENDATION_EXPORT_NAMES = {
     "LOCAL_MODEL_MAX_TOKENS",
     "LOCAL_MODEL_BATCH_LIMIT",
     "LOCAL_MODEL_PATH",
+    "LOCAL_MODEL_PATH_BY_CATEGORY",
     "LOCAL_MODEL_TEMPERATURE",
     "LOCAL_MODEL_THREADS",
     "LOCAL_MODEL_TIMEOUT_SECONDS",
@@ -209,6 +210,21 @@ def _get_category_set_from(env: dict[str, str], name: str) -> tuple[str, ...]:
     return tuple(categories)
 
 
+def _get_path_map_from(env: dict[str, str], name: str) -> dict[str, Path]:
+    raw = env.get(name, "")
+    mapping = {}
+    for item in raw.split(";"):
+        item = item.strip()
+        if not item or "=" not in item:
+            continue
+        category, path_raw = item.split("=", 1)
+        category = category.strip()
+        path = path_raw.strip()
+        if category and path:
+            mapping[category] = Path(path)
+    return mapping
+
+
 def parse_allowed_models(raw: str | None) -> list[str]:
     if not raw:
         return []
@@ -273,6 +289,7 @@ class RuntimeConfig:
     local_model_enabled: bool = False
     local_model_command: str | None = None
     local_model_path: Path | None = None
+    local_model_paths_by_category: dict[str, Path] | None = None
     local_model_max_tokens: int = 128
     local_model_context: int = 1024
     local_model_threads: int = 2
@@ -326,6 +343,7 @@ class RuntimeConfig:
             local_model_enabled=_get_bool_from(env, "LOCAL_MODEL_ENABLED", False),
             local_model_command=env.get("LOCAL_MODEL_COMMAND") or None,
             local_model_path=Path(local_model_path) if local_model_path else None,
+            local_model_paths_by_category=_get_path_map_from(env, "LOCAL_MODEL_PATH_BY_CATEGORY"),
             local_model_max_tokens=_get_int_from(env, "LOCAL_MODEL_MAX_TOKENS", 128, 1, 512),
             local_model_context=_get_int_from(env, "LOCAL_MODEL_CONTEXT", 1024, 256, 4096),
             local_model_threads=_get_int_from(env, "LOCAL_MODEL_THREADS", 2, 1, 8),

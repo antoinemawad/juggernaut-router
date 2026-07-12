@@ -99,6 +99,7 @@ def answer_task(
             deadline=deadline,
             system_prompt=system_prompt,
             task_id=task_id,
+            category=classification.category,
         )
         timings.local_model_elapsed_ms = local_model.elapsed_ms
         if local_model.error is None:
@@ -472,7 +473,7 @@ def _local_model_skip_reason(
         return "local_model_batch_limit"
     if not config.local_model_enabled:
         return "local_model_disabled"
-    if config.local_model_path is None and not config.local_model_command:
+    if _local_model_path_for_category(config, classification.category) is None and not config.local_model_command:
         return "local_model_runtime_missing"
     if deadline is not None and not deadline.can_spend(config.local_model_timeout_seconds):
         return "deadline_suppressed_local_model"
@@ -518,6 +519,14 @@ def _local_model_safe_categories(config: RuntimeConfig) -> set[str]:
     if config.router_profile == "token_competitive":
         safe.update({"factual_knowledge", "text_summarisation", "code_generation", "code_debugging"})
     return safe
+
+
+def _local_model_path_for_category(config: RuntimeConfig, category: str | None):
+    if category and config.local_model_paths_by_category:
+        path = config.local_model_paths_by_category.get(category)
+        if path is not None:
+            return path
+    return config.local_model_path
 
 
 def _code_task_is_local_model_eligible(prompt: str, classification) -> bool:

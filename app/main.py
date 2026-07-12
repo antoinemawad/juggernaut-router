@@ -195,6 +195,10 @@ def startup_diagnostics(
         "fireworks_api_key_present": bool(config.fireworks_api_key),
         "local_model_enabled": config.local_model_enabled,
         "local_model_path": str(config.local_model_path) if config.local_model_path else None,
+        "local_model_paths_by_category": {
+            category: str(path)
+            for category, path in (config.local_model_paths_by_category or {}).items()
+        },
         "local_model_batch_limit": config.local_model_batch_limit,
         "tasks_parsed": tasks_parsed,
         "input_error": input_error,

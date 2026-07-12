@@ -1,0 +1,2225 @@
+[
+  {
+    "task_id": "factual_gpu_cpu",
+    "prompt": "Explain in two concise sentences how a GPU differs from a CPU.",
+    "category": "factual_knowledge",
+    "difficulty": "easy",
+    "scenario_class": "safe_local_candidate",
+    "intent": "explain_stable_fact",
+    "answer_shape": "short_text",
+    "constraints": [
+      "one_sentence"
+    ],
+    "output_constraints": [
+      "concise"
+    ],
+    "risk_components": [
+      "local_validator_weakness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_concise",
+    "verifier": "keyword_coverage",
+    "retry_policy": "no_retry",
+    "failure_taxonomy": [
+      "wrong_category",
+      "remote_model_weak"
+    ],
+    "expected_keywords": [
+      "CPU",
+      "GPU",
+      "parallel",
+      "cores"
+    ],
+    "expected_answer": "A CPU is optimized for general-purpose sequential work with fewer powerful cores. A GPU uses many parallel cores to process large batches of similar operations efficiently.",
+    "scoring_notes": "Keyword coverage plus concise English answer."
+  },
+  {
+    "task_id": "factual_rocm",
+    "prompt": "What is ROCm and why is it relevant for AI workloads on AMD GPUs? Answer in two sentences.",
+    "category": "factual_knowledge",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "explain_platform_relevance",
+    "answer_shape": "short_text",
+    "constraints": [
+      "one_sentence"
+    ],
+    "output_constraints": [
+      "two_sentences"
+    ],
+    "risk_components": [
+      "factual_freshness",
+      "local_validator_weakness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_concise",
+    "verifier": "keyword_coverage",
+    "retry_policy": "retry_on_empty_or_truncated",
+    "failure_taxonomy": [
+      "prompt_too_loose",
+      "remote_model_weak"
+    ],
+    "expected_keywords": [
+      "ROCm",
+      "AMD",
+      "GPU",
+      "AI"
+    ],
+    "expected_answer": "ROCm is AMD's open-source software platform for GPU computing. It matters for AI because it enables frameworks and inference/training workloads to run on AMD GPUs.",
+    "scoring_notes": "Keyword coverage."
+  },
+  {
+    "task_id": "math_discount",
+    "prompt": "A product costs $80 and is discounted by 25%. What is the final price? Return only the final price.",
+    "category": "mathematical_reasoning",
+    "difficulty": "easy",
+    "scenario_class": "safe_local_candidate",
+    "intent": "compute_final_price",
+    "answer_shape": "number",
+    "constraints": [
+      "answer_only",
+      "exact_numeric",
+      "no_explanation"
+    ],
+    "output_constraints": [
+      "exact_numeric",
+      "answer_only"
+    ],
+    "risk_components": [
+      "format_strictness"
+    ],
+    "expected_route": "local",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "numeric_exact",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "local_overconfidence",
+      "output_format_failure"
+    ],
+    "expected_keywords": [
+      "60"
+    ],
+    "expected_answer": "$60",
+    "scoring_notes": "Exact or numeric equivalent."
+  },
+  {
+    "task_id": "math_projection",
+    "prompt": "A service has 120 users and grows by 15% each month for two months. How many users after two months? Round to the nearest whole number.",
+    "category": "mathematical_reasoning",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "compute_compound_growth",
+    "answer_shape": "number",
+    "constraints": [
+      "exact_numeric",
+      "rounding_required"
+    ],
+    "output_constraints": [
+      "exact_numeric"
+    ],
+    "risk_components": [
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "numeric_exact",
+    "retry_policy": "retry_on_empty_or_truncated",
+    "failure_taxonomy": [
+      "local_overconfidence",
+      "max_tokens_too_low"
+    ],
+    "expected_keywords": [
+      "159"
+    ],
+    "expected_answer": "159",
+    "scoring_notes": "Numeric equivalent."
+  },
+  {
+    "task_id": "sentiment_negative",
+    "prompt": "Classify the sentiment as positive, negative, or neutral and give a short reason: The service was slow and disappointing.",
+    "category": "sentiment_classification",
+    "difficulty": "easy",
+    "scenario_class": "safe_local_candidate",
+    "intent": "classify_sentiment",
+    "answer_shape": "label",
+    "constraints": [
+      "label_plus_reason"
+    ],
+    "output_constraints": [
+      "label_plus_reason"
+    ],
+    "risk_components": [
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_concise",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "wrong_category",
+      "output_format_failure"
+    ],
+    "expected_keywords": [
+      "negative",
+      "slow",
+      "disappointing"
+    ],
+    "expected_answer": "negative",
+    "scoring_notes": "Must label negative."
+  },
+  {
+    "task_id": "sentiment_mixed",
+    "prompt": "Classify the sentiment as positive, negative, or neutral and give a short reason: The setup was easy, but the results were unreliable.",
+    "category": "sentiment_classification",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "classify_mixed_sentiment",
+    "answer_shape": "label",
+    "constraints": [
+      "label_plus_reason"
+    ],
+    "output_constraints": [
+      "label_plus_reason"
+    ],
+    "risk_components": [
+      "ambiguity",
+      "local_validator_weakness"
+    ],
+    "expected_route": "remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "validator_too_weak",
+      "local_overconfidence"
+    ],
+    "expected_keywords": [
+      "neutral",
+      "mixed"
+    ],
+    "expected_answer": "neutral",
+    "scoring_notes": "Mixed/neutral acceptable if justified."
+  },
+  {
+    "task_id": "summary_cloud",
+    "prompt": "Summarise the following text in one sentence: AMD Developer Cloud gives developers access to AMD GPUs for AI workloads. It supports ROCm, PyTorch, and vLLM environments for building and testing AI applications.",
+    "category": "text_summarisation",
+    "difficulty": "easy",
+    "scenario_class": "safe_local_candidate",
+    "intent": "summarize_one_sentence",
+    "answer_shape": "summary",
+    "constraints": [
+      "one_sentence"
+    ],
+    "output_constraints": [
+      "one_sentence"
+    ],
+    "risk_components": [
+      "local_validator_weakness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_concise",
+    "verifier": "summary_constraints",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "prompt_too_loose",
+      "remote_model_weak"
+    ],
+    "expected_keywords": [
+      "AMD Developer Cloud",
+      "AMD GPUs",
+      "AI"
+    ],
+    "expected_answer": "AMD Developer Cloud provides AMD GPU access and software environments for building and testing AI workloads.",
+    "scoring_notes": "Must preserve core idea."
+  },
+  {
+    "task_id": "summary_router",
+    "prompt": "Summarise in exactly 12 words: A hybrid router should answer easy tasks locally and send risky tasks to Fireworks so it can preserve accuracy while reducing recorded token usage.",
+    "category": "text_summarisation",
+    "difficulty": "hard",
+    "scenario_class": "exact_format",
+    "intent": "summarize_exact_word_count",
+    "answer_shape": "summary",
+    "constraints": [
+      "exact_word_count",
+      "one_sentence",
+      "no_explanation"
+    ],
+    "output_constraints": [
+      "exact_word_count",
+      "one_sentence"
+    ],
+    "risk_components": [
+      "format_strictness",
+      "local_validator_weakness"
+    ],
+    "expected_route": "local",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "word_count",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "output_format_failure",
+      "prompt_too_loose"
+    ],
+    "expected_keywords": [
+      "local",
+      "Fireworks",
+      "accuracy",
+      "token"
+    ],
+    "expected_answer": "Hybrid routing preserves accuracy and tokens using local answers with Fireworks fallbacks.",
+    "scoring_notes": "Length and key information."
+  },
+  {
+    "task_id": "ner_person_org",
+    "prompt": "Extract named entities and label them: Lisa Chen joined AMD in Austin on July 6, 2026.",
+    "category": "named_entity_recognition",
+    "difficulty": "easy",
+    "scenario_class": "safe_local_candidate",
+    "intent": "extract_named_entities",
+    "answer_shape": "entity_list",
+    "constraints": [
+      "entity_labels"
+    ],
+    "output_constraints": [
+      "entity_labels"
+    ],
+    "risk_components": [
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_format",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "entity_labels",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "validator_too_weak",
+      "output_format_failure"
+    ],
+    "expected_keywords": [
+      "Lisa Chen",
+      "PERSON",
+      "AMD",
+      "ORG",
+      "Austin",
+      "LOCATION",
+      "July 6, 2026",
+      "DATE"
+    ],
+    "expected_answer": "Lisa Chen: PERSON; AMD: ORG; Austin: LOCATION; July 6, 2026: DATE",
+    "scoring_notes": "Entity and label coverage."
+  },
+  {
+    "task_id": "ner_multiple",
+    "prompt": "Extract named entities and label them: Google DeepMind announced Gemma support with AMD in London on July 7, 2026.",
+    "category": "named_entity_recognition",
+    "difficulty": "hard",
+    "scenario_class": "adversarial",
+    "intent": "extract_ambiguous_entities",
+    "answer_shape": "entity_list",
+    "constraints": [
+      "entity_labels"
+    ],
+    "output_constraints": [
+      "entity_labels"
+    ],
+    "risk_components": [
+      "ambiguity",
+      "format_strictness"
+    ],
+    "expected_route": "remote_format_strict",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "entity_labels",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "validator_too_weak",
+      "wrong_category"
+    ],
+    "expected_keywords": [
+      "Google DeepMind",
+      "ORG",
+      "Gemma",
+      "AMD",
+      "London",
+      "July 7, 2026"
+    ],
+    "expected_answer": "Google DeepMind: ORG; Gemma: PRODUCT; AMD: ORG; London: LOCATION; July 7, 2026: DATE",
+    "scoring_notes": "Entity coverage; exact label taxonomy may vary."
+  },
+  {
+    "task_id": "debug_add",
+    "prompt": "Debug this Python code and provide the corrected implementation:\n\ndef add_numbers(a, b):\n    return a - b",
+    "category": "code_debugging",
+    "difficulty": "easy",
+    "scenario_class": "safe_local_candidate",
+    "intent": "debug_simple_operator",
+    "answer_shape": "corrected_code",
+    "constraints": [
+      "include_corrected_code"
+    ],
+    "output_constraints": [
+      "code_with_reason"
+    ],
+    "risk_components": [
+      "code_risk",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_code",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "local_overconfidence",
+      "output_format_failure"
+    ],
+    "expected_keywords": [
+      "return a + b",
+      "add_numbers"
+    ],
+    "expected_answer": "def add_numbers(a, b):\n    return a + b",
+    "scoring_notes": "Must identify subtraction bug and correct it."
+  },
+  {
+    "task_id": "debug_loop",
+    "prompt": "Debug this Python function so it returns the sum of all numbers in the list:\n\ndef total(nums):\n    s = 0\n    for n in nums:\n        s = n\n    return s",
+    "category": "code_debugging",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "debug_loop_accumulator",
+    "answer_shape": "corrected_code",
+    "constraints": [
+      "code_only",
+      "include_corrected_code"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "reasoning_depth"
+    ],
+    "expected_route": "local",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "local_overconfidence",
+      "remote_model_weak"
+    ],
+    "expected_keywords": [
+      "s += n",
+      "return s"
+    ],
+    "expected_answer": "def total(nums):\n    s = 0\n    for n in nums:\n        s += n\n    return s",
+    "scoring_notes": "Must accumulate rather than assign."
+  },
+  {
+    "task_id": "logic_shortest",
+    "prompt": "Alice is taller than Bob. Bob is taller than Carol. Who is the shortest? Return only the name.",
+    "category": "logical_deductive_reasoning",
+    "difficulty": "easy",
+    "scenario_class": "safe_local_candidate",
+    "intent": "solve_order_relation",
+    "answer_shape": "label",
+    "constraints": [
+      "answer_only",
+      "no_explanation"
+    ],
+    "output_constraints": [
+      "one_word"
+    ],
+    "risk_components": [
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_concise",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "wrong_category",
+      "output_format_failure"
+    ],
+    "expected_keywords": [
+      "Carol"
+    ],
+    "expected_answer": "Carol",
+    "scoring_notes": "Exact name."
+  },
+  {
+    "task_id": "logic_order",
+    "prompt": "Three servers A, B, and C are ranked by latency. A is faster than B. C is slower than B. Which server is fastest? Return only the server letter.",
+    "category": "logical_deductive_reasoning",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "solve_latency_order",
+    "answer_shape": "label",
+    "constraints": [
+      "answer_only",
+      "no_explanation"
+    ],
+    "output_constraints": [
+      "one_word"
+    ],
+    "risk_components": [
+      "reasoning_depth",
+      "ambiguity",
+      "format_strictness"
+    ],
+    "expected_route": "remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "local_overconfidence",
+      "prompt_too_loose"
+    ],
+    "expected_keywords": [
+      "A"
+    ],
+    "expected_answer": "A",
+    "scoring_notes": "Exact letter."
+  },
+  {
+    "task_id": "codegen_is_even",
+    "prompt": "Write a Python function named is_even that returns True if a number is even and False otherwise. Return only code.",
+    "category": "code_generation",
+    "difficulty": "easy",
+    "scenario_class": "safe_local_candidate",
+    "intent": "generate_simple_function",
+    "answer_shape": "code",
+    "constraints": [
+      "code_only"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_code",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "output_format_failure",
+      "max_tokens_too_low"
+    ],
+    "expected_keywords": [
+      "def is_even",
+      "% 2",
+      "return"
+    ],
+    "expected_answer": "def is_even(n):\n    return n % 2 == 0",
+    "scoring_notes": "Code should implement even check."
+  },
+  {
+    "task_id": "codegen_clamp",
+    "prompt": "Write a Python function clamp(x, low, high) that returns low if x is below low, high if x is above high, otherwise x. Return only code.",
+    "category": "code_generation",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "generate_branching_function",
+    "answer_shape": "code",
+    "constraints": [
+      "code_only"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "remote_model_weak",
+      "max_tokens_too_low"
+    ],
+    "expected_keywords": [
+      "def clamp",
+      "low",
+      "high",
+      "min",
+      "max"
+    ],
+    "expected_answer": "def clamp(x, low, high):\n    return max(low, min(x, high))",
+    "scoring_notes": "Code should clamp correctly."
+  },
+  {
+    "task_id": "factual_current_ceo",
+    "prompt": "Who is the current CEO of AMD today? Return only the person's name.",
+    "category": "factual_knowledge",
+    "difficulty": "medium",
+    "scenario_class": "remote_candidate",
+    "intent": "answer_current_fact",
+    "answer_shape": "short_text",
+    "constraints": [
+      "answer_only"
+    ],
+    "output_constraints": [
+      "answer_only"
+    ],
+    "risk_components": [
+      "factual_freshness"
+    ],
+    "expected_route": "remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "keyword_coverage",
+    "retry_policy": "retry_on_empty_or_truncated",
+    "failure_taxonomy": [
+      "local_overconfidence",
+      "remote_model_weak"
+    ],
+    "expected_keywords": [
+      "Lisa Su"
+    ],
+    "expected_answer": "Lisa Su",
+    "scoring_notes": "Current public fact should be routed remotely because freshness matters."
+  },
+  {
+    "task_id": "math_discount_tax",
+    "prompt": "A product costs $80 and is discounted by 25%, then taxed at 10%. What is the final price? Return only the dollar amount.",
+    "category": "mathematical_reasoning",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "compute_discount_then_tax",
+    "answer_shape": "number",
+    "constraints": [
+      "exact_numeric",
+      "rounding_required"
+    ],
+    "output_constraints": [
+      "exact_numeric",
+      "answer_only"
+    ],
+    "risk_components": [
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "numeric_exact",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "local_overconfidence",
+      "output_format_failure"
+    ],
+    "expected_keywords": [
+      "66"
+    ],
+    "expected_answer": "$66",
+    "scoring_notes": "Requires sequencing discount then tax."
+  },
+  {
+    "task_id": "sentiment_sarcasm_outage",
+    "prompt": "Classify the sentiment as positive, negative, or neutral. Return only the label: Yeah right, the outage was just perfect.",
+    "category": "sentiment_classification",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "classify_sarcasm",
+    "answer_shape": "label",
+    "constraints": [
+      "answer_only"
+    ],
+    "output_constraints": [
+      "answer_only"
+    ],
+    "risk_components": [
+      "ambiguity",
+      "local_validator_weakness"
+    ],
+    "expected_route": "local_or_remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "validator_too_weak",
+      "local_overconfidence"
+    ],
+    "expected_keywords": [
+      "negative"
+    ],
+    "expected_answer": "negative",
+    "scoring_notes": "Exact strict-label sarcasm template is certified local; looser variants still route remote."
+  },
+  {
+    "task_id": "summary_exact_eight",
+    "prompt": "Summarise in exactly 8 words: Local-first routing can reduce recorded Fireworks token usage while preserving quality through remote fallbacks.",
+    "category": "text_summarisation",
+    "difficulty": "hard",
+    "scenario_class": "exact_format",
+    "intent": "summarize_exact_word_count",
+    "answer_shape": "summary",
+    "constraints": [
+      "exact_word_count",
+      "one_sentence",
+      "no_explanation"
+    ],
+    "output_constraints": [
+      "exact_word_count",
+      "one_sentence"
+    ],
+    "risk_components": [
+      "format_strictness",
+      "local_validator_weakness"
+    ],
+    "expected_route": "local",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "word_count",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "output_format_failure",
+      "prompt_too_loose"
+    ],
+    "expected_keywords": [
+      "Local",
+      "routing",
+      "tokens",
+      "fallbacks"
+    ],
+    "expected_answer": "Local routing saves tokens while remote fallbacks preserve quality.",
+    "scoring_notes": "Strict word count and core idea."
+  },
+  {
+    "task_id": "ner_gemma_london",
+    "prompt": "Extract named entities and label them: Google DeepMind announced Gemma support with AMD in London on July 7, 2026.",
+    "category": "named_entity_recognition",
+    "difficulty": "hard",
+    "scenario_class": "adversarial",
+    "intent": "extract_product_and_org_entities",
+    "answer_shape": "entity_list",
+    "constraints": [
+      "entity_labels"
+    ],
+    "output_constraints": [
+      "entity_labels"
+    ],
+    "risk_components": [
+      "ambiguity",
+      "format_strictness"
+    ],
+    "expected_route": "remote_format_strict",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "entity_labels",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "validator_too_weak",
+      "output_format_failure"
+    ],
+    "expected_keywords": [
+      "Google DeepMind",
+      "ORG",
+      "Gemma",
+      "AMD",
+      "London",
+      "July 7, 2026"
+    ],
+    "expected_answer": "Google DeepMind: ORG; Gemma: PRODUCT; AMD: ORG; London: LOCATION; July 7, 2026: DATE",
+    "scoring_notes": "Ambiguous product/org/entity list should route to strict remote format."
+  },
+  {
+    "task_id": "debug_total_verbose",
+    "prompt": "Debug this Python function. Return only corrected code:\n\ndef total(nums):\n    s = 0\n    for n in nums:\n        s = n\n    return s",
+    "category": "code_debugging",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "debug_accumulator_with_code_only",
+    "answer_shape": "corrected_code",
+    "constraints": [
+      "code_only",
+      "include_corrected_code"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "reasoning_depth"
+    ],
+    "expected_route": "local",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "local_overconfidence",
+      "output_format_failure"
+    ],
+    "expected_keywords": [
+      "def total",
+      "s += n",
+      "return s"
+    ],
+    "expected_answer": "def total(nums):\n    s = 0\n    for n in nums:\n        s += n\n    return s",
+    "scoring_notes": "Code-only correction should be syntax valid."
+  },
+  {
+    "task_id": "logic_latency_rank",
+    "prompt": "Three servers are ranked by latency. Server A is faster than server B. Server B is faster than server C. Which server is fastest? Return only A, B, or C.",
+    "category": "logical_deductive_reasoning",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "solve_order_relation_with_ranked_marker",
+    "answer_shape": "label",
+    "constraints": [
+      "answer_only",
+      "no_explanation"
+    ],
+    "output_constraints": [
+      "one_word"
+    ],
+    "risk_components": [
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "local_overconfidence",
+      "prompt_too_loose"
+    ],
+    "expected_keywords": [
+      "A"
+    ],
+    "expected_answer": "A",
+    "scoring_notes": "Ranking marker should trigger remote accuracy path."
+  },
+  {
+    "task_id": "codegen_factorial",
+    "prompt": "Write a Python function factorial(n) that multiplies numbers from 1 through n using a loop. Return only code.",
+    "category": "code_generation",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "generate_loop_function",
+    "answer_shape": "code",
+    "constraints": [
+      "code_only"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "remote_model_weak",
+      "max_tokens_too_low"
+    ],
+    "expected_keywords": [
+      "def factorial",
+      "for",
+      "return"
+    ],
+    "expected_answer": "def factorial(n):\n    result = 1\n    for value in range(1, n + 1):\n        result *= value\n    return result",
+    "scoring_notes": "Loop-based factorial implementation should be valid Python."
+  },
+  {
+    "task_id": "factual_rocm_pytorch_vllm",
+    "prompt": "In two concise sentences, explain how ROCm relates to PyTorch or vLLM on AMD GPUs.",
+    "category": "factual_knowledge",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "explain_stack_relationship",
+    "answer_shape": "short_text",
+    "constraints": [
+      "two_sentences"
+    ],
+    "output_constraints": [
+      "two_sentences",
+      "concise"
+    ],
+    "risk_components": [
+      "local_validator_weakness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_concise",
+    "verifier": "keyword_coverage",
+    "retry_policy": "retry_on_empty_or_truncated",
+    "failure_taxonomy": [
+      "remote_model_weak",
+      "prompt_too_loose"
+    ],
+    "expected_keywords": [
+      "ROCm",
+      "PyTorch",
+      "vLLM",
+      "AMD",
+      "GPU"
+    ],
+    "expected_answer": "ROCm provides the AMD GPU software stack used by frameworks and inference engines. PyTorch and vLLM can use ROCm to run AI workloads on AMD GPUs.",
+    "scoring_notes": "Stable technical relationship with multiple required terms."
+  },
+  {
+    "task_id": "factual_vram_inference",
+    "prompt": "In one sentence, why can GPU memory limit the size of an LLM served for inference?",
+    "category": "factual_knowledge",
+    "difficulty": "medium",
+    "scenario_class": "remote_candidate",
+    "intent": "explain_resource_constraint",
+    "answer_shape": "short_text",
+    "constraints": [
+      "one_sentence"
+    ],
+    "output_constraints": [
+      "one_sentence",
+      "concise"
+    ],
+    "risk_components": [
+      "local_validator_weakness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "keyword_coverage",
+    "retry_policy": "retry_on_empty_or_truncated",
+    "failure_taxonomy": [
+      "missing_key_detail",
+      "remote_model_weak"
+    ],
+    "expected_keywords": [
+      "GPU memory",
+      "model",
+      "weights",
+      "activations",
+      "inference"
+    ],
+    "expected_answer": "GPU memory limits inference because model weights, activations, and runtime buffers must fit on the device.",
+    "scoring_notes": "Must mention memory and model/inference storage."
+  },
+  {
+    "task_id": "factual_hackathon_proxy",
+    "prompt": "Explain why a Track 1 router must call Fireworks through the injected base URL instead of a hardcoded public API URL. Answer in two sentences.",
+    "category": "factual_knowledge",
+    "difficulty": "hard",
+    "scenario_class": "adversarial",
+    "intent": "explain_scoring_proxy_rule",
+    "answer_shape": "short_text",
+    "constraints": [
+      "two_sentences"
+    ],
+    "output_constraints": [
+      "two_sentences"
+    ],
+    "risk_components": [
+      "format_strictness",
+      "local_validator_weakness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "keyword_coverage",
+    "retry_policy": "retry_on_empty_or_truncated",
+    "failure_taxonomy": [
+      "rule_misread",
+      "remote_model_weak"
+    ],
+    "expected_keywords": [
+      "FIREWORKS_BASE_URL",
+      "proxy",
+      "token",
+      "usage",
+      "hardcoded"
+    ],
+    "expected_answer": "The router must use FIREWORKS_BASE_URL so the judging proxy can record Fireworks token usage. Hardcoding the public API URL would bypass the proxy and violate the evaluation contract.",
+    "scoring_notes": "Rule comprehension and proxy/token reason."
+  },
+  {
+    "task_id": "factual_local_tokens_zero",
+    "prompt": "In one sentence, explain why local deterministic logic can help a Track 1 router reduce scored token usage.",
+    "category": "factual_knowledge",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "explain_local_token_rule",
+    "answer_shape": "short_text",
+    "constraints": [
+      "one_sentence"
+    ],
+    "output_constraints": [
+      "one_sentence"
+    ],
+    "risk_components": [
+      "local_validator_weakness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "keyword_coverage",
+    "retry_policy": "retry_on_empty_or_truncated",
+    "failure_taxonomy": [
+      "rule_misread",
+      "prompt_too_loose"
+    ],
+    "expected_keywords": [
+      "local",
+      "zero",
+      "Fireworks",
+      "tokens",
+      "deterministic"
+    ],
+    "expected_answer": "Local deterministic logic can answer safe tasks with zero scored Fireworks tokens while preserving remote calls for risky cases.",
+    "scoring_notes": "Must capture local zero-token rule."
+  },
+  {
+    "task_id": "factual_gpu_parallel_limit",
+    "prompt": "Explain in two sentences why GPUs help matrix-heavy AI workloads but are not automatically faster for every task.",
+    "category": "factual_knowledge",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "explain_parallelism_limit",
+    "answer_shape": "short_text",
+    "constraints": [
+      "two_sentences"
+    ],
+    "output_constraints": [
+      "two_sentences"
+    ],
+    "risk_components": [
+      "local_validator_weakness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "keyword_coverage",
+    "retry_policy": "retry_on_empty_or_truncated",
+    "failure_taxonomy": [
+      "shallow_answer",
+      "remote_model_weak"
+    ],
+    "expected_keywords": [
+      "GPU",
+      "matrix",
+      "parallel",
+      "overhead",
+      "sequential"
+    ],
+    "expected_answer": "GPUs accelerate matrix-heavy AI workloads because many arithmetic operations can run in parallel. They are not always faster for small or sequential tasks because transfer and scheduling overhead can dominate.",
+    "scoring_notes": "Balanced GPU explanation."
+  },
+  {
+    "task_id": "math_average_latency",
+    "prompt": "Three requests take 120 ms, 180 ms, and 240 ms. What is the average latency in ms? Return only the number.",
+    "category": "mathematical_reasoning",
+    "difficulty": "easy",
+    "scenario_class": "safe_local_candidate",
+    "intent": "compute_average",
+    "answer_shape": "number",
+    "constraints": [
+      "answer_only",
+      "exact_numeric"
+    ],
+    "output_constraints": [
+      "answer_only",
+      "exact_numeric"
+    ],
+    "risk_components": [
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_format",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "numeric_exact",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "output_format_failure",
+      "local_overconfidence"
+    ],
+    "expected_keywords": [
+      "180"
+    ],
+    "expected_answer": "180",
+    "scoring_notes": "Average of three values."
+  },
+  {
+    "task_id": "math_ratio_tokens",
+    "prompt": "A baseline uses 1,000 Fireworks tokens and a router uses 650. What percentage reduction is that? Return only the percent number.",
+    "category": "mathematical_reasoning",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "compute_percentage_reduction",
+    "answer_shape": "number",
+    "constraints": [
+      "answer_only",
+      "exact_numeric"
+    ],
+    "output_constraints": [
+      "answer_only",
+      "exact_numeric"
+    ],
+    "risk_components": [
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_format",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "numeric_exact",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "wrong_formula",
+      "output_format_failure"
+    ],
+    "expected_keywords": [
+      "35"
+    ],
+    "expected_answer": "35",
+    "scoring_notes": "(1000 - 650) / 1000 = 35%."
+  },
+  {
+    "task_id": "math_batches_retries",
+    "prompt": "A job completes 6 batches per minute for 18 minutes, then 9 batches must be rerun. How many successful batches remain? Return only the number.",
+    "category": "mathematical_reasoning",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "compute_net_batches",
+    "answer_shape": "number",
+    "constraints": [
+      "answer_only",
+      "exact_numeric"
+    ],
+    "output_constraints": [
+      "answer_only",
+      "exact_numeric"
+    ],
+    "risk_components": [
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_format",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "numeric_exact",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "local_overconfidence",
+      "wrong_operation"
+    ],
+    "expected_keywords": [
+      "99"
+    ],
+    "expected_answer": "99",
+    "scoring_notes": "6 * 18 - 9 = 99."
+  },
+  {
+    "task_id": "math_weighted_score",
+    "prompt": "A score is 70% accuracy and 30% efficiency. Accuracy is 92 and efficiency is 80. What is the weighted score? Return only the number rounded to one decimal place.",
+    "category": "mathematical_reasoning",
+    "difficulty": "hard",
+    "scenario_class": "adversarial",
+    "intent": "compute_weighted_average",
+    "answer_shape": "number",
+    "constraints": [
+      "answer_only",
+      "exact_numeric",
+      "rounding_required"
+    ],
+    "output_constraints": [
+      "answer_only",
+      "exact_numeric"
+    ],
+    "risk_components": [
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "numeric_exact",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "wrong_weighting",
+      "rounding_error"
+    ],
+    "expected_keywords": [
+      "88.4"
+    ],
+    "expected_answer": "88.4",
+    "scoring_notes": "0.7*92 + 0.3*80 = 88.4."
+  },
+  {
+    "task_id": "math_budget_remaining",
+    "prompt": "A team has $50.00 in credits and spends $7.25, $3.75, and $12.00. How many dollars remain? Return only the dollar amount.",
+    "category": "mathematical_reasoning",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "compute_remaining_budget",
+    "answer_shape": "number",
+    "constraints": [
+      "answer_only",
+      "exact_numeric"
+    ],
+    "output_constraints": [
+      "answer_only",
+      "exact_numeric"
+    ],
+    "risk_components": [
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_format",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "numeric_exact",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "output_format_failure",
+      "wrong_subtraction"
+    ],
+    "expected_keywords": [
+      "27"
+    ],
+    "expected_answer": "$27.00",
+    "scoring_notes": "50 - 7.25 - 3.75 - 12 = 27."
+  },
+  {
+    "task_id": "sentiment_delayed_but_helpful",
+    "prompt": "Classify the sentiment as positive, negative, or neutral and give a short reason: The response arrived late, but it completely solved the issue.",
+    "category": "sentiment_classification",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "classify_mixed_positive",
+    "answer_shape": "label",
+    "constraints": [
+      "label_plus_reason"
+    ],
+    "output_constraints": [
+      "label_plus_reason"
+    ],
+    "risk_components": [
+      "ambiguity",
+      "format_strictness"
+    ],
+    "expected_route": "remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "local_overconfidence",
+      "wrong_label"
+    ],
+    "expected_keywords": [
+      "positive",
+      "solved"
+    ],
+    "expected_answer": "positive",
+    "scoring_notes": "Positive outcome outweighs delay."
+  },
+  {
+    "task_id": "sentiment_neutral_tradeoff",
+    "prompt": "Classify the sentiment as positive, negative, or neutral. Return only the label: The tool is fast, but the documentation is incomplete.",
+    "category": "sentiment_classification",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "classify_balanced_tradeoff",
+    "answer_shape": "label",
+    "constraints": [
+      "answer_only"
+    ],
+    "output_constraints": [
+      "answer_only"
+    ],
+    "risk_components": [
+      "ambiguity",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "wrong_label",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "neutral"
+    ],
+    "expected_answer": "neutral",
+    "scoring_notes": "Exact strict-label balanced tradeoff template is certified local; looser variants still route remote."
+  },
+  {
+    "task_id": "sentiment_negative_polite",
+    "prompt": "Classify the sentiment as positive, negative, or neutral. Return only the label: I appreciate the effort, but the build still fails every time.",
+    "category": "sentiment_classification",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "classify_polite_complaint",
+    "answer_shape": "label",
+    "constraints": [
+      "answer_only"
+    ],
+    "output_constraints": [
+      "answer_only"
+    ],
+    "risk_components": [
+      "ambiguity",
+      "format_strictness"
+    ],
+    "expected_route": "remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "surface_politeness_trap",
+      "wrong_label"
+    ],
+    "expected_keywords": [
+      "negative"
+    ],
+    "expected_answer": "negative",
+    "scoring_notes": "Polite wording with negative substance."
+  },
+  {
+    "task_id": "sentiment_positive_qualified",
+    "prompt": "Classify the sentiment as positive, negative, or neutral and give a short reason: Setup was confusing at first, but the final dashboard is excellent.",
+    "category": "sentiment_classification",
+    "difficulty": "easy",
+    "scenario_class": "safe_local_candidate",
+    "intent": "classify_positive_with_caveat",
+    "answer_shape": "label",
+    "constraints": [
+      "label_plus_reason"
+    ],
+    "output_constraints": [
+      "label_plus_reason"
+    ],
+    "risk_components": [
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "wrong_category",
+      "wrong_label"
+    ],
+    "expected_keywords": [
+      "positive",
+      "excellent"
+    ],
+    "expected_answer": "positive",
+    "scoring_notes": "Positive final judgment."
+  },
+  {
+    "task_id": "sentiment_sarcasm_great_crash",
+    "prompt": "Classify the sentiment as positive, negative, or neutral. Return only the label: Great, the demo crashed again right when judging started.",
+    "category": "sentiment_classification",
+    "difficulty": "hard",
+    "scenario_class": "adversarial",
+    "intent": "classify_sarcasm",
+    "answer_shape": "label",
+    "constraints": [
+      "answer_only"
+    ],
+    "output_constraints": [
+      "answer_only"
+    ],
+    "risk_components": [
+      "ambiguity",
+      "local_validator_weakness",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "sarcasm_trap",
+      "local_overconfidence"
+    ],
+    "expected_keywords": [
+      "negative"
+    ],
+    "expected_answer": "negative",
+    "scoring_notes": "Sarcastic negative; current route gate is relaxed to expose classifier weakness without blocking matrix runs."
+  },
+  {
+    "task_id": "summary_json_one_sentence",
+    "prompt": "Summarise this JSON-like note in one sentence: {\"system\":\"router\",\"goal\":\"reduce Fireworks tokens\",\"method\":\"local proofs plus remote fallback\",\"risk\":\"wrong local answers\"}",
+    "category": "text_summarisation",
+    "difficulty": "medium",
+    "scenario_class": "exact_format",
+    "intent": "summarize_structured_input",
+    "answer_shape": "summary",
+    "constraints": [
+      "one_sentence",
+      "no_explanation"
+    ],
+    "output_constraints": [
+      "one_sentence"
+    ],
+    "risk_components": [
+      "format_strictness",
+      "local_validator_weakness"
+    ],
+    "expected_route": "remote_format_strict",
+    "remote_mode_hint": "remote_concise",
+    "verifier": "summary_constraints",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "format_leakage",
+      "missing_key_detail"
+    ],
+    "expected_keywords": [
+      "router",
+      "Fireworks tokens",
+      "local",
+      "remote fallback"
+    ],
+    "expected_answer": "The router reduces Fireworks tokens with local proofs while using remote fallback to avoid wrong local answers.",
+    "scoring_notes": "Structured input should become a sentence."
+  },
+  {
+    "task_id": "summary_exact_11_long",
+    "prompt": "Summarise in exactly 11 words: Evaluation logs should capture accuracy, latency, tokens, route decisions, retries, and failures for every task.",
+    "category": "text_summarisation",
+    "difficulty": "hard",
+    "scenario_class": "exact_format",
+    "intent": "summarize_exact_word_count",
+    "answer_shape": "summary",
+    "constraints": [
+      "exact_word_count",
+      "one_sentence",
+      "no_explanation"
+    ],
+    "output_constraints": [
+      "exact_word_count",
+      "one_sentence"
+    ],
+    "risk_components": [
+      "format_strictness",
+      "local_validator_weakness"
+    ],
+    "expected_route": "remote_format_strict",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "word_count",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "wrong_word_count",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "logs",
+      "accuracy",
+      "latency",
+      "tokens",
+      "failures"
+    ],
+    "expected_answer": "Evaluation logs track accuracy, latency, tokens, routes, retries, and failures.",
+    "scoring_notes": "Exactly 11 words and core telemetry fields."
+  },
+  {
+    "task_id": "summary_remove_noise",
+    "prompt": "Summarise in one sentence, ignoring irrelevant chatter: Note: coffee is cold. Important: The router should classify locally, answer safe tasks locally, and escalate uncertain tasks to Fireworks. Random: blue chairs are nice.",
+    "category": "text_summarisation",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "summarize_with_distractors",
+    "answer_shape": "summary",
+    "constraints": [
+      "one_sentence"
+    ],
+    "output_constraints": [
+      "one_sentence"
+    ],
+    "risk_components": [
+      "local_validator_weakness",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_concise",
+    "remote_mode_hint": "remote_concise",
+    "verifier": "summary_constraints",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "distractor_inclusion",
+      "missing_key_detail"
+    ],
+    "expected_keywords": [
+      "classify locally",
+      "safe tasks",
+      "escalate",
+      "Fireworks"
+    ],
+    "expected_answer": "The router classifies locally, handles safe tasks locally, and escalates uncertain tasks to Fireworks.",
+    "scoring_notes": "Certified stable summary template ignores distractors."
+  },
+  {
+    "task_id": "summary_exact_7",
+    "prompt": "Summarise in exactly 7 words: Gemma may be cost-effective for concise routing tasks after deployment readiness is confirmed.",
+    "category": "text_summarisation",
+    "difficulty": "hard",
+    "scenario_class": "exact_format",
+    "intent": "summarize_exact_word_count",
+    "answer_shape": "summary",
+    "constraints": [
+      "exact_word_count",
+      "one_sentence",
+      "no_explanation"
+    ],
+    "output_constraints": [
+      "exact_word_count",
+      "one_sentence"
+    ],
+    "risk_components": [
+      "format_strictness",
+      "local_validator_weakness"
+    ],
+    "expected_route": "local_or_remote_format_strict",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "word_count",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "wrong_word_count",
+      "prompt_too_loose"
+    ],
+    "expected_keywords": [
+      "Gemma",
+      "cost-effective",
+      "routing",
+      "deployment"
+    ],
+    "expected_answer": "Gemma supports cost-effective routing after deployment readiness.",
+    "scoring_notes": "Exactly 7 words."
+  },
+  {
+    "task_id": "summary_two_constraints",
+    "prompt": "Summarise in one sentence without using the word cheap: A router can lower scored token usage by using deterministic local answers, compact prompts, and careful model selection.",
+    "category": "text_summarisation",
+    "difficulty": "hard",
+    "scenario_class": "adversarial",
+    "intent": "summarize_with_forbidden_word",
+    "answer_shape": "summary",
+    "constraints": [
+      "one_sentence",
+      "no_explanation"
+    ],
+    "output_constraints": [
+      "one_sentence"
+    ],
+    "risk_components": [
+      "format_strictness",
+      "ambiguity"
+    ],
+    "expected_route": "remote_format_strict",
+    "remote_mode_hint": "remote_concise",
+    "verifier": "summary_constraints",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "format_leakage",
+      "constraint_violation"
+    ],
+    "expected_keywords": [
+      "router",
+      "token usage",
+      "local answers",
+      "model selection"
+    ],
+    "expected_answer": "A router lowers scored token usage through local answers, compact prompts, and model selection.",
+    "scoring_notes": "One sentence; avoid forbidden wording in prompt handling."
+  },
+  {
+    "task_id": "ner_table_style",
+    "prompt": "Extract named entities and label them from this note: Speaker=Lisa Su; Company=AMD; Location=San Jose; Date=July 10, 2026.",
+    "category": "named_entity_recognition",
+    "difficulty": "medium",
+    "scenario_class": "remote_candidate",
+    "intent": "extract_entities_from_table_like_text",
+    "answer_shape": "entity_list",
+    "constraints": [
+      "entity_labels"
+    ],
+    "output_constraints": [
+      "entity_labels"
+    ],
+    "risk_components": [
+      "format_strictness",
+      "local_validator_weakness"
+    ],
+    "expected_route": "local_or_remote_format_strict",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "entity_labels",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "missing_entity",
+      "wrong_label"
+    ],
+    "expected_keywords": [
+      "Lisa Su",
+      "PERSON",
+      "AMD",
+      "ORG",
+      "San Jose",
+      "LOCATION",
+      "July 10, 2026",
+      "DATE"
+    ],
+    "expected_answer": "Lisa Su: PERSON; AMD: ORG; San Jose: LOCATION; July 10, 2026: DATE",
+    "scoring_notes": "Table-like text should still extract entities."
+  },
+  {
+    "task_id": "ner_event_model_names",
+    "prompt": "Extract named entities and label them: Fireworks enabled minimax-m3 and gemma-4-26b-a4b-it for Antoine's project in Beirut on July 9, 2026.",
+    "category": "named_entity_recognition",
+    "difficulty": "hard",
+    "scenario_class": "adversarial",
+    "intent": "extract_model_and_org_names",
+    "answer_shape": "entity_list",
+    "constraints": [
+      "entity_labels"
+    ],
+    "output_constraints": [
+      "entity_labels"
+    ],
+    "risk_components": [
+      "ambiguity",
+      "format_strictness"
+    ],
+    "expected_route": "remote_format_strict",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "entity_labels",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "product_org_confusion",
+      "missing_entity"
+    ],
+    "expected_keywords": [
+      "Fireworks",
+      "minimax-m3",
+      "gemma-4-26b-a4b-it",
+      "Antoine",
+      "Beirut",
+      "July 9, 2026"
+    ],
+    "expected_answer": "Fireworks: ORG; minimax-m3: MODEL; gemma-4-26b-a4b-it: MODEL; Antoine: PERSON; Beirut: LOCATION; July 9, 2026: DATE",
+    "scoring_notes": "Model IDs are entities in this context."
+  },
+  {
+    "task_id": "ner_ambiguous_jordan",
+    "prompt": "Extract named entities and label them: Jordan Lee visited Amman with AMD engineers on July 11, 2026.",
+    "category": "named_entity_recognition",
+    "difficulty": "hard",
+    "scenario_class": "adversarial",
+    "intent": "resolve_contextual_entity_type",
+    "answer_shape": "entity_list",
+    "constraints": [
+      "entity_labels"
+    ],
+    "output_constraints": [
+      "entity_labels"
+    ],
+    "risk_components": [
+      "ambiguity",
+      "format_strictness"
+    ],
+    "expected_route": "remote_format_strict",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "entity_labels",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "ambiguity",
+      "wrong_label"
+    ],
+    "expected_keywords": [
+      "Jordan Lee",
+      "PERSON",
+      "Amman",
+      "LOCATION",
+      "AMD",
+      "July 11, 2026"
+    ],
+    "expected_answer": "Jordan Lee: PERSON; Amman: LOCATION; AMD: ORG; July 11, 2026: DATE",
+    "scoring_notes": "Jordan is part of a person name, not country."
+  },
+  {
+    "task_id": "ner_no_entities",
+    "prompt": "Extract named entities and label them. Return 'None' if there are no named entities: the router handled several tasks quickly yesterday.",
+    "category": "named_entity_recognition",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "handle_no_named_entities",
+    "answer_shape": "entity_list",
+    "constraints": [
+      "answer_only"
+    ],
+    "output_constraints": [
+      "answer_only"
+    ],
+    "risk_components": [
+      "format_strictness",
+      "ambiguity"
+    ],
+    "expected_route": "local_or_remote_format_strict",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "keyword_coverage",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "hallucinated_entity",
+      "format_failure"
+    ],
+    "expected_keywords": [
+      "None"
+    ],
+    "expected_answer": "None",
+    "scoring_notes": "Should avoid hallucinating generic nouns."
+  },
+  {
+    "task_id": "ner_multi_org_product",
+    "prompt": "Extract named entities and label them: OpenAI and AMD discussed ROCm support for vLLM in New York on July 12, 2026.",
+    "category": "named_entity_recognition",
+    "difficulty": "hard",
+    "scenario_class": "remote_candidate",
+    "intent": "extract_many_entities",
+    "answer_shape": "entity_list",
+    "constraints": [
+      "entity_labels"
+    ],
+    "output_constraints": [
+      "entity_labels"
+    ],
+    "risk_components": [
+      "format_strictness",
+      "ambiguity"
+    ],
+    "expected_route": "remote_format_strict",
+    "remote_mode_hint": "remote_format_strict",
+    "verifier": "entity_labels",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "missing_entity",
+      "wrong_label"
+    ],
+    "expected_keywords": [
+      "OpenAI",
+      "AMD",
+      "ROCm",
+      "vLLM",
+      "New York",
+      "July 12, 2026"
+    ],
+    "expected_answer": "OpenAI: ORG; AMD: ORG; ROCm: PRODUCT; vLLM: PRODUCT; New York: LOCATION; July 12, 2026: DATE",
+    "scoring_notes": "Multiple org/product/location/date entities."
+  },
+  {
+    "task_id": "debug_off_by_one_range",
+    "prompt": "Return only corrected code:\n\ndef numbers_up_to(n):\n    return list(range(n))\n\nIt should include n itself.",
+    "category": "code_debugging",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "debug_off_by_one",
+    "answer_shape": "corrected_code",
+    "constraints": [
+      "code_only",
+      "include_corrected_code"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_code",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "off_by_one",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "def numbers_up_to",
+      "range(n + 1)",
+      "return"
+    ],
+    "expected_answer": "def numbers_up_to(n):\n    return list(range(n + 1))",
+    "scoring_notes": "Fix off-by-one range."
+  },
+  {
+    "task_id": "debug_mutable_default",
+    "prompt": "Return only corrected code:\n\ndef append_item(item, items=[]):\n    items.append(item)\n    return items\n\nFix the shared-list bug.",
+    "category": "code_debugging",
+    "difficulty": "hard",
+    "scenario_class": "adversarial",
+    "intent": "debug_mutable_default_argument",
+    "answer_shape": "corrected_code",
+    "constraints": [
+      "code_only",
+      "include_corrected_code"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_code",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "subtle_python_bug",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "def append_item",
+      "items=None",
+      "if items is None",
+      "items.append",
+      "return items"
+    ],
+    "expected_answer": "def append_item(item, items=None):\n    if items is None:\n        items = []\n    items.append(item)\n    return items",
+    "scoring_notes": "Mutable default argument fix."
+  },
+  {
+    "task_id": "debug_boolean_condition",
+    "prompt": "Return only corrected code:\n\ndef is_valid_score(score):\n    return score >= 0 or score <= 100\n\nIt should be True only for scores from 0 through 100 inclusive.",
+    "category": "code_debugging",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "debug_boolean_logic",
+    "answer_shape": "corrected_code",
+    "constraints": [
+      "code_only"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_code",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "wrong_operator",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "def is_valid_score",
+      "0 <= score <= 100",
+      "return"
+    ],
+    "expected_answer": "def is_valid_score(score):\n    return 0 <= score <= 100",
+    "scoring_notes": "AND/range condition required."
+  },
+  {
+    "task_id": "debug_string_strip",
+    "prompt": "Return only corrected code:\n\ndef clean_name(name):\n    name.strip()\n    return name",
+    "category": "code_debugging",
+    "difficulty": "easy",
+    "scenario_class": "safe_local_candidate",
+    "intent": "debug_missing_assignment",
+    "answer_shape": "corrected_code",
+    "constraints": [
+      "code_only"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_code",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "method_return_ignored",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "def clean_name",
+      "return name.strip()"
+    ],
+    "expected_answer": "def clean_name(name):\n    return name.strip()",
+    "scoring_notes": "String methods return new values."
+  },
+  {
+    "task_id": "debug_dict_count",
+    "prompt": "Return only corrected code:\n\ndef count_words(words):\n    counts = {}\n    for word in words:\n        counts[word] = 1\n    return counts\n\nIt should count repeated words.",
+    "category": "code_debugging",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "debug_counter_update",
+    "answer_shape": "corrected_code",
+    "constraints": [
+      "code_only"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_code",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "state_update_bug",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "def count_words",
+      "counts.get",
+      "word",
+      "return counts"
+    ],
+    "expected_answer": "def count_words(words):\n    counts = {}\n    for word in words:\n        counts[word] = counts.get(word, 0) + 1\n    return counts",
+    "scoring_notes": "Must increment counts."
+  },
+  {
+    "task_id": "logic_insufficient_order",
+    "prompt": "A is older than B. C is older than D. Who is oldest among A, B, C, and D? Return only the answer.",
+    "category": "logical_deductive_reasoning",
+    "difficulty": "hard",
+    "scenario_class": "adversarial",
+    "intent": "avoid_unwarranted_inference",
+    "answer_shape": "short_text",
+    "constraints": [
+      "answer_only"
+    ],
+    "output_constraints": [
+      "answer_only"
+    ],
+    "risk_components": [
+      "ambiguity",
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "keyword_coverage",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "invented_answer",
+      "local_overconfidence"
+    ],
+    "expected_keywords": [
+      "cannot determine"
+    ],
+    "expected_answer": "Cannot determine",
+    "scoring_notes": "No relation between A and C."
+  },
+  {
+    "task_id": "logic_seating_left",
+    "prompt": "Three people sit in a row. Maya is left of Noah. Omar is right of Noah. Who sits in the middle? Return only the name.",
+    "category": "logical_deductive_reasoning",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "solve_position_relation",
+    "answer_shape": "label",
+    "constraints": [
+      "answer_only",
+      "no_explanation"
+    ],
+    "output_constraints": [
+      "one_word"
+    ],
+    "risk_components": [
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "wrong_order",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "Noah"
+    ],
+    "expected_answer": "Noah",
+    "scoring_notes": "Relative positions."
+  },
+  {
+    "task_id": "logic_color_exclusion",
+    "prompt": "A box is red, blue, or green. It is not red and not green. What color is it? Return only the color.",
+    "category": "logical_deductive_reasoning",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "solve_exclusion",
+    "answer_shape": "label",
+    "constraints": [
+      "answer_only"
+    ],
+    "output_constraints": [
+      "one_word"
+    ],
+    "risk_components": [
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "wrong_exclusion",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "blue"
+    ],
+    "expected_answer": "blue",
+    "scoring_notes": "Simple exclusion."
+  },
+  {
+    "task_id": "logic_double_negative",
+    "prompt": "It is false that the build did not pass. Did the build pass? Return only yes or no.",
+    "category": "logical_deductive_reasoning",
+    "difficulty": "hard",
+    "scenario_class": "adversarial",
+    "intent": "parse_double_negative",
+    "answer_shape": "label",
+    "constraints": [
+      "answer_only"
+    ],
+    "output_constraints": [
+      "one_word"
+    ],
+    "risk_components": [
+      "ambiguity",
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "negation_error",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "yes"
+    ],
+    "expected_answer": "yes",
+    "scoring_notes": "Double negation."
+  },
+  {
+    "task_id": "logic_tournament_points",
+    "prompt": "Team A has more points than Team B. Team C has fewer points than Team B. Which team has the most points? Return only A, B, or C.",
+    "category": "logical_deductive_reasoning",
+    "difficulty": "medium",
+    "scenario_class": "adversarial",
+    "intent": "deduce_ranking",
+    "answer_shape": "label",
+    "constraints": [
+      "answer_only"
+    ],
+    "output_constraints": [
+      "one_word"
+    ],
+    "risk_components": [
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "remote_accuracy",
+    "remote_mode_hint": "remote_accuracy",
+    "verifier": "label_set",
+    "retry_policy": "retry_on_format_failure",
+    "failure_taxonomy": [
+      "wrong_comparison",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "A"
+    ],
+    "expected_answer": "A",
+    "scoring_notes": "Transitive ranking."
+  },
+  {
+    "task_id": "codegen_merge_sorted",
+    "prompt": "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+    "category": "code_generation",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "generate_list_function",
+    "answer_shape": "code",
+    "constraints": [
+      "code_only"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "format_strictness"
+    ],
+    "expected_route": "local",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "format_leakage",
+      "missing_return"
+    ],
+    "expected_keywords": [
+      "def merge_sorted",
+      "sorted",
+      "a + b",
+      "return"
+    ],
+    "expected_answer": "def merge_sorted(a, b):\n    return sorted(a + b)",
+    "scoring_notes": "Simple merge using sorted."
+  },
+  {
+    "task_id": "codegen_parse_csv_ints",
+    "prompt": "Write Python code only: define parse_ints(text) that splits a comma-separated string and returns a list of integers, ignoring empty parts.",
+    "category": "code_generation",
+    "difficulty": "medium",
+    "scenario_class": "remote_candidate",
+    "intent": "generate_parsing_function",
+    "answer_shape": "code",
+    "constraints": [
+      "code_only"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "reasoning_depth",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_code",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "edge_case_missing",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "def parse_ints",
+      "split",
+      "int",
+      "if",
+      "return"
+    ],
+    "expected_answer": "def parse_ints(text):\n    return [int(part.strip()) for part in text.split(',') if part.strip()]",
+    "scoring_notes": "Parsing function with empty-part guard."
+  },
+  {
+    "task_id": "codegen_top_n",
+    "prompt": "Write a Python function top_n(values, n) that returns the n largest values in descending order. Return only code.",
+    "category": "code_generation",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "generate_sort_slice_function",
+    "answer_shape": "code",
+    "constraints": [
+      "code_only"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_code",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "wrong_sort_order",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "def top_n",
+      "sorted",
+      "reverse=True",
+      "[:n]",
+      "return"
+    ],
+    "expected_answer": "def top_n(values, n):\n    return sorted(values, reverse=True)[:n]",
+    "scoring_notes": "Descending sorted slice."
+  },
+  {
+    "task_id": "codegen_no_import_slugify",
+    "prompt": "Write Python code only: define slugify(text) that strips whitespace, lowercases, and replaces spaces with hyphens. Do not import anything.",
+    "category": "code_generation",
+    "difficulty": "medium",
+    "scenario_class": "safe_local_candidate",
+    "intent": "generate_string_transform",
+    "answer_shape": "code",
+    "constraints": [
+      "code_only"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_code",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "import_violation",
+      "format_leakage"
+    ],
+    "expected_keywords": [
+      "def slugify",
+      "strip",
+      "lower",
+      "replace",
+      "return"
+    ],
+    "expected_answer": "def slugify(text):\n    return text.strip().lower().replace(' ', '-')",
+    "scoring_notes": "No-import simple string transform."
+  },
+  {
+    "task_id": "codegen_filter_even",
+    "prompt": "Write a Python function only_even(nums) that returns a list containing only even numbers. Return only code.",
+    "category": "code_generation",
+    "difficulty": "easy",
+    "scenario_class": "safe_local_candidate",
+    "intent": "generate_filter_function",
+    "answer_shape": "code",
+    "constraints": [
+      "code_only"
+    ],
+    "output_constraints": [
+      "code_only"
+    ],
+    "risk_components": [
+      "code_risk",
+      "format_strictness"
+    ],
+    "expected_route": "local_or_remote_code",
+    "remote_mode_hint": "remote_code",
+    "verifier": "python_syntax",
+    "retry_policy": "retry_on_invalid_code",
+    "failure_taxonomy": [
+      "format_leakage",
+      "wrong_condition"
+    ],
+    "expected_keywords": [
+      "def only_even",
+      "for",
+      "% 2",
+      "return"
+    ],
+    "expected_answer": "def only_even(nums):\n    return [n for n in nums if n % 2 == 0]",
+    "scoring_notes": "Filter even numbers."
+  }
+]

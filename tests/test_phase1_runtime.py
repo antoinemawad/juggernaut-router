@@ -12,7 +12,7 @@ from app.classifier import classify_prompt
 from app.config import DEFAULT_ALLOWED_PLANNING_MODELS, RuntimeConfig, parse_allowed_models
 from app.deadline import DeadlineManager
 from app.fireworks_client import allowed_model_candidates, ask_fireworks_structured, provider_model_for_dev, select_allowed_model
-from app.local_model_client import _bounded_local_max_tokens
+from app.local_model_client import _bounded_local_max_tokens, ask_local_model_structured
 from app.local_llm import _extract_text, _format_messages
 from app.main import load_tasks, main
 from app.normalization import normalize_answer
@@ -95,6 +95,66 @@ class Phase1RuntimeTests(unittest.TestCase):
         )
         self.assertTrue(all(task.get("task_id") and task.get("prompt") for task in tasks))
 
+    def test_extensive_track1_fixture_covers_complexity_matrix(self):
+        path = Path(__file__).resolve().parents[1] / "local_test" / "track1_extensive_input" / "tasks.json"
+        tasks = json.loads(path.read_text(encoding="utf-8"))
+
+        categories = {}
+        difficulties = {}
+        scenario_classes = {}
+        answer_shapes = {}
+        for task in tasks:
+            categories[task["category"]] = categories.get(task["category"], 0) + 1
+            difficulties[task["difficulty"]] = difficulties.get(task["difficulty"], 0) + 1
+            scenario_classes[task["scenario_class"]] = scenario_classes.get(task["scenario_class"], 0) + 1
+            answer_shapes[task["answer_shape"]] = answer_shapes.get(task["answer_shape"], 0) + 1
+
+        self.assertEqual(len(tasks), 64)
+        self.assertEqual(
+            categories,
+            {
+                "factual_knowledge": 8,
+                "mathematical_reasoning": 8,
+                "sentiment_classification": 8,
+                "text_summarisation": 8,
+                "named_entity_recognition": 8,
+                "code_debugging": 8,
+                "logical_deductive_reasoning": 8,
+                "code_generation": 8,
+            },
+        )
+        self.assertEqual(difficulties, {"easy": 12, "medium": 36, "hard": 16})
+        self.assertEqual(
+            scenario_classes,
+            {
+                "safe_local_candidate": 27,
+                "adversarial": 27,
+                "exact_format": 5,
+                "remote_candidate": 5,
+            },
+        )
+        self.assertEqual(
+            answer_shapes,
+            {
+                "short_text": 9,
+                "number": 8,
+                "label": 15,
+                "summary": 8,
+                "entity_list": 8,
+                "corrected_code": 8,
+                "code": 8,
+            },
+        )
+        self.assertTrue(
+            all(
+                task.get("task_id")
+                and task.get("prompt")
+                and task.get("verifier")
+                and "expected_answer" in task
+                for task in tasks
+            )
+        )
+
     def test_model_access_classifier_categorizes_plain_404_as_no_access(self):
         self.assertEqual(
             classify_access_error("HTTPError: HTTP Error 404: Not Found body={\"code\":\"NOT_FOUND\"}"),
@@ -176,10 +236,13 @@ class Phase1RuntimeTests(unittest.TestCase):
             dockerfile,
         )
         self.assertIn("ARG LOCAL_MODEL_FILENAME=local-model.gguf", dockerfile)
+        self.assertIn("ARG LOCAL_MODEL_PATH_BY_CATEGORY=", dockerfile)
+        self.assertIn("ARG LOCAL_MODEL_CATEGORIES=sentiment_classification,text_summarisation", dockerfile)
         self.assertIn("LOCAL_MODEL_ENABLED=${ENABLE_LOCAL_MODEL}", dockerfile)
         self.assertIn("LOCAL_MODEL_PATH=/app/models/${LOCAL_MODEL_FILENAME}", dockerfile)
+        self.assertIn("LOCAL_MODEL_PATH_BY_CATEGORY=${LOCAL_MODEL_PATH_BY_CATEGORY}", dockerfile)
         self.assertIn("LOCAL_MODEL_BATCH_LIMIT=6", dockerfile)
-        self.assertIn("LOCAL_MODEL_CATEGORIES=sentiment_classification,text_summarisation", dockerfile)
+        self.assertIn("LOCAL_MODEL_CATEGORIES=${LOCAL_MODEL_CATEGORIES}", dockerfile)
         self.assertIn("LOCAL_MODEL_MAX_TOKENS=128", dockerfile)
         self.assertIn("LOCAL_MODEL_CONTEXT=1024", dockerfile)
         self.assertIn("LOCAL_MODEL_THREADS=2", dockerfile)
@@ -189,6 +252,7 @@ class Phase1RuntimeTests(unittest.TestCase):
 
     def test_dockerfile_local_model_selection_is_deterministic_and_hardened(self):
         dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
+        dockerignore = (Path(__file__).resolve().parents[1] / ".dockerignore").read_text(encoding="utf-8")
         self.assertIn("COPY models ./models", dockerfile)
         self.assertIn('target="/app/models/${LOCAL_MODEL_FILENAME}"', dockerfile)
         self.assertIn("Using exact bundled model:", dockerfile)
@@ -196,6 +260,9 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertIn("find /app/models -maxdepth 1 -type f -name '*.gguf' | sort | head -n 1", dockerfile)
         self.assertIn("No local GGUF model was found.", dockerfile)
         self.assertIn("test -s", dockerfile)
+        self.assertIn("models/*", dockerignore)
+        self.assertIn("!models/local-model.gguf", dockerignore)
+        self.assertIn("!models/local-*.gguf", dockerignore)
 
     def test_dockerfile_preserves_current_fireworks_routing_values(self):
         dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
@@ -247,6 +314,7 @@ class Phase1RuntimeTests(unittest.TestCase):
             "LOCAL_MODEL_ENABLED",
             "LOCAL_MODEL_COMMAND",
             "LOCAL_MODEL_PATH",
+            "LOCAL_MODEL_PATH_BY_CATEGORY",
             "LOCAL_MODEL_MAX_TOKENS",
             "LOCAL_MODEL_CONTEXT",
             "LOCAL_MODEL_THREADS",
@@ -405,6 +473,10 @@ class Phase1RuntimeTests(unittest.TestCase):
             {
                 "LOCAL_MODEL_ENABLED": "true",
                 "LOCAL_MODEL_PATH": "/app/models/qwen.gguf",
+                "LOCAL_MODEL_PATH_BY_CATEGORY": (
+                    "code_generation=/app/models/local-code.gguf;"
+                    "text_summarisation=/app/models/local-summary.gguf"
+                ),
                 "LOCAL_MODEL_MAX_TOKENS": "96",
                 "LOCAL_MODEL_BATCH_LIMIT": "7",
                 "LOCAL_MODEL_CATEGORIES": "sentiment_classification,text_summarisation",
@@ -418,6 +490,13 @@ class Phase1RuntimeTests(unittest.TestCase):
 
         self.assertTrue(config.local_model_enabled)
         self.assertEqual(str(config.local_model_path), "/app/models/qwen.gguf")
+        self.assertEqual(
+            {category: str(path) for category, path in (config.local_model_paths_by_category or {}).items()},
+            {
+                "code_generation": "/app/models/local-code.gguf",
+                "text_summarisation": "/app/models/local-summary.gguf",
+            },
+        )
         self.assertEqual(config.local_model_max_tokens, 96)
         self.assertEqual(config.local_model_batch_limit, 7)
         self.assertEqual(config.local_model_categories, ("sentiment_classification", "text_summarisation"))
@@ -438,6 +517,42 @@ class Phase1RuntimeTests(unittest.TestCase):
             _bounded_local_max_tokens("Classify sentiment as positive, negative, or neutral.", 128),
             24,
         )
+
+    def test_local_model_uses_category_specific_weight_path(self):
+        with patch.dict(
+            os.environ,
+            {
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_PATH": "/app/models/local-model.gguf",
+                "LOCAL_MODEL_PATH_BY_CATEGORY": (
+                    "code_generation=/app/models/local-code.gguf;"
+                    "text_summarisation=/app/models/local-summary.gguf"
+                ),
+            },
+            clear=True,
+        ), patch(
+            "app.local_model_client.generate_local_answer",
+            return_value=type(
+                "FakeLocalAnswer",
+                (),
+                {
+                    "success": True,
+                    "text": "def clamp(x, low, high):\n    return max(low, min(high, x))",
+                    "latency_ms": 1,
+                    "error": None,
+                    "model_path": "/app/models/local-code.gguf",
+                    "prompt_tokens_estimate": 5,
+                    "output_tokens_estimate": 8,
+                },
+            )(),
+        ) as generate:
+            result = ask_local_model_structured(
+                "Write a Python function clamp(x, low, high). Return only code.",
+                category="code_generation",
+            )
+
+        self.assertEqual(result.model_path, "/app/models/local-code.gguf")
+        self.assertEqual(generate.call_args.kwargs["model_path"], Path("/app/models/local-code.gguf"))
         self.assertEqual(
             _bounded_local_max_tokens("Extract named entities and label them.", 128),
             64,

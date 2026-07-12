@@ -22,6 +22,7 @@ models/*
 !models/
 !models/.gitkeep
 !models/local-model.gguf
+!models/local-*.gguf
 checkpoints/
 *.safetensors
 *.bin
