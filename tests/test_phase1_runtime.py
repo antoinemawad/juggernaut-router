@@ -156,12 +156,11 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertIn("LOCAL_MODEL_ENABLED=${ENABLE_LOCAL_MODEL}", dockerfile)
         self.assertIn("LOCAL_MODEL_PATH=/app/models/${LOCAL_MODEL_FILENAME}", dockerfile)
         self.assertIn("LOCAL_MODEL_BATCH_LIMIT=1000", dockerfile)
-        self.assertIn(
-            "LOCAL_MODEL_CATEGORIES=factual_knowledge,text_summarisation,sentiment_classification,"
-            "named_entity_recognition,mathematical_reasoning,logical_deductive_reasoning,"
-            "code_generation,code_debugging",
-            dockerfile,
-        )
+        self.assertIn("ROUTER_MODE=balanced", dockerfile)
+        self.assertIn("LOCAL_MODEL_CATEGORIES=sentiment_classification,text_summarisation,code_debugging", dockerfile)
+        self.assertIn("LOCAL_MODEL_TRIAGE_ENABLED=true", dockerfile)
+        self.assertIn("LOCAL_MODEL_TRIAGE_MAX_TOKENS=96", dockerfile)
+        self.assertIn("LOCAL_MODEL_TRIAGE_TIMEOUT_SECONDS=8", dockerfile)
         self.assertIn("LOCAL_MODEL_MAX_TOKENS=128", dockerfile)
         self.assertIn("LOCAL_MODEL_CONTEXT=1024", dockerfile)
         self.assertIn("LOCAL_MODEL_THREADS=2", dockerfile)
