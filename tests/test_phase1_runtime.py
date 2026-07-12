@@ -184,7 +184,7 @@ class Phase1RuntimeTests(unittest.TestCase):
             "ROUTER_PROMPT_POLICY_BY_CATEGORY": (
                 "sentiment_classification=answer_only;named_entity_recognition=answer_only;"
                 "mathematical_reasoning=final_only;logical_deductive_reasoning=final_only;"
-                "code_generation=answer_only;code_debugging=answer_only;factual_knowledge=answer_only;"
+                "code_generation=compact;code_debugging=compact;factual_knowledge=compact;"
                 "text_summarisation=answer_only"
             ),
             "ROUTER_MODELS_REMOTE_ACCURACY": "gemma-4-31b-it,kimi-k2p7-code,gemma-4-26b-a4b-it,minimax-m3",
