@@ -872,9 +872,7 @@ def _escalation_models(current_model: str | None, config: RuntimeConfig) -> tupl
 
 
 def _escalation_prompt_policy(prompt_policy: str) -> str:
-    if prompt_policy in {"compact", "original"}:
-        return "answer_only"
-    return prompt_policy
+    return "final_only"
 
 
 def _merged_remote_result(first, second):

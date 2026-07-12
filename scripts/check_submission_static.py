@@ -125,8 +125,8 @@ def check_dockerfile_is_submission_scoped() -> list[str]:
         errors.append("Dockerfile mixed profile should allow local-model attempts across the batch")
     if "LOCAL_MODEL_CATEGORIES=sentiment_classification,text_summarisation,code_debugging" not in dockerfile:
         errors.append("Dockerfile mixed profile should restrict local answers to proven categories")
-    if "LOCAL_MODEL_TRIAGE_ENABLED=true" not in dockerfile:
-        errors.append("Dockerfile mixed profile should enable local triage for remote prompt shaping")
+    if "LOCAL_MODEL_TRIAGE_ENABLED=false" not in dockerfile:
+        errors.append("Dockerfile mixed profile should keep experimental local triage disabled by default")
     return errors
 
 

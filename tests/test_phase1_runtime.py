@@ -158,7 +158,7 @@ class Phase1RuntimeTests(unittest.TestCase):
         self.assertIn("LOCAL_MODEL_BATCH_LIMIT=1000", dockerfile)
         self.assertIn("ROUTER_MODE=balanced", dockerfile)
         self.assertIn("LOCAL_MODEL_CATEGORIES=sentiment_classification,text_summarisation,code_debugging", dockerfile)
-        self.assertIn("LOCAL_MODEL_TRIAGE_ENABLED=true", dockerfile)
+        self.assertIn("LOCAL_MODEL_TRIAGE_ENABLED=false", dockerfile)
         self.assertIn("LOCAL_MODEL_TRIAGE_MAX_TOKENS=96", dockerfile)
         self.assertIn("LOCAL_MODEL_TRIAGE_TIMEOUT_SECONDS=8", dockerfile)
         self.assertIn("LOCAL_MODEL_MAX_TOKENS=128", dockerfile)
