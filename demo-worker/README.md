@@ -1,12 +1,23 @@
-# Juggernaut Router Cloudflare Worker Demo
+# Juggernaut Router Track 1 Demo Worker
 
-This is a public demo surface for the project. It is not the Track 1 Docker agent and does not include evaluator inputs, private keys, or model weights.
+This Cloudflare Worker is a public, informative demo for the AMD Developer Hackathon Track 1 project.
+
+It does not run the private evaluator and does not contain secrets or model weights. The official agent remains the Docker image.
+
+## What It Demonstrates
+
+- Synthetic examples for the Track 1 categories
+- Prompt classification
+- Route intent
+- Evaluator-style `{ task_id, answer }` output shape
+- A small web UI for judges or viewers
 
 ## Run Locally
 
 ```bash
 cd demo-worker
 npm install
+npm run check
 npm run dev
 ```
 
@@ -22,10 +33,11 @@ npm run deploy
 
 ## Endpoints
 
-- `GET /` interactive demo page
-- `GET /health` readiness JSON
-- `GET /examples` synthetic demo tasks
-- `POST /route` demo category and route decision
+- `GET /` web demo
+- `GET /health` health check
+- `GET /tasks` synthetic Track 1 tasks
+- `GET /results` evaluator-style synthetic results
+- `POST /route` classify and route a single prompt
 
 Example:
 

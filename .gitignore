@@ -36,6 +36,7 @@ outputs/
 local_output/
 *.log
 presentation/build/
+presentation/.build/
 
 # Jupyter
 .ipynb_checkpoints/

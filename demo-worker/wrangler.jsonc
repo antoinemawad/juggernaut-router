@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "juggernaut-router-demo",
+  "name": "juggernaut-router-track1-demo",
   "main": "src/index.js",
   "compatibility_date": "2026-07-12",
   "compatibility_flags": ["nodejs_compat"],
@@ -8,6 +8,6 @@
     "enabled": true
   },
   "vars": {
-    "DEMO_NAME": "Juggernaut Router Demo"
+    "DEMO_TITLE": "Juggernaut Router Track 1 Demo"
   }
 }
