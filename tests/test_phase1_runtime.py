@@ -72,6 +72,29 @@ class Phase1RuntimeTests(unittest.TestCase):
             ),
         )
 
+    def test_wide_track1_fixture_covers_all_categories(self):
+        path = Path(__file__).resolve().parents[1] / "local_test" / "track1_wide_input" / "tasks.json"
+        tasks = json.loads(path.read_text(encoding="utf-8"))
+        categories = {}
+        for task in tasks:
+            categories[task["category"]] = categories.get(task["category"], 0) + 1
+
+        self.assertEqual(len(tasks), 32)
+        self.assertEqual(
+            categories,
+            {
+                "factual_knowledge": 4,
+                "mathematical_reasoning": 4,
+                "sentiment_classification": 4,
+                "text_summarisation": 4,
+                "named_entity_recognition": 4,
+                "code_debugging": 4,
+                "logical_deductive_reasoning": 4,
+                "code_generation": 4,
+            },
+        )
+        self.assertTrue(all(task.get("task_id") and task.get("prompt") for task in tasks))
+
     def test_model_access_classifier_categorizes_plain_404_as_no_access(self):
         self.assertEqual(
             classify_access_error("HTTPError: HTTP Error 404: Not Found body={\"code\":\"NOT_FOUND\"}"),

@@ -1,0 +1,314 @@
+[
+  {
+    "task_id": "wide_factual_gpu_cpu",
+    "prompt": "Explain in two concise sentences how a GPU differs from a CPU.",
+    "category": "factual_knowledge",
+    "verifier": "keyword_coverage",
+    "expected_keywords": ["CPU", "GPU", "parallel", "cores"],
+    "expected_answer": "A CPU is optimized for general-purpose control flow and a smaller number of powerful cores. A GPU has many parallel cores for running large numbers of similar operations at once."
+  },
+  {
+    "task_id": "wide_factual_rocm",
+    "prompt": "What is ROCm and why is it useful for AI workloads on AMD GPUs? Answer in two sentences.",
+    "category": "factual_knowledge",
+    "verifier": "keyword_coverage",
+    "expected_keywords": ["ROCm", "AMD", "GPU", "AI"],
+    "expected_answer": "ROCm is AMD's open software stack for GPU computing. It helps AI frameworks run training and inference workloads on AMD GPUs."
+  },
+  {
+    "task_id": "wide_factual_proxy",
+    "prompt": "In two sentences, explain why an evaluation agent should use FIREWORKS_BASE_URL instead of a hardcoded public Fireworks URL.",
+    "category": "factual_knowledge",
+    "verifier": "keyword_coverage",
+    "expected_keywords": ["FIREWORKS_BASE_URL", "proxy", "token", "usage", "hardcoded"],
+    "expected_answer": "The agent should use FIREWORKS_BASE_URL so the judging proxy can observe token usage. A hardcoded public URL could bypass that proxy and break the evaluation contract."
+  },
+  {
+    "task_id": "wide_factual_local_tokens",
+    "prompt": "In one sentence, explain why deterministic local answers can reduce recorded Fireworks token usage.",
+    "category": "factual_knowledge",
+    "verifier": "keyword_coverage",
+    "expected_keywords": ["local", "deterministic", "zero", "Fireworks", "tokens"],
+    "expected_answer": "Deterministic local answers can solve safe tasks with zero Fireworks tokens while remote calls handle uncertain tasks."
+  },
+  {
+    "task_id": "wide_math_discount",
+    "prompt": "A product costs $120 and is discounted by 25%. What is the final price? Return only the dollar amount.",
+    "category": "mathematical_reasoning",
+    "constraints": ["answer_only", "exact_numeric"],
+    "output_constraints": ["answer_only", "exact_numeric"],
+    "verifier": "numeric_exact",
+    "expected_keywords": ["90"],
+    "expected_answer": "$90"
+  },
+  {
+    "task_id": "wide_math_discount_tax",
+    "prompt": "A product costs $80 and is discounted by 25%, then taxed at 10%. What is the final price? Return only the dollar amount.",
+    "category": "mathematical_reasoning",
+    "constraints": ["answer_only", "exact_numeric"],
+    "output_constraints": ["answer_only", "exact_numeric"],
+    "verifier": "numeric_exact",
+    "expected_keywords": ["66"],
+    "expected_answer": "$66"
+  },
+  {
+    "task_id": "wide_math_budget",
+    "prompt": "A team has $50.00 in credits and spends $7.25, $3.75, and $12.00. How many dollars remain? Return only the dollar amount.",
+    "category": "mathematical_reasoning",
+    "constraints": ["answer_only", "exact_numeric"],
+    "output_constraints": ["answer_only", "exact_numeric"],
+    "verifier": "numeric_exact",
+    "expected_keywords": ["27"],
+    "expected_answer": "$27.00"
+  },
+  {
+    "task_id": "wide_math_weighted",
+    "prompt": "A score is 70% accuracy and 30% efficiency. Accuracy is 92 and efficiency is 80. What is the weighted score? Return only the number rounded to one decimal place.",
+    "category": "mathematical_reasoning",
+    "constraints": ["answer_only", "exact_numeric"],
+    "output_constraints": ["answer_only", "exact_numeric"],
+    "verifier": "numeric_exact",
+    "expected_keywords": ["88.4"],
+    "expected_answer": "88.4"
+  },
+  {
+    "task_id": "wide_sentiment_positive",
+    "prompt": "Classify the sentiment as positive, negative, or neutral. Return only the label: The setup was fast and the result was excellent.",
+    "category": "sentiment_classification",
+    "constraints": ["answer_only"],
+    "output_constraints": ["answer_only"],
+    "verifier": "label_set",
+    "expected_keywords": ["positive"],
+    "expected_answer": "positive"
+  },
+  {
+    "task_id": "wide_sentiment_negative_sarcasm",
+    "prompt": "Classify the sentiment as positive, negative, or neutral. Return only the label: Yeah right, the outage was just perfect.",
+    "category": "sentiment_classification",
+    "constraints": ["answer_only"],
+    "output_constraints": ["answer_only"],
+    "verifier": "label_set",
+    "expected_keywords": ["negative"],
+    "expected_answer": "negative"
+  },
+  {
+    "task_id": "wide_sentiment_neutral_tradeoff",
+    "prompt": "Classify the sentiment as positive, negative, or neutral. Return only the label: The tool is fast, but the documentation is incomplete.",
+    "category": "sentiment_classification",
+    "constraints": ["answer_only"],
+    "output_constraints": ["answer_only"],
+    "verifier": "label_set",
+    "expected_keywords": ["neutral"],
+    "expected_answer": "neutral"
+  },
+  {
+    "task_id": "wide_sentiment_negative_plain",
+    "prompt": "Classify the sentiment as positive, negative, or neutral. Return only the label: The build was late, broken, and frustrating.",
+    "category": "sentiment_classification",
+    "constraints": ["answer_only"],
+    "output_constraints": ["answer_only"],
+    "verifier": "label_set",
+    "expected_keywords": ["negative"],
+    "expected_answer": "negative"
+  },
+  {
+    "task_id": "wide_summary_cloud",
+    "prompt": "Summarise the following text in one sentence: AMD Developer Cloud gives developers access to AMD GPUs for AI workloads. It supports ROCm, PyTorch, and vLLM environments for building and testing AI applications.",
+    "category": "text_summarisation",
+    "constraints": ["one_sentence"],
+    "output_constraints": ["one_sentence"],
+    "verifier": "summary_constraints",
+    "expected_keywords": ["AMD Developer Cloud", "AMD GPUs", "AI"],
+    "expected_answer": "AMD Developer Cloud provides AMD GPU access and software environments for building and testing AI workloads."
+  },
+  {
+    "task_id": "wide_summary_router_noise",
+    "prompt": "Summarise in one sentence, ignoring irrelevant chatter: Note: coffee is cold. Important: The router should classify locally, answer safe tasks locally, and escalate uncertain tasks to Fireworks. Random: blue chairs are nice.",
+    "category": "text_summarisation",
+    "constraints": ["one_sentence"],
+    "output_constraints": ["one_sentence"],
+    "verifier": "summary_constraints",
+    "expected_keywords": ["classify locally", "safe tasks", "escalate", "Fireworks"],
+    "expected_answer": "The router classifies locally, handles safe tasks locally, and escalates uncertain tasks to Fireworks."
+  },
+  {
+    "task_id": "wide_summary_exact_7",
+    "prompt": "Summarise in exactly 7 words: Gemma may be cost-effective for concise routing tasks after deployment readiness is confirmed.",
+    "category": "text_summarisation",
+    "constraints": ["exact_word_count", "one_sentence", "no_explanation"],
+    "output_constraints": ["exact_word_count", "one_sentence"],
+    "verifier": "word_count",
+    "expected_keywords": ["Gemma", "cost-effective", "routing", "deployment"],
+    "expected_answer": "Gemma supports cost-effective routing after deployment readiness."
+  },
+  {
+    "task_id": "wide_summary_tokens",
+    "prompt": "Summarise in one sentence: A router can lower scored token usage by using deterministic local answers, compact prompts, and careful model selection.",
+    "category": "text_summarisation",
+    "constraints": ["one_sentence"],
+    "output_constraints": ["one_sentence"],
+    "verifier": "summary_constraints",
+    "expected_keywords": ["router", "token usage", "local answers", "model selection"],
+    "expected_answer": "A router lowers scored token usage through local answers, compact prompts, and model selection."
+  },
+  {
+    "task_id": "wide_ner_standard",
+    "prompt": "Extract named entities and label them: Lisa Chen joined AMD in Austin on July 6, 2026.",
+    "category": "named_entity_recognition",
+    "constraints": ["entity_labels"],
+    "output_constraints": ["entity_labels"],
+    "verifier": "entity_labels",
+    "expected_keywords": ["Lisa Chen", "PERSON", "AMD", "ORG", "Austin", "LOCATION", "July 6, 2026", "DATE"],
+    "expected_answer": "Lisa Chen: PERSON; AMD: ORG; Austin: LOCATION; July 6, 2026: DATE"
+  },
+  {
+    "task_id": "wide_ner_table",
+    "prompt": "Extract named entities and label them from this note: Speaker=Lisa Su; Company=AMD; Location=San Jose; Date=July 10, 2026.",
+    "category": "named_entity_recognition",
+    "constraints": ["entity_labels"],
+    "output_constraints": ["entity_labels"],
+    "verifier": "entity_labels",
+    "expected_keywords": ["Lisa Su", "PERSON", "AMD", "ORG", "San Jose", "LOCATION", "July 10, 2026", "DATE"],
+    "expected_answer": "Lisa Su: PERSON; AMD: ORG; San Jose: LOCATION; July 10, 2026: DATE"
+  },
+  {
+    "task_id": "wide_ner_none",
+    "prompt": "Extract named entities and label them. If there are no named entities, return 'None': the quick benchmark finished before sunset.",
+    "category": "named_entity_recognition",
+    "constraints": ["entity_labels", "answer_only"],
+    "output_constraints": ["entity_labels", "answer_only"],
+    "verifier": "keyword_coverage",
+    "expected_keywords": ["None"],
+    "expected_answer": "None"
+  },
+  {
+    "task_id": "wide_ner_multi_org",
+    "prompt": "Extract named entities and label them: OpenAI partnered with Microsoft in Seattle on March 3, 2026.",
+    "category": "named_entity_recognition",
+    "constraints": ["entity_labels"],
+    "output_constraints": ["entity_labels"],
+    "verifier": "entity_labels",
+    "expected_keywords": ["OpenAI", "ORG", "Microsoft", "ORG", "Seattle", "LOCATION", "March 3, 2026", "DATE"],
+    "expected_answer": "OpenAI: ORG; Microsoft: ORG; Seattle: LOCATION; March 3, 2026: DATE"
+  },
+  {
+    "task_id": "wide_debug_mutable_default",
+    "prompt": "Return only corrected code:\n\ndef append_item(item, items=[]):\n    items.append(item)\n    return items\n\nThe function should avoid sharing the same default list across calls.",
+    "category": "code_debugging",
+    "constraints": ["code_only"],
+    "output_constraints": ["code_only"],
+    "verifier": "python_syntax",
+    "expected_keywords": ["def append_item", "items=None", "if items is None", "items.append", "return items"],
+    "expected_answer": "def append_item(item, items=None):\n    if items is None:\n        items = []\n    items.append(item)\n    return items"
+  },
+  {
+    "task_id": "wide_debug_boolean_condition",
+    "prompt": "Return only corrected code:\n\ndef is_valid_score(score):\n    return score >= 0 or score <= 100\n\nIt should be True only for scores from 0 through 100 inclusive.",
+    "category": "code_debugging",
+    "constraints": ["code_only"],
+    "output_constraints": ["code_only"],
+    "verifier": "python_syntax",
+    "expected_keywords": ["def is_valid_score", "0 <= score <= 100", "return"],
+    "expected_answer": "def is_valid_score(score):\n    return 0 <= score <= 100"
+  },
+  {
+    "task_id": "wide_debug_safe_divide",
+    "prompt": "Return only corrected code:\n\ndef safe_divide(a, b):\n    return a / b\n\nIt should return None when b is zero.",
+    "category": "code_debugging",
+    "constraints": ["code_only"],
+    "output_constraints": ["code_only"],
+    "verifier": "python_syntax",
+    "expected_keywords": ["def safe_divide", "if b == 0", "return None", "return a / b"],
+    "expected_answer": "def safe_divide(a, b):\n    if b == 0:\n        return None\n    return a / b"
+  },
+  {
+    "task_id": "wide_debug_is_adult",
+    "prompt": "Return only corrected code:\n\ndef is_adult(age):\n    return age > 18\n\nThe function should return True for age 18 and above.",
+    "category": "code_debugging",
+    "constraints": ["code_only"],
+    "output_constraints": ["code_only"],
+    "verifier": "python_syntax",
+    "expected_keywords": ["def is_adult", "age >= 18", "return"],
+    "expected_answer": "def is_adult(age):\n    return age >= 18"
+  },
+  {
+    "task_id": "wide_logic_shortest",
+    "prompt": "Alice is taller than Bob. Bob is taller than Carol. Who is the shortest? Return only the name.",
+    "category": "logical_deductive_reasoning",
+    "constraints": ["answer_only"],
+    "output_constraints": ["answer_only"],
+    "verifier": "keyword_coverage",
+    "expected_keywords": ["Carol"],
+    "expected_answer": "Carol"
+  },
+  {
+    "task_id": "wide_logic_insufficient_order",
+    "prompt": "A is older than B. C is older than D. Who is definitely oldest? Return only the answer.",
+    "category": "logical_deductive_reasoning",
+    "constraints": ["answer_only"],
+    "output_constraints": ["answer_only"],
+    "verifier": "keyword_coverage",
+    "expected_keywords": ["cannot determine"],
+    "expected_answer": "cannot determine"
+  },
+  {
+    "task_id": "wide_logic_double_negative",
+    "prompt": "It is false that the build did not pass. Did the build pass? Return yes or no.",
+    "category": "logical_deductive_reasoning",
+    "constraints": ["answer_only"],
+    "output_constraints": ["answer_only"],
+    "verifier": "label_set",
+    "expected_keywords": ["yes"],
+    "expected_answer": "yes"
+  },
+  {
+    "task_id": "wide_logic_seating",
+    "prompt": "Maya is left of Noah. Omar is right of Noah. Who sits in the middle? Return only the name.",
+    "category": "logical_deductive_reasoning",
+    "constraints": ["answer_only"],
+    "output_constraints": ["answer_only"],
+    "verifier": "keyword_coverage",
+    "expected_keywords": ["Noah"],
+    "expected_answer": "Noah"
+  },
+  {
+    "task_id": "wide_codegen_is_even",
+    "prompt": "Write a Python function named is_even that returns True if a number is even. Return only code.",
+    "category": "code_generation",
+    "constraints": ["code_only"],
+    "output_constraints": ["code_only"],
+    "verifier": "python_syntax",
+    "expected_keywords": ["def is_even", "% 2", "return"],
+    "expected_answer": "def is_even(n):\n    return n % 2 == 0"
+  },
+  {
+    "task_id": "wide_codegen_clamp",
+    "prompt": "Write a Python function clamp(x, low, high) that returns low if x is below low, high if x is above high, otherwise x. Return only code.",
+    "category": "code_generation",
+    "constraints": ["code_only"],
+    "output_constraints": ["code_only"],
+    "verifier": "python_syntax",
+    "expected_keywords": ["def clamp", "low", "high", "return"],
+    "expected_answer": "def clamp(x, low, high):\n    return low if x < low else high if x > high else x"
+  },
+  {
+    "task_id": "wide_codegen_top_n",
+    "prompt": "Write a Python function top_n(values, n) that returns the n largest values sorted descending. Return only code.",
+    "category": "code_generation",
+    "constraints": ["code_only"],
+    "output_constraints": ["code_only"],
+    "verifier": "python_syntax",
+    "expected_keywords": ["def top_n", "sorted", "reverse=True", "[:n]", "return"],
+    "expected_answer": "def top_n(values, n):\n    return sorted(values, reverse=True)[:n]"
+  },
+  {
+    "task_id": "wide_codegen_merge_sorted",
+    "prompt": "Write a Python function merge_sorted(a, b) that returns a sorted merged list. Return only code.",
+    "category": "code_generation",
+    "constraints": ["code_only"],
+    "output_constraints": ["code_only"],
+    "verifier": "python_syntax",
+    "expected_keywords": ["def merge_sorted", "sorted", "a + b", "return"],
+    "expected_answer": "def merge_sorted(a, b):\n    return sorted(a + b)"
+  }
+]
