@@ -40,6 +40,9 @@ RECOMMENDATION_EXPORT_NAMES = {
     "LOCAL_MODEL_PATH",
     "LOCAL_MODEL_TEMPERATURE",
     "LOCAL_MODEL_THREADS",
+    "LOCAL_MODEL_TRIAGE_ENABLED",
+    "LOCAL_MODEL_TRIAGE_MAX_TOKENS",
+    "LOCAL_MODEL_TRIAGE_TIMEOUT_SECONDS",
     "LOCAL_MODEL_TIMEOUT_SECONDS",
     "REMOTE_VALIDATION_ESCALATION_ENABLED",
     "ROUTER_MODE",
@@ -281,6 +284,9 @@ class RuntimeConfig:
     local_model_max_chars: int = 4096
     local_model_batch_limit: int = 12
     local_model_categories: tuple[str, ...] = ()
+    local_model_triage_enabled: bool = False
+    local_model_triage_max_tokens: int = 96
+    local_model_triage_timeout_seconds: int = 8
     prompt_policy_remote_accuracy: str = "compact"
     prompt_policy_remote_code: str = "answer_only"
     prompt_policy_remote_format_strict: str = "answer_only"
@@ -334,6 +340,9 @@ class RuntimeConfig:
             local_model_max_chars=_get_int_from(env, "LOCAL_MODEL_MAX_CHARS", 4096, 128, 20000),
             local_model_batch_limit=_get_int_from(env, "LOCAL_MODEL_BATCH_LIMIT", 12, 0, 10000),
             local_model_categories=_get_category_set_from(env, "LOCAL_MODEL_CATEGORIES"),
+            local_model_triage_enabled=_get_bool_from(env, "LOCAL_MODEL_TRIAGE_ENABLED", False),
+            local_model_triage_max_tokens=_get_int_from(env, "LOCAL_MODEL_TRIAGE_MAX_TOKENS", 96, 24, 256),
+            local_model_triage_timeout_seconds=_get_int_from(env, "LOCAL_MODEL_TRIAGE_TIMEOUT_SECONDS", 8, 1, 30),
             router_log_path=Path(router_log_path) if router_log_path else None,
             fireworks_api_key=env.get("FIREWORKS_API_KEY"),
             fireworks_base_url=env.get("FIREWORKS_BASE_URL"),

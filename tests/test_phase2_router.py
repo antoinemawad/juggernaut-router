@@ -597,6 +597,139 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.route, "local")
         self.assertEqual(result.answer, "$60")
 
+    def test_local_model_triage_is_disabled_by_default(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse("Lisa Su")
+
+        with patch.dict(
+            os.environ,
+            {
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+                "LOCAL_MODEL_CATEGORIES": "sentiment_classification",
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+                "REMOTE_VALIDATION_ESCALATION_ENABLED": "false",
+            },
+            clear=True,
+        ), patch("app.agent.ask_local_model_structured") as local_model, patch("urllib.request.urlopen", fake_urlopen):
+            result = answer_task("factual", "Who is the current CEO of AMD? Return only the name.")
+
+        local_model.assert_not_called()
+        self.assertEqual(result.route, "fireworks")
+        self.assertFalse(result.metadata["local_triage_attempted"])
+        self.assertNotIn("Cleaned task framing", captured["payload"]["messages"][1]["content"])
+
+    def test_local_model_triage_shapes_remote_prompt_for_uncertain_task(self):
+        from app.local_model_client import LocalModelResult
+
+        captured = {}
+        triage = {
+            "category": "factual_knowledge",
+            "answer_shape": "short_text",
+            "risk": "high",
+            "format_constraints": ["answer_only"],
+            "should_answer_local": False,
+            "remote_prompt": "Return only the current AMD CEO name.",
+        }
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse("Lisa Su")
+
+        with patch.dict(
+            os.environ,
+            {
+                "LOCAL_MODEL_TRIAGE_ENABLED": "true",
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+                "LOCAL_MODEL_CATEGORIES": "sentiment_classification",
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+                "REMOTE_VALIDATION_ESCALATION_ENABLED": "false",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(answer=json.dumps(triage), elapsed_ms=4),
+        ) as local_model, patch("urllib.request.urlopen", fake_urlopen):
+            result = answer_task("factual", "Who is the current CEO of AMD? Return only the name.")
+
+        local_model.assert_called_once()
+        user_prompt = captured["payload"]["messages"][1]["content"]
+        self.assertIn("Original task:", user_prompt)
+        self.assertIn("Cleaned task framing:", user_prompt)
+        self.assertIn("Return only the current AMD CEO name.", user_prompt)
+        self.assertEqual(result.route, "fireworks")
+        self.assertTrue(result.metadata["local_triage_attempted"])
+        self.assertTrue(result.metadata["local_triage_remote_prompt_used"])
+        self.assertEqual(result.metadata["local_triage_category"], "factual_knowledge")
+
+    def test_local_model_triage_invalid_json_is_ignored(self):
+        from app.local_model_client import LocalModelResult
+
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse("Lisa Su")
+
+        with patch.dict(
+            os.environ,
+            {
+                "LOCAL_MODEL_TRIAGE_ENABLED": "true",
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+                "LOCAL_MODEL_CATEGORIES": "sentiment_classification",
+                "FIREWORKS_API_KEY": "secret",
+                "FIREWORKS_BASE_URL": "https://judge-proxy.example/v1",
+                "ALLOWED_MODELS": "minimax-m3",
+                "REMOTE_VALIDATION_ESCALATION_ENABLED": "false",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(answer="not json", elapsed_ms=4),
+        ) as local_model, patch("urllib.request.urlopen", fake_urlopen):
+            result = answer_task("factual", "Who is the current CEO of AMD? Return only the name.")
+
+        local_model.assert_called_once()
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.metadata["local_triage_error"], "local_triage_invalid_json")
+        self.assertFalse(result.metadata["local_triage_remote_prompt_used"])
+        self.assertNotIn("Cleaned task framing", captured["payload"]["messages"][1]["content"])
+
+    def test_local_model_triage_does_not_run_in_local_only_mode(self):
+        from app.local_model_client import LocalModelResult
+
+        with patch.dict(
+            os.environ,
+            {
+                "ROUTER_MODE": "local_only",
+                "LOCAL_MODEL_TRIAGE_ENABLED": "true",
+                "LOCAL_MODEL_ENABLED": "true",
+                "LOCAL_MODEL_COMMAND": "mock-local-model",
+                "LOCAL_MODEL_CATEGORIES": "factual_knowledge",
+            },
+            clear=True,
+        ), patch(
+            "app.agent.ask_local_model_structured",
+            return_value=LocalModelResult(answer="ROCm is AMD's open software stack for GPU AI workloads.", elapsed_ms=4),
+        ) as local_model:
+            result = answer_task(
+                "factual",
+                "Explain what ROCm is in one sentence.",
+            )
+
+        local_model.assert_called_once()
+        self.assertEqual(result.route, "local_model")
+        self.assertFalse(result.metadata["local_triage_attempted"])
+
     def test_remote_accuracy_prompt_policy_can_be_overridden(self):
         captured = {}
 

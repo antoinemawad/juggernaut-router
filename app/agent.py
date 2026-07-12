@@ -1,6 +1,8 @@
+import json
+import re
 from dataclasses import replace
 
-from app.classifier import classify_prompt
+from app.classifier import ClassificationResult, classify_prompt
 from app.config import DEFAULT_ACCURACY_FIRST_MODELS, RuntimeConfig
 from app.deadline import DeadlineManager, StageTimer
 from app.fireworks_client import ask_fireworks_structured
@@ -81,9 +83,22 @@ def answer_task(
             },
         )
 
+    triage = _run_local_model_triage(
+        prompt=prompt,
+        classification=classification,
+        config=config,
+        deadline=deadline,
+        local_model_allowed=local_model_allowed,
+        task_id=task_id,
+    )
+    timings.trap_guard_elapsed_ms = triage.get("elapsed_ms", 0) if triage else 0
+    classification = _classification_with_triage(classification, triage)
+    remote_base_prompt = _remote_task_prompt_from_triage(prompt, triage)
+    triage_metadata = _local_triage_metadata(triage)
+
     remote_mode = _select_remote_mode(classification, local_result)
     prompt_policy = _prompt_policy_for_remote_mode(remote_mode, config, classification.category)
-    remote_prompt = _apply_prompt_policy(prompt, prompt_policy)
+    remote_prompt = _apply_prompt_policy(remote_base_prompt, prompt_policy)
     remote_prompt_token_estimate = estimate_tokens(remote_prompt)
     system_prompt = _system_prompt_for_remote_mode(remote_mode)
     remote_max_tokens = _max_tokens_for_category(config, classification.category)
@@ -129,6 +144,7 @@ def answer_task(
                     deadline_decision=_deadline_decision(deadline, config),
                     timings=timings,
                     metadata={
+                        **triage_metadata,
                         "answer_shape": classification.answer_shape,
                         "constraints": list(classification.constraints),
                         "classification_confidence": classification.confidence,
@@ -167,6 +183,7 @@ def answer_task(
             error="local_model_unaccepted",
             timings=timings,
             metadata={
+                **triage_metadata,
                 "answer_shape": classification.answer_shape,
                 "constraints": list(classification.constraints),
                 "classification_confidence": classification.confidence,
@@ -213,6 +230,7 @@ def answer_task(
             error="deadline_suppressed_remote",
             timings=timings,
             metadata={
+                **triage_metadata,
                 "answer_shape": classification.answer_shape,
                 "constraints": list(classification.constraints),
                 "classification_confidence": classification.confidence,
@@ -254,6 +272,7 @@ def answer_task(
             error="fireworks_unavailable",
             timings=timings,
             metadata={
+                **triage_metadata,
                 "answer_shape": classification.answer_shape,
                 "constraints": list(classification.constraints),
                 "classification_confidence": classification.confidence,
@@ -298,7 +317,7 @@ def answer_task(
     escalation_validation = None
     if _should_escalate_remote_answer(remote, remote_validation, config, deadline):
         escalation_prompt_policy = _escalation_prompt_policy(prompt_policy)
-        escalation_prompt = _apply_prompt_policy(prompt, escalation_prompt_policy)
+        escalation_prompt = _apply_prompt_policy(remote_base_prompt, escalation_prompt_policy)
         escalation = ask_fireworks_structured(
             escalation_prompt,
             config=_config_with_max_tokens(config, _escalation_max_tokens(remote_max_tokens, classification.category)),
@@ -338,6 +357,7 @@ def answer_task(
         error=remote.error,
         timings=timings,
         metadata={
+            **triage_metadata,
             "answer_shape": classification.answer_shape,
             "constraints": list(classification.constraints),
             "classification_confidence": classification.confidence,
@@ -378,6 +398,248 @@ def answer_task(
             "final_answer_type": _answer_type(answer),
         },
     )
+
+
+_TRIAGE_CATEGORIES = {
+    "factual_knowledge",
+    "text_summarisation",
+    "sentiment_classification",
+    "named_entity_recognition",
+    "mathematical_reasoning",
+    "logical_deductive_reasoning",
+    "code_generation",
+    "code_debugging",
+}
+
+_TRIAGE_ANSWER_SHAPES = {
+    "short_text",
+    "summary",
+    "label",
+    "entity_list",
+    "number",
+    "code",
+    "corrected_code",
+}
+
+
+def _run_local_model_triage(
+    prompt: str,
+    classification: ClassificationResult,
+    config: RuntimeConfig,
+    deadline: DeadlineManager | None,
+    local_model_allowed: bool,
+    task_id: str,
+) -> dict:
+    if not _should_run_local_model_triage(prompt, classification, config, deadline, local_model_allowed):
+        return {"enabled": config.local_model_triage_enabled, "attempted": False}
+
+    triage_config = replace(
+        config,
+        local_model_max_tokens=config.local_model_triage_max_tokens,
+        local_model_timeout_seconds=config.local_model_triage_timeout_seconds,
+        local_model_temperature=0.0,
+    )
+    result = ask_local_model_structured(
+        _local_model_triage_prompt(prompt, classification),
+        config=triage_config,
+        deadline=deadline,
+        system_prompt=_local_model_triage_system_prompt(),
+        task_id=f"{task_id}:triage",
+    )
+    triage = {
+        "enabled": True,
+        "attempted": True,
+        "elapsed_ms": result.elapsed_ms,
+        "error": result.error,
+        "raw": result.answer,
+        "model_path": result.model_path,
+        "runtime": result.runtime,
+    }
+    if result.error is not None:
+        return triage
+
+    parsed, parse_error = _parse_local_model_triage(result.answer)
+    if parse_error is not None:
+        triage["error"] = parse_error
+        return triage
+    triage.update(parsed)
+    triage["accepted"] = True
+    return triage
+
+
+def _should_run_local_model_triage(
+    prompt: str,
+    classification: ClassificationResult,
+    config: RuntimeConfig,
+    deadline: DeadlineManager | None,
+    local_model_allowed: bool,
+) -> bool:
+    if not config.local_model_triage_enabled:
+        return False
+    if not local_model_allowed:
+        return False
+    if config.router_mode == "local_only":
+        return False
+    if not config.local_model_enabled:
+        return False
+    if config.local_model_path is None and not config.local_model_command:
+        return False
+    if len(prompt) > 1800:
+        return False
+    if deadline is not None and not deadline.can_spend(config.local_model_triage_timeout_seconds):
+        return False
+    risk = classification.risk_components
+    return (
+        classification.confidence < 0.9
+        or risk.get("ambiguity", 0) >= 0.5
+        or risk.get("factual_freshness", 0) >= 0.5
+        or risk.get("reasoning_depth", 0) >= 0.5
+        or risk.get("format_strictness", 0) >= 0.5
+    )
+
+
+def _local_model_triage_system_prompt() -> str:
+    return (
+        "You classify routing tasks. Return strict JSON only. Do not answer the task. "
+        "Do not include markdown, comments, or extra text."
+    )
+
+
+def _local_model_triage_prompt(prompt: str, classification: ClassificationResult) -> str:
+    return (
+        "Classify this task for a remote answerer and rewrite the instructions only if that makes the "
+        "required output clearer. Return JSON with keys: category, answer_shape, risk, "
+        "format_constraints, should_answer_local, remote_prompt.\n"
+        "Allowed categories: factual_knowledge, text_summarisation, sentiment_classification, "
+        "named_entity_recognition, mathematical_reasoning, logical_deductive_reasoning, "
+        "code_generation, code_debugging.\n"
+        "Allowed answer_shape: short_text, summary, label, entity_list, number, code, corrected_code.\n"
+        "Use should_answer_local=false unless the task is trivial. remote_prompt must be a concise "
+        "task instruction, not an answer.\n\n"
+        f"Initial category: {classification.category}\n"
+        f"Initial answer_shape: {classification.answer_shape}\n"
+        f"Initial constraints: {', '.join(classification.constraints) or 'none'}\n\n"
+        f"Task:\n{prompt.strip()}"
+    )
+
+
+def _parse_local_model_triage(answer: str) -> tuple[dict, str | None]:
+    payload = _extract_json_object(answer)
+    if payload is None:
+        return {}, "local_triage_invalid_json"
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        return {}, "local_triage_invalid_json"
+    if not isinstance(data, dict):
+        return {}, "local_triage_invalid_json"
+
+    category = str(data.get("category", "")).strip()
+    answer_shape = str(data.get("answer_shape", "")).strip()
+    risk = str(data.get("risk", "")).strip().lower()
+    remote_prompt = str(data.get("remote_prompt", "")).strip()
+    constraints = data.get("format_constraints", [])
+    if not isinstance(constraints, list):
+        constraints = []
+
+    if category not in _TRIAGE_CATEGORIES:
+        return {}, "local_triage_invalid_category"
+    if answer_shape not in _TRIAGE_ANSWER_SHAPES:
+        return {}, "local_triage_invalid_answer_shape"
+    if risk not in {"low", "medium", "high"}:
+        risk = "medium"
+    if remote_prompt and not _safe_triage_remote_prompt(remote_prompt):
+        return {}, "local_triage_unsafe_remote_prompt"
+
+    return {
+        "category": category,
+        "answer_shape": answer_shape,
+        "risk": risk,
+        "format_constraints": tuple(str(item).strip() for item in constraints if str(item).strip())[:6],
+        "should_answer_local": bool(data.get("should_answer_local", False)),
+        "remote_prompt": remote_prompt,
+    }, None
+
+
+def _extract_json_object(answer: str) -> str | None:
+    stripped = (answer or "").strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped, flags=re.IGNORECASE).strip()
+        stripped = re.sub(r"\s*```$", "", stripped).strip()
+    if stripped.startswith("{") and stripped.endswith("}"):
+        return stripped
+    match = re.search(r"\{.*\}", stripped, flags=re.DOTALL)
+    return match.group(0) if match else None
+
+
+def _safe_triage_remote_prompt(remote_prompt: str) -> bool:
+    if len(remote_prompt) < 20 or len(remote_prompt) > 1200:
+        return False
+    lower = remote_prompt.lower()
+    blocked = (
+        "ignore previous",
+        "ignore the previous",
+        "system prompt",
+        "developer message",
+        "api key",
+        "secret",
+        "token:",
+        "password",
+    )
+    return not any(item in lower for item in blocked)
+
+
+def _classification_with_triage(classification: ClassificationResult, triage: dict | None) -> ClassificationResult:
+    if not triage or not triage.get("accepted"):
+        return classification
+    category = triage.get("category")
+    answer_shape = triage.get("answer_shape")
+    if category == classification.category and answer_shape == classification.answer_shape:
+        return classification
+    if classification.confidence >= 0.9 and triage.get("risk") != "high":
+        return classification
+    constraints = tuple(dict.fromkeys(tuple(classification.constraints) + tuple(triage.get("format_constraints", ()))))
+    return ClassificationResult(
+        category=category if category in _TRIAGE_CATEGORIES else classification.category,
+        confidence=max(classification.confidence, 0.88),
+        answer_shape=answer_shape if answer_shape in _TRIAGE_ANSWER_SHAPES else classification.answer_shape,
+        constraints=constraints,
+        risk_components=classification.risk_components,
+        risk_score=classification.risk_score,
+    )
+
+
+def _remote_task_prompt_from_triage(prompt: str, triage: dict | None) -> str:
+    if not triage or not triage.get("accepted"):
+        return prompt
+    remote_prompt = triage.get("remote_prompt")
+    if not remote_prompt:
+        return prompt
+    return (
+        f"Original task:\n{prompt.strip()}\n\n"
+        f"Cleaned task framing:\n{remote_prompt.strip()}\n\n"
+        "Follow the original task if there is any conflict."
+    )
+
+
+def _local_triage_metadata(triage: dict | None) -> dict:
+    if not triage:
+        return {
+            "local_triage_enabled": False,
+            "local_triage_attempted": False,
+        }
+    return {
+        "local_triage_enabled": triage.get("enabled", False),
+        "local_triage_attempted": triage.get("attempted", False),
+        "local_triage_error": triage.get("error"),
+        "local_triage_category": triage.get("category"),
+        "local_triage_answer_shape": triage.get("answer_shape"),
+        "local_triage_risk": triage.get("risk"),
+        "local_triage_remote_prompt_used": bool(triage.get("accepted") and triage.get("remote_prompt")),
+        "local_triage_elapsed_ms": triage.get("elapsed_ms", 0),
+        "local_triage_model_path": triage.get("model_path"),
+        "local_triage_runtime": triage.get("runtime"),
+    }
 
 
 def estimate_tokens(text: str) -> int:
