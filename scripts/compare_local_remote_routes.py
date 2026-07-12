@@ -50,13 +50,21 @@ LOCAL_CATEGORIES_ALL = ",".join(
     )
 )
 
+LOCAL_CATEGORIES_TARGETED = ",".join(
+    (
+        "sentiment_classification",
+        "text_summarisation",
+        "code_debugging",
+    )
+)
+
 MODE_CONFIGS = {
-    "deterministic_only": {
+    "local_targeted_only": {
         "requires_remote": False,
         "env": {
-            "LOCAL_MODEL_ENABLED": "false",
-            "LOCAL_MODEL_BATCH_LIMIT": "0",
-            "LOCAL_MODEL_CATEGORIES": "",
+            "LOCAL_MODEL_ENABLED": "true",
+            "LOCAL_MODEL_BATCH_LIMIT": "1000",
+            "LOCAL_MODEL_CATEGORIES": LOCAL_CATEGORIES_TARGETED,
             "ROUTER_PROFILE": "accuracy_gate",
             "ROUTER_MODE": "local_only",
         },
@@ -90,6 +98,16 @@ MODE_CONFIGS = {
             "ROUTER_MODE": "balanced",
         },
     },
+    "mixed_targeted": {
+        "requires_remote": True,
+        "env": {
+            "LOCAL_MODEL_ENABLED": "true",
+            "LOCAL_MODEL_BATCH_LIMIT": "1000",
+            "LOCAL_MODEL_CATEGORIES": LOCAL_CATEGORIES_TARGETED,
+            "ROUTER_PROFILE": "accuracy_gate",
+            "ROUTER_MODE": "balanced",
+        },
+    },
     "mixed_broad": {
         "requires_remote": True,
         "env": {
@@ -112,7 +130,7 @@ def main() -> int:
     parser.add_argument("--platform", default="linux/amd64")
     parser.add_argument("--memory", default="4g")
     parser.add_argument("--cpus", default="2")
-    parser.add_argument("--modes", default="deterministic_only,local_only,remote_only,mixed_fast,mixed_broad")
+    parser.add_argument("--modes", default="local_targeted_only,local_only,mixed_targeted,remote_only,mixed_broad")
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--min-pass-rate", type=float, default=0.0)
     parser.add_argument("--fail-under-min", action="store_true")
@@ -190,6 +208,7 @@ def main() -> int:
         "min_pass_rate": args.min_pass_rate,
         "remote_env_present": remote_ready,
         "modes": summaries,
+        "category_winners": category_winners(summaries),
         "raw_runs": raw_runs,
     }
     summary_path.write_text(json.dumps(summary_payload, indent=2), encoding="utf-8")
@@ -405,6 +424,43 @@ def merge_average_counts(counts_list) -> dict[str, float]:
 
 def aggregate_categories(runs: list[dict]) -> dict:
     return aggregate_named_buckets(runs, "by_category")
+
+
+def category_winners(summaries: list[dict]) -> list[dict]:
+    by_category: dict[str, list[dict]] = defaultdict(list)
+    for summary in summaries:
+        if summary.get("status") != "passed":
+            continue
+        for category, bucket in (summary.get("by_category") or {}).items():
+            by_category[category].append(
+                {
+                    "category": category,
+                    "mode": summary["mode"],
+                    "pass_rate": float(bucket.get("pass_rate", 0.0)),
+                    "avg_score": float(bucket.get("avg_score", 0.0)),
+                    "avg_seconds": float(summary.get("elapsed_seconds", 0.0)),
+                    "fireworks_count": float(summary.get("fireworks_count", 0.0)),
+                    "local_llm_count": float(summary.get("local_llm_count", 0.0)),
+                    "fallbacks_count": float(summary.get("fallbacks_count", 0.0)),
+                }
+            )
+
+    winners = []
+    for category, rows in sorted(by_category.items()):
+        rows.sort(
+            key=lambda row: (
+                -row["pass_rate"],
+                -row["avg_score"],
+                row["fireworks_count"],
+                row["avg_seconds"],
+                row["fallbacks_count"],
+                row["mode"],
+            )
+        )
+        winner = rows[0]
+        winner["alternatives"] = rows[1:4]
+        winners.append(winner)
+    return winners
 
 
 def aggregate_named_buckets(runs: list[dict], key: str) -> dict:
@@ -626,6 +682,17 @@ def render_markdown(payload: dict) -> str:
         for category, bucket in row["by_category"].items():
             lines.append(
                 f"| {category} | {bucket['pass_rate']:.1%} | {bucket['avg_score']:.3f} | {bucket['rows']} | {bucket.get('runs', 1)} |"
+            )
+        lines.append("")
+    winners = payload.get("category_winners") or []
+    if winners:
+        lines.extend(["## Category Winners", ""])
+        lines.append("| Category | Best Mode | Pass Rate | Avg Score | Avg Seconds | Fireworks | Local LLM | Fallbacks |")
+        lines.append("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |")
+        for winner in winners:
+            lines.append(
+                "| {category} | {mode} | {pass_rate:.1%} | {avg_score:.3f} | {avg_seconds:.1f} | "
+                "{fireworks_count:.1f} | {local_llm_count:.1f} | {fallbacks_count:.1f} |".format(**winner)
             )
         lines.append("")
     lines.extend(["## Difficulty Scores", ""])
