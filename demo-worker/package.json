@@ -1,0 +1,15 @@
+{
+  "name": "juggernaut-router-demo-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local --port 8787",
+    "deploy": "wrangler deploy --minify",
+    "dry-run": "wrangler deploy --dry-run",
+    "check": "node --check src/index.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

@@ -44,7 +44,7 @@ The message should be:
 
 ### 4. Architecture
 
-Use the flow from `docs/architecture.md`:
+Use the flow from `docs/ARCHITECTURE.md`:
 
 `/input/tasks.json -> main.py -> agent.py -> local classifier -> local solver/validator -> route decision -> Fireworks fallback only if needed -> /output/results.json`
 

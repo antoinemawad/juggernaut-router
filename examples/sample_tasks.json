@@ -1,0 +1,22 @@
+[
+  {
+    "task_id": "demo_sentiment",
+    "prompt": "Classify the sentiment as positive, negative, or neutral. Return only the label: The setup was fast and the results were reliable."
+  },
+  {
+    "task_id": "demo_math",
+    "prompt": "A product costs $80 and is discounted by 25%, then taxed at 10%. What is the final price? Return only the dollar amount."
+  },
+  {
+    "task_id": "demo_code",
+    "prompt": "Write a Python function clamp(x, low, high) that returns x limited to the inclusive range [low, high]. Return only code."
+  },
+  {
+    "task_id": "demo_summary",
+    "prompt": "Summarise in one sentence: A hybrid router can answer simple tasks locally, validate outputs, and use remote models for risky requests."
+  },
+  {
+    "task_id": "demo_factual",
+    "prompt": "In one sentence, explain why a GPU is useful for parallel workloads."
+  }
+]

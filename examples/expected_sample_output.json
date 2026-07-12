@@ -1,0 +1,22 @@
+[
+  {
+    "task_id": "demo_sentiment",
+    "answer": "positive"
+  },
+  {
+    "task_id": "demo_math",
+    "answer": "$66"
+  },
+  {
+    "task_id": "demo_code",
+    "answer": "def clamp(x, low, high):\n    return max(low, min(high, x))"
+  },
+  {
+    "task_id": "demo_summary",
+    "answer": "A hybrid router handles simple tasks locally and uses remote models for risky requests."
+  },
+  {
+    "task_id": "demo_factual",
+    "answer": "A GPU is useful for parallel workloads because it has many cores that can process similar operations at the same time."
+  }
+]
