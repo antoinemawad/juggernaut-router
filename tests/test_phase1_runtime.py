@@ -1327,6 +1327,20 @@ class Phase1RuntimeTests(unittest.TestCase):
         )
         self.assertEqual(answer, "positive")
 
+    def test_normalize_answer_recovers_sentiment_from_unclosed_meta_quote(self):
+        answer = normalize_answer(
+            'The user wants me to classify the sentiment of the sentence "The response arrived late, but it completely solved the issue.',
+            allowed_labels=("positive", "negative", "neutral"),
+        )
+        self.assertEqual(answer, "positive")
+
+    def test_normalize_answer_keeps_product_and_model_entity_labels(self):
+        answer = normalize_answer(
+            "Google DeepMind: ORG; Gemma: PRODUCT; minimax-m3: MODEL; London: LOCATION",
+            entity_labels=True,
+        )
+        self.assertEqual(answer, "Google DeepMind: ORG; Gemma: PRODUCT; minimax-m3: MODEL; London: LOCATION")
+
     def test_normalize_answer_uses_final_summary_after_meta_preamble(self):
         answer = normalize_answer(
             "The user wants a short summary of the routing system.\n\n"

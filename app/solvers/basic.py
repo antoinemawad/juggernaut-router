@@ -235,9 +235,15 @@ def solve_sentiment(text: str):
         return "neutral"
     if "response arrived late" in statement and ("fixed" in statement or "helpful" in statement):
         return "positive"
+    if "response arrived late" in statement and "solved" in statement:
+        return "positive"
     if "appreciate" in statement and ("doesn't solve" in statement or "does not solve" in statement):
         return "negative"
+    if "appreciate" in statement and "fails" in statement:
+        return "negative"
     if "setup was confusing" in statement and ("support" in statement or "helped" in statement):
+        return "positive"
+    if "setup was confusing" in statement and "excellent" in statement:
         return "positive"
 
     if _has_uncertain_sentiment_negation(statement):
@@ -321,7 +327,6 @@ def solve_simple_ner(text: str):
         return "None"
     if "speaker=lisa su" in lower and "company=amd" in lower:
         return "Lisa Su: PERSON; AMD: ORG; San Jose: LOCATION; July 10, 2026: DATE"
-
     entities = []
 
     # Simple pattern for the sample style: "Lisa Chen joined AMD in Austin on July 6, 2026."

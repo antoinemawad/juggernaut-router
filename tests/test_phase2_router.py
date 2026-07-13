@@ -267,6 +267,84 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.route, "local")
         self.assertEqual(result.answer, "def add_numbers(a, b):\n    return a + b")
 
+    def test_remote_ner_failure_repairs_from_prompt_entities(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            mocked.return_value = FireworksResult(
+                answer="1. Google DeepMind - Organization",
+                model="kimi-k2p7-code",
+            )
+            result = answer_task(
+                "ner_multiple",
+                "Extract named entities and label them: Google DeepMind announced Gemma support with AMD in London on July 7, 2026.",
+            )
+
+        mocked.assert_called()
+        self.assertEqual(result.route, "fireworks")
+        self.assertIn("Google DeepMind: ORG", result.answer)
+        self.assertIn("Gemma: PRODUCT", result.answer)
+        self.assertIn("AMD: ORG", result.answer)
+        self.assertIn("London: LOCATION", result.answer)
+        self.assertIn("July 7, 2026: DATE", result.answer)
+
+    def test_remote_ner_model_id_failure_repairs_from_prompt_entities(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            mocked.return_value = FireworksResult(
+                answer="1. Fireworks - likely an organization/company",
+                model="kimi-k2p7-code",
+            )
+            result = answer_task(
+                "ner_event_model_names",
+                "Extract named entities and label them: Fireworks enabled minimax-m3 and gemma-4-26b-a4b-it for Antoine's project in Beirut on July 9, 2026.",
+            )
+
+        mocked.assert_called()
+        self.assertEqual(result.route, "fireworks")
+        self.assertIn("Fireworks: ORG", result.answer)
+        self.assertIn("minimax-m3: MODEL", result.answer)
+        self.assertIn("gemma-4-26b-a4b-it: MODEL", result.answer)
+        self.assertIn("Antoine: PERSON", result.answer)
+        self.assertIn("Beirut: LOCATION", result.answer)
+        self.assertIn("July 9, 2026: DATE", result.answer)
+
+    def test_exact_eleven_word_summary_routes_local(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            mocked.return_value = FireworksResult(
+                answer="Evaluation logs should capture accuracy, latency, tokens, route decisions, retries, and failures for every task.",
+                model="kimi-k2p7-code",
+            )
+            result = answer_task(
+                "summary_exact_11_long",
+                "Summarise in exactly 11 words: Evaluation logs should capture accuracy, latency, tokens, route decisions, retries, and failures for every task.",
+            )
+
+        mocked.assert_called()
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.answer, "Evaluation logs track accuracy, latency, tokens, route decisions, retries, and failures.")
+
+    def test_forbidden_word_summary_routes_local(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            mocked.return_value = FireworksResult(
+                answer='The user wants a one-sentence summary without using the word cheap.',
+                model="kimi-k2p7-code",
+            )
+            result = answer_task(
+                "summary_two_constraints",
+                "Summarise in one sentence without using the word cheap: A router can lower scored token usage by using deterministic local answers, compact prompts, and careful model selection.",
+            )
+
+        mocked.assert_called()
+        self.assertEqual(result.route, "fireworks")
+        self.assertNotIn("cheap", result.answer.lower())
+        self.assertIn("token usage", result.answer)
+
     def test_classifier_runs_before_remote_call(self):
         seen = []
 

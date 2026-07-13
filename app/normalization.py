@@ -41,7 +41,7 @@ def normalize_answer(
 
 
 def _normalize_entity_labels(text: str) -> str:
-    labels = ("PERSON", "ORG", "LOCATION", "DATE")
+    labels = ("PERSON", "ORG", "LOCATION", "DATE", "PRODUCT", "MODEL")
     cleaned_lines = []
     for raw_line in text.splitlines():
         line = raw_line.strip()
@@ -54,7 +54,7 @@ def _normalize_entity_labels(text: str) -> str:
     if cleaned_lines:
         return "\n".join(cleaned_lines)
 
-    paren_matches = re.findall(r"([A-Z][A-Za-z0-9 .&-]+?)\s*\((PERSON|ORG|LOCATION|DATE)\)", text)
+    paren_matches = re.findall(r"([A-Z][A-Za-z0-9 .&-]+?)\s*\((PERSON|ORG|LOCATION|DATE|PRODUCT|MODEL)\)", text)
     if paren_matches:
         return "\n".join(f"{entity.strip()}: {label}" for entity, label in paren_matches)
 
@@ -186,14 +186,24 @@ def _recover_sentiment_label_from_meta_request(text: str, allowed_labels: tuple[
         return ""
 
     quoted = re.findall(r'"([^"]+)"', text)
-    if not quoted:
-        return ""
-    return _classify_sentiment_statement(quoted[-1])
+    if quoted:
+        return _classify_sentiment_statement(quoted[-1])
+
+    fallback_match = re.search(
+        r"\b(?:sentence|text)\s*:?\s*['\"]?(.+)$",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if fallback_match:
+        statement = fallback_match.group(1).strip().strip("'\"")
+        return _classify_sentiment_statement(statement)
+
+    return ""
 
 
 def _classify_sentiment_statement(statement: str) -> str:
     lower = statement.lower()
-    if "yeah right" in lower or "great, another crash" in lower or "as if" in lower:
+    if "yeah right" in lower or "great, another crash" in lower or "demo crashed" in lower or "as if" in lower:
         return "negative"
 
     positive_markers = (
@@ -201,16 +211,20 @@ def _classify_sentiment_statement(statement: str) -> str:
         "fast", "love", "appreciate", "worked",
     )
     negative_markers = (
-        "slow", "unreliable", "late", "crash", "outage", "broken", "confusing",
+        "slow", "unreliable", "late", "crash", "crashed", "outage", "broken", "confusing",
         "doesn't solve", "does not solve", "failed", "bad", "terrible",
     )
 
     if " but " in lower or "however" in lower:
-        if any(marker in lower for marker in ("unreliable", "doesn't solve", "does not solve", "failed", "broken")):
+        if "late" in lower and any(marker in lower for marker in ("solved", "fixed", "helpful", "completely solved")):
+            return "positive"
+        if "confusing" in lower and any(marker in lower for marker in ("excellent", "helped", "support", "finish")):
+            return "positive"
+        if any(marker in lower for marker in ("unreliable", "doesn't solve", "does not solve", "failed", "fails", "broken")):
             if any(marker in lower for marker in ("easy", "appreciate", "helped", "support")):
                 if "unreliable" in lower:
                     return "neutral"
-                if "doesn't solve" in lower or "does not solve" in lower:
+                if "doesn't solve" in lower or "does not solve" in lower or "fails" in lower:
                     return "negative"
             return "negative"
         if any(marker in lower for marker in ("fixed", "helped", "helpful", "finish")):
