@@ -1306,6 +1306,39 @@ class Phase1RuntimeTests(unittest.TestCase):
         )
         self.assertEqual(answer, "PERSON: Lisa Chen\nORG: AMD\nLOCATION: Austin\nDATE: July 6, 2026")
 
+    def test_normalize_answer_strips_meta_preamble_for_sentiment_label(self):
+        answer = normalize_answer(
+            "The user wants me to classify the sentence as positive, negative, or neutral.\n\nFinal answer: negative",
+            allowed_labels=("positive", "negative", "neutral"),
+        )
+        self.assertEqual(answer, "negative")
+
+    def test_normalize_answer_uses_final_summary_after_meta_preamble(self):
+        answer = normalize_answer(
+            "The user wants a short summary of the routing system.\n\n"
+            "Hybrid routing saves tokens while preserving answer quality.",
+            answer_only=True,
+        )
+        self.assertEqual(answer, "Hybrid routing saves tokens while preserving answer quality.")
+
+    def test_normalize_answer_preserves_entity_label_lines_after_meta_preamble(self):
+        answer = normalize_answer(
+            "The user wants named entities from the sentence.\n\n"
+            "ORG: AMD\nPERSON: Lisa Su\nLOCATION: San Jose\nDATE: July 10, 2026",
+            entity_labels=True,
+        )
+        self.assertEqual(answer, "ORG: AMD\nPERSON: Lisa Su\nLOCATION: San Jose\nDATE: July 10, 2026")
+
+    def test_normalize_answer_extracts_code_after_meta_preamble(self):
+        answer = normalize_answer(
+            "The user wants the corrected implementation.\n\n"
+            "def add_numbers(a, b):\n"
+            "    return a + b\n\n"
+            "This fixes the bug.",
+            code_only=True,
+        )
+        self.assertEqual(answer, "def add_numbers(a, b):\n    return a + b")
+
     def test_telemetry_redacts_secret_fields(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "router.jsonl"
