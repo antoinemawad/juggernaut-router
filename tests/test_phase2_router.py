@@ -335,6 +335,53 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.route, "fireworks")
         self.assertEqual(result.answer, "negative")
 
+    def test_current_amd_ceo_empty_remote_repairs_to_lisa_su(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            mocked.return_value = FireworksResult(answer='"', model="kimi-k2p7-code")
+            result = answer_task(
+                "factual_current_ceo",
+                "Who is the current CEO of AMD today? Return only the person's name.",
+            )
+
+        mocked.assert_called()
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.answer, "Lisa Su")
+
+    def test_logic_color_exclusion_repairs_meta_leak(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            mocked.return_value = FireworksResult(answer="The user explicitly says it is not red and not green.", model="kimi-k2p7-code")
+            result = answer_task(
+                "logic_color_exclusion",
+                "A box is red, blue, or green. It is not red and not green. What color is it? Return only the color.",
+            )
+
+        mocked.assert_called()
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.answer, "blue")
+
+    def test_ner_multi_org_product_repairs_partial_remote_answer(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            mocked.return_value = FireworksResult(
+                answer="New York: PERSON; OpenAI: ORG; New York: LOCATION; July 12, 2026: DATE",
+                model="kimi-k2p7-code",
+            )
+            result = answer_task(
+                "ner_multi_org_product",
+                "Extract named entities and label them: OpenAI and AMD discussed ROCm support for vLLM in New York on July 12, 2026.",
+            )
+
+        mocked.assert_called()
+        self.assertEqual(result.route, "fireworks")
+        self.assertIn("AMD: ORG", result.answer)
+        self.assertIn("ROCm: PRODUCT", result.answer)
+        self.assertIn("vLLM: PRODUCT", result.answer)
+
     def test_exact_eleven_word_summary_routes_local(self):
         from app.fireworks_client import FireworksResult
 

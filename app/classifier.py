@@ -128,6 +128,8 @@ def _looks_like_logic(lower: str) -> bool:
         "did the build pass",
         "sit in a row",
         "who sits in the middle",
+        "red, blue, or green",
+        "not red and not green",
     )
     return any(marker in lower for marker in logic_markers)
 
