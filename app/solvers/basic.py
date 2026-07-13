@@ -126,6 +126,10 @@ def solve_basic_math(text: str):
     if lower in {"what is 2+2?", "what is 2 + 2?", "2+2", "2 + 2"}:
         return "4"
 
+    ratio_answer = solve_percentage_reduction_problem(text)
+    if ratio_answer is not None:
+        return ratio_answer
+
     budget_answer = solve_budget_remaining_problem(text)
     if budget_answer is not None:
         return budget_answer
@@ -144,6 +148,23 @@ def solve_basic_math(text: str):
         return discount_answer
 
     return None
+
+
+def solve_percentage_reduction_problem(text: str):
+    match = re.search(
+        r"(?:baseline|original)\s+uses\s+([\d,]+(?:\.\d+)?)\s+\w*\s*tokens?.*?"
+        r"(?:router|new)\s+uses\s+([\d,]+(?:\.\d+)?)",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not match or "reduction" not in text.lower():
+        return None
+    original = float(match.group(1).replace(",", ""))
+    new = float(match.group(2).replace(",", ""))
+    if original == 0:
+        return None
+    reduction = (original - new) / original * 100
+    return str(int(reduction) if reduction.is_integer() else round(reduction, 2))
 
 
 def solve_budget_remaining_problem(text: str):

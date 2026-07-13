@@ -108,6 +108,8 @@ def _looks_like_math(lower: str) -> bool:
         "batches per minute",
         "how many dollars remain",
         "credits and spends",
+        "percentage reduction",
+        "percent number",
     )
     if any(marker in lower for marker in math_markers):
         return True

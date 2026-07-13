@@ -254,6 +254,17 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.route, "local")
         self.assertEqual(result.answer, "99")
 
+    def test_percentage_reduction_routes_local(self):
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            result = answer_task(
+                "math_ratio_tokens",
+                "A baseline uses 1,000 Fireworks tokens and a router uses 650. What percentage reduction is that? Return only the percent number.",
+            )
+
+        mocked.assert_not_called()
+        self.assertEqual(result.route, "local")
+        self.assertEqual(result.answer, "35")
+
     def test_debug_add_returns_corrected_code_only(self):
         with patch("app.agent.ask_fireworks_structured") as mocked:
             result = answer_task(
@@ -309,6 +320,20 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertIn("Antoine: PERSON", result.answer)
         self.assertIn("Beirut: LOCATION", result.answer)
         self.assertIn("July 9, 2026: DATE", result.answer)
+
+    def test_wrong_remote_sentiment_label_repairs_from_prompt(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            mocked.return_value = FireworksResult(answer="positive", model="kimi-k2p7-code")
+            result = answer_task(
+                "sentiment_negative_polite",
+                "Classify the sentiment as positive, negative, or neutral. Return only the label: I appreciate the effort, but the build still fails every time.",
+            )
+
+        mocked.assert_called()
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.answer, "negative")
 
     def test_exact_eleven_word_summary_routes_local(self):
         from app.fireworks_client import FireworksResult
