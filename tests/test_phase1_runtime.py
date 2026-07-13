@@ -1313,6 +1313,20 @@ class Phase1RuntimeTests(unittest.TestCase):
         )
         self.assertEqual(answer, "negative")
 
+    def test_normalize_answer_recovers_sentiment_from_meta_only_leak(self):
+        answer = normalize_answer(
+            'The user wants me to classify the sentiment of the sentence: "The setup was easy, but the results were unreliable."',
+            allowed_labels=("positive", "negative", "neutral"),
+        )
+        self.assertEqual(answer, "neutral")
+
+    def test_normalize_answer_recovers_positive_sentiment_from_meta_only_leak(self):
+        answer = normalize_answer(
+            'The user wants me to classify the sentiment of the text: "Setup was confusing, but the support team helped me finish."',
+            allowed_labels=("positive", "negative", "neutral"),
+        )
+        self.assertEqual(answer, "positive")
+
     def test_normalize_answer_uses_final_summary_after_meta_preamble(self):
         answer = normalize_answer(
             "The user wants a short summary of the routing system.\n\n"

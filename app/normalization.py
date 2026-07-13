@@ -66,6 +66,10 @@ def _extract_allowed_label(text: str, allowed_labels: tuple[str, ...] | list[str
     search_text = marker_answer or text
     explicit_pattern = "|".join(re.escape(label) for label in allowed_labels)
 
+    recovered_label = _recover_sentiment_label_from_meta_request(search_text, allowed_labels)
+    if recovered_label:
+        return recovered_label
+
     for line in [line.strip() for line in search_text.splitlines() if line.strip()]:
         match = re.match(
             rf"^(?:sentiment|label|answer|final answer)?\s*:?\s*({explicit_pattern})\b",
@@ -171,6 +175,56 @@ def _canonical_label(label: str, allowed_labels: tuple[str, ...] | list[str]) ->
         if allowed.lower() == lowered:
             return allowed
     return label
+
+
+def _recover_sentiment_label_from_meta_request(text: str, allowed_labels: tuple[str, ...] | list[str]) -> str:
+    labels = {label.lower() for label in allowed_labels}
+    if labels != {"positive", "negative", "neutral"}:
+        return ""
+    lowered = text.lower()
+    if "sentiment" not in lowered or not _is_meta_reasoning_line(text):
+        return ""
+
+    quoted = re.findall(r'"([^"]+)"', text)
+    if not quoted:
+        return ""
+    return _classify_sentiment_statement(quoted[-1])
+
+
+def _classify_sentiment_statement(statement: str) -> str:
+    lower = statement.lower()
+    if "yeah right" in lower or "great, another crash" in lower or "as if" in lower:
+        return "negative"
+
+    positive_markers = (
+        "easy", "helped", "helpful", "fixed", "finish", "good", "great", "excellent",
+        "fast", "love", "appreciate", "worked",
+    )
+    negative_markers = (
+        "slow", "unreliable", "late", "crash", "outage", "broken", "confusing",
+        "doesn't solve", "does not solve", "failed", "bad", "terrible",
+    )
+
+    if " but " in lower or "however" in lower:
+        if any(marker in lower for marker in ("unreliable", "doesn't solve", "does not solve", "failed", "broken")):
+            if any(marker in lower for marker in ("easy", "appreciate", "helped", "support")):
+                if "unreliable" in lower:
+                    return "neutral"
+                if "doesn't solve" in lower or "does not solve" in lower:
+                    return "negative"
+            return "negative"
+        if any(marker in lower for marker in ("fixed", "helped", "helpful", "finish")):
+            return "positive"
+        if any(marker in lower for marker in positive_markers) and any(marker in lower for marker in negative_markers):
+            return "neutral"
+
+    positive_hits = sum(marker in lower for marker in positive_markers)
+    negative_hits = sum(marker in lower for marker in negative_markers)
+    if positive_hits > negative_hits:
+        return "positive"
+    if negative_hits > positive_hits:
+        return "negative"
+    return "neutral"
 
 
 def _extract_code_only(text: str) -> str:

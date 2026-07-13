@@ -348,7 +348,12 @@ def _normalize_for_classification(answer, prompt: str, classification) -> str:
     constraints = set(classification.constraints)
     return normalize_answer(
         answer,
-        code_only=_requests_code_only(prompt) or "code_only" in constraints,
+        code_only=(
+            _requests_code_only(prompt)
+            or "code_only" in constraints
+            or classification.answer_shape in {"code", "corrected_code"}
+            or "include_corrected_code" in constraints
+        ),
         exact_numeric="exact_numeric" in constraints,
         answer_only="answer_only" in constraints,
         entity_labels="entity_labels" in constraints,

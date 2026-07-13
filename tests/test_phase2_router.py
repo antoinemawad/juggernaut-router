@@ -213,6 +213,60 @@ class Phase2RouterTests(unittest.TestCase):
         self.assertEqual(result.route_reason, "stable_factual_template")
         self.assertIn("parallel", result.answer)
 
+    def test_stable_rocm_fact_mentions_pytorch_and_vllm(self):
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            result = answer_task(
+                "factual_rocm_pytorch_vllm",
+                "What is ROCm and why does it matter for PyTorch and vLLM AI workloads on AMD GPUs?",
+            )
+
+        mocked.assert_not_called()
+        self.assertEqual(result.route, "local")
+        self.assertIn("ROCm", result.answer)
+        self.assertIn("PyTorch", result.answer)
+        self.assertIn("vLLM", result.answer)
+
+    def test_mixed_sentiment_meta_leak_is_normalized_after_remote(self):
+        from app.fireworks_client import FireworksResult
+
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            mocked.return_value = FireworksResult(
+                answer='The user wants me to classify the sentiment of the sentence: "The setup was easy, but the results were unreliable."',
+                model="kimi-k2p7-code",
+            )
+            result = answer_task(
+                "sentiment_mixed",
+                "Classify the sentiment as positive, negative, or neutral: The setup was easy, but the results were unreliable.",
+            )
+
+        mocked.assert_called()
+        self.assertEqual(result.route, "fireworks")
+        self.assertEqual(result.answer, "neutral")
+
+    def test_batch_rerun_minutes_routes_local(self):
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            result = answer_task(
+                "math_batches_retries",
+                "A job completes 6 batches per minute for 18 minutes, then 9 batches must be rerun. How many successful batches remain?",
+            )
+
+        mocked.assert_not_called()
+        self.assertEqual(result.route, "local")
+        self.assertEqual(result.answer, "99")
+
+    def test_debug_add_returns_corrected_code_only(self):
+        with patch("app.agent.ask_fireworks_structured") as mocked:
+            result = answer_task(
+                "debug_add",
+                "Debug this Python code and provide the corrected implementation:\n\n"
+                "def add_numbers(a, b):\n"
+                "    return a - b",
+            )
+
+        mocked.assert_not_called()
+        self.assertEqual(result.route, "local")
+        self.assertEqual(result.answer, "def add_numbers(a, b):\n    return a + b")
+
     def test_classifier_runs_before_remote_call(self):
         seen = []
 

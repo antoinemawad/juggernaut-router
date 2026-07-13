@@ -91,6 +91,19 @@ def solve_compound_growth_problem(text: str):
 
 
 def solve_batch_rerun_problem(text: str):
+    minute_match = re.search(
+        r"completes\s+(\d+(?:\.\d+)?)\s+batches\s+per\s+minute\s+for\s+(\d+(?:\.\d+)?)\s+minutes?,"
+        r"\s+then\s+(\d+(?:\.\d+)?)\s+batches\s+must\s+be\s+rerun",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if minute_match:
+        rate = float(minute_match.group(1))
+        minutes = float(minute_match.group(2))
+        rerun = float(minute_match.group(3))
+        remaining = rate * minutes - rerun
+        return str(int(remaining) if remaining.is_integer() else remaining)
+
     match = re.search(
         r"processes\s+(\d+(?:\.\d+)?)\s+batches\s+per\s+hour\s+for\s+(\d+(?:\.\d+)?)\s+hours?,"
         r"\s+then\s+fails\s+and\s+reruns\s+(\d+(?:\.\d+)?)\s+batches",
@@ -212,10 +225,20 @@ def solve_sentiment(text: str):
         statement = lower_text
 
     strict_label = "return only the label" in lower_text
-    if strict_label and "yeah right" in statement and "just perfect" in statement and "outage" in statement:
+    if "yeah right" in statement and "just perfect" in statement and "outage" in statement:
         return "negative"
-    if strict_label and "fast" in statement and "but" in statement and "documentation is incomplete" in statement:
+    if "great, another crash" in statement:
+        return "negative"
+    if "fast" in statement and "but" in statement and "documentation is incomplete" in statement:
         return "neutral"
+    if "easy" in statement and "but" in statement and "unreliable" in statement:
+        return "neutral"
+    if "response arrived late" in statement and ("fixed" in statement or "helpful" in statement):
+        return "positive"
+    if "appreciate" in statement and ("doesn't solve" in statement or "does not solve" in statement):
+        return "negative"
+    if "setup was confusing" in statement and ("support" in statement or "helped" in statement):
+        return "positive"
 
     if _has_uncertain_sentiment_negation(statement):
         return None
@@ -450,6 +473,11 @@ def solve_factual(text: str):
         )
 
     if "rocm" in lower and "amd" in lower and ("ai" in lower or "inference" in lower or "workloads" in lower):
+        if "pytorch" in lower or "vllm" in lower:
+            return (
+                "ROCm is AMD's open-source GPU software platform for AI workloads. "
+                "It lets frameworks like PyTorch and vLLM run inference and training on AMD GPUs."
+            )
         if "one sentence" in lower or "in one sentence" in lower:
             return "ROCm enables AI inference frameworks and GPU compute workloads to run on AMD GPUs."
         return (

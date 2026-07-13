@@ -105,6 +105,7 @@ def _looks_like_math(lower: str) -> bool:
         "calculate ",
         "round to the nearest",
         "batches per hour",
+        "batches per minute",
         "how many dollars remain",
         "credits and spends",
     )
